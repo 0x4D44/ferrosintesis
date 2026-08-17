@@ -74,14 +74,22 @@ class DrumkitOutputPlanTests(unittest.TestCase):
         self.assertEqual(rustdoc_documented, expected)
 
     def test_output_plan_matches_both_committed_package_inventories(self):
-        planned = prepare_drumkit.output_plan()
+        # The plan names recordings (`kick_vl1_rr1.wav`); the bank stores them as
+        # FLAC. Compared under the packaged name, so this stays a test of which
+        # takes each package owns rather than of the container.
+        planned = {
+            package: {prepare_drumkit.packaged_name(name) for name in names}
+            for package, names in prepare_drumkit.output_plan().items()
+        }
         committed = {}
         for package in prepare_drumkit.OUTPUT_PACKAGES:
             sample_dir = os.path.join(
                 prepare_drumkit.REPO_ROOT, "crates", package, "samples"
             )
             committed[package] = {
-                name for name in os.listdir(sample_dir) if name.endswith(".wav")
+                prepare_drumkit.packaged_name(name)
+                for name in os.listdir(sample_dir)
+                if name.endswith((".wav", ".flac"))
             }
 
         self.assertEqual(planned, committed)
@@ -127,7 +135,15 @@ class DrumkitOutputPlanTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unknown output package"):
                 prepare_drumkit.output_plan()
 
-    def test_publish_copy_failure_preserves_both_packages(self):
+    def test_publish_encode_failure_preserves_both_packages(self):
+        """A failure part-way through publication must leave both banks intact.
+
+        The injection point is the ENCODE, which is the step that can fail now
+        that publication compresses each take instead of copying it. Staged
+        inputs are real WAVs because the encoder decodes them; the committed
+        files are stand-ins holding a recognizable marker, which is all this test
+        needs to prove nothing was replaced.
+        """
         plans = {
             prepare_drumkit.CORE_PACKAGE: {"core.wav"},
             prepare_drumkit.ACCENT_PACKAGE: {"accent.wav"},
@@ -140,35 +156,43 @@ class DrumkitOutputPlanTests(unittest.TestCase):
                 os.makedirs(staged_dir)
                 os.makedirs(output_dir)
                 for name in names:
-                    with open(os.path.join(staged_dir, name), "wb") as f:
-                        f.write(b"new")
-                    with open(os.path.join(output_dir, name), "wb") as f:
+                    with wave.open(os.path.join(staged_dir, name), "wb") as staged:
+                        staged.setnchannels(1)
+                        staged.setsampwidth(2)
+                        staged.setframerate(44100)
+                        staged.writeframes(struct.pack("<8h", *range(8)))
+                    committed = os.path.join(
+                        output_dir, prepare_drumkit.packaged_name(name)
+                    )
+                    with open(committed, "wb") as f:
                         f.write(b"old")
 
-            real_copyfile = prepare_drumkit.shutil.copyfile
-            copies = 0
+            real_encode = prepare_drumkit._encode_flac
+            encodes = 0
 
-            def fail_second_copy(source, destination):
-                nonlocal copies
-                copies += 1
-                if copies == 2:
-                    raise OSError("injected copy failure")
-                return real_copyfile(source, destination)
+            def fail_second_encode(source, destination):
+                nonlocal encodes
+                encodes += 1
+                if encodes == 2:
+                    raise OSError("injected encode failure")
+                return real_encode(source, destination)
 
             with mock.patch.object(
-                prepare_drumkit.shutil, "copyfile", side_effect=fail_second_copy
+                prepare_drumkit, "_encode_flac", side_effect=fail_second_encode
             ):
-                with self.assertRaisesRegex(OSError, "injected copy failure"):
+                with self.assertRaisesRegex(OSError, "injected encode failure"):
                     prepare_drumkit.publish_staged(staging, root, plans)
 
+            self.assertEqual(encodes, 2, "the encode boundary was never reached")
             for package, names in plans.items():
                 output_dir = os.path.join(root, "crates", package, "samples")
                 for name in names:
-                    with open(os.path.join(output_dir, name), "rb") as f:
+                    packaged = os.path.join(
+                        output_dir, prepare_drumkit.packaged_name(name)
+                    )
+                    with open(packaged, "rb") as f:
                         self.assertEqual(f.read(), b"old")
-                    self.assertFalse(os.path.exists(
-                        os.path.join(output_dir, name + ".part")
-                    ))
+                    self.assertFalse(os.path.exists(packaged + ".part"))
 
 
 class DrumkitSourceCacheTests(unittest.TestCase):

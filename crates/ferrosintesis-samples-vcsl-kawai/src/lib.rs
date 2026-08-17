@@ -144,22 +144,22 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
 ];
 
 static ALIASES: [(&str, &str); 16] = [
-    ("kawai_A#3_f_rr2.wav", "kawai_A#3_mf_rr2.flac"),
-    ("kawai_A#3_mf.wav", "kawai_A#3_pp_rr2.flac"),
-    ("kawai_A#4_f_rr2.wav", "kawai_A#4_mf_rr2.flac"),
-    ("kawai_A#4_mf.wav", "kawai_A#4_pp_rr2.flac"),
-    ("kawai_A2_f_rr2.wav", "kawai_A2_mf_rr2.flac"),
-    ("kawai_A2_mf.wav", "kawai_A2_pp_rr2.flac"),
-    ("kawai_C2_f_rr2.wav", "kawai_C2_mf_rr2.flac"),
-    ("kawai_C2_mf.wav", "kawai_C2_pp_rr2.flac"),
-    ("kawai_C3_f_rr2.wav", "kawai_C3_mf_rr2.flac"),
-    ("kawai_C3_mf.wav", "kawai_C3_pp_rr2.flac"),
-    ("kawai_C4_f_rr2.wav", "kawai_C4_mf_rr2.flac"),
-    ("kawai_C4_mf.wav", "kawai_C4_pp_rr2.flac"),
-    ("kawai_C5_f_rr2.wav", "kawai_C5_mf_rr2.flac"),
-    ("kawai_C5_mf.wav", "kawai_C5_pp_rr2.flac"),
-    ("kawai_C6_f_rr2.wav", "kawai_C6_mf_rr2.flac"),
-    ("kawai_C6_mf.wav", "kawai_C6_pp_rr2.flac"),
+    ("kawai_A#3_f_rr2.flac", "kawai_A#3_mf_rr2.flac"),
+    ("kawai_A#3_mf.flac", "kawai_A#3_pp_rr2.flac"),
+    ("kawai_A#4_f_rr2.flac", "kawai_A#4_mf_rr2.flac"),
+    ("kawai_A#4_mf.flac", "kawai_A#4_pp_rr2.flac"),
+    ("kawai_A2_f_rr2.flac", "kawai_A2_mf_rr2.flac"),
+    ("kawai_A2_mf.flac", "kawai_A2_pp_rr2.flac"),
+    ("kawai_C2_f_rr2.flac", "kawai_C2_mf_rr2.flac"),
+    ("kawai_C2_mf.flac", "kawai_C2_pp_rr2.flac"),
+    ("kawai_C3_f_rr2.flac", "kawai_C3_mf_rr2.flac"),
+    ("kawai_C3_mf.flac", "kawai_C3_pp_rr2.flac"),
+    ("kawai_C4_f_rr2.flac", "kawai_C4_mf_rr2.flac"),
+    ("kawai_C4_mf.flac", "kawai_C4_pp_rr2.flac"),
+    ("kawai_C5_f_rr2.flac", "kawai_C5_mf_rr2.flac"),
+    ("kawai_C5_mf.flac", "kawai_C5_pp_rr2.flac"),
+    ("kawai_C6_f_rr2.flac", "kawai_C6_mf_rr2.flac"),
+    ("kawai_C6_mf.flac", "kawai_C6_pp_rr2.flac"),
 ];
 
 /// Returns the embedded sample bytes for an exact (case-sensitive) name.

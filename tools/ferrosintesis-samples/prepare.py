@@ -1222,6 +1222,30 @@ for octave in range(0, 8):
         NOTE_HZ[f"{name}{octave}"] = 440.0 * 2 ** ((12 * (octave + 1) + i - 69) / 12)
 
 
+PACKAGED_EXT = ".flac"
+
+
+def packaged_name(name):
+    """The on-disk name of a generated bank sample.
+
+    The recipes, the provenance documents, the bug records and the zone tables
+    all name a recording as `family_NOTE_dyn.wav`. That is its LOGICAL name and
+    it is not changing -- too much prose points at it, and a recording is not a
+    container. What changed on 2026.08.16 is how the bytes are stored: banks are
+    FLAC, which is lossless, so the PCM is identical and only the wrapper moved.
+
+    Keeping the split in ONE function is the point. A blanket rename of every
+    `.wav` literal in this file would have been wrong: most of them name SOURCE
+    files, which really are WAV and must stay so. This converts outputs only,
+    and it is idempotent so a caller may pass either form.
+    """
+    if name.endswith(PACKAGED_EXT):
+        return name
+    if name.endswith(".wav"):
+        return name[: -len(".wav")] + PACKAGED_EXT
+    return name
+
+
 def sample_output_path(filename, repo_root=None):
     """Return the sample-package destination for a generated WAV.
 
@@ -1240,10 +1264,63 @@ def sample_output_path(filename, repo_root=None):
         package = "ferrosintesis-samples-core"
     else:
         package = "ferrosintesis-samples-orchestral"
+    # The LOGICAL name, which is what a baker writes. `publish_pending_banks`
+    # converts the directory to the packaged container once the bake is done.
     return os.path.join(repo_root, "crates", package, "samples", filename)
 
 
+def _flac_streaminfo(path):
+    """Return `(sample_rate, channels, bits_per_sample)` from a FLAC header.
+
+    Parsed here rather than shelled out to `ffprobe`, which would be a second
+    external tool for four fields at fixed bit offsets. STREAMINFO follows the
+    4-byte magic and a 4-byte block header; within its body the rate is 20 bits
+    at bit 80, then 3 bits of channel count and 5 of sample depth (RFC 9639).
+    """
+    with open(path, "rb") as f:
+        head = f.read(8 + 34)
+    if len(head) < 8 + 34 or head[:4] != b"fLaC":
+        raise ValueError(f"{path}: not a FLAC stream")
+    body = head[8:]
+    rate = int.from_bytes(body[10:13], "big") >> 4
+    channels = ((body[12] >> 1) & 0x07) + 1
+    bits = (((body[12] & 0x01) << 4) | (body[13] >> 4)) + 1
+    if rate == 0:
+        raise ValueError(f"{path}: FLAC declares no sample rate")
+    return rate, channels, bits
+
+
+def _read_flac(path):
+    """Decode a packaged FLAC bank sample to normalized floats plus its rate."""
+    rate, channels, bits = _flac_streaminfo(path)
+    if bits != 16:
+        raise ValueError(f"{path}: expected a 16-bit bank sample, found {bits}-bit")
+    raw = _decode_flac_pcm(path)
+    count = len(raw) // 2
+    vals = struct.unpack(f"<{count}h", raw[: count * 2])
+    norm = [v / 32768.0 for v in vals]
+    if channels == 2:
+        frames = count // 2
+        norm = [(norm[2 * i] + norm[2 * i + 1]) * 0.5 for i in range(frames)]
+    elif channels != 1:
+        raise ValueError(f"{path}: unsupported channel count {channels}")
+    return norm, rate
+
+
 def read_wav(path):
+    """Read a PCM recording as normalized mono floats plus its sample rate.
+
+    Named for the container it was born with, and a plain WAV -- which is what
+    every SOURCE recording still is -- is read directly. A packaged bank has
+    been FLAC since 2026.08.16, so a `fLaC` magic dispatches to the decoder.
+
+    The dispatch is on the BYTES, not the extension, matching what the runtime
+    sampler does in `parse_wav`: a file whose name and contents disagree is then
+    read correctly instead of failing somewhere inside `wave`.
+    """
+    with open(path, "rb") as probe:
+        if probe.read(4) == b"fLaC":
+            return _read_flac(path)
     with wave.open(path, "rb") as w:
         ch, sw, sr, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
         raw = w.readframes(n)
@@ -4244,8 +4321,69 @@ def trim_lead_and_ring(x, sr, pre_s, end_fade_s):
     return [v * g for v in seg]
 
 
+def _require_ffmpeg():
+    """ffmpeg is the bank encoder. Named here so the failure is one sentence."""
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError(
+            "ffmpeg is required to bake sample banks: the packaged banks are "
+            "FLAC and this is the encoder. Install it, or bake on a host that "
+            "has it. There is deliberately no WAV fallback -- a bank written "
+            "as WAV would not match the name its crate table references."
+        )
+
+
+def _encode_flac(wav_path, flac_path):
+    _require_ffmpeg()
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-i", wav_path,
+         "-c:a", "flac", "-compression_level", "12", "-f", "flac", flac_path],
+        check=True,
+    )
+
+
+def _decode_flac_pcm(flac_path):
+    """Decode a FLAC back to raw little-endian 16-bit PCM, for verification."""
+    _require_ffmpeg()
+    done = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", flac_path,
+         "-f", "s16le", "-acodec", "pcm_s16le", "-"],
+        check=True, stdout=subprocess.PIPE,
+    )
+    return done.stdout
+
+
+def _is_bank_destination(path):
+    """True when `path` lands in a published sample crate's `samples/`.
+
+    The container rule is exactly this: BANK samples are FLAC, everything else
+    this module writes -- decode caches, extraction scratch, pilots -- stays a
+    plain WAV. Deciding it from the destination rather than from the caller is
+    what stopped the first attempt at this from converting the archive cache
+    too and breaking every warm-cache test.
+    """
+    parts = os.path.normpath(path).replace("\\", "/").split("/")
+    return "crates" in parts and "samples" in parts
+
+
+# Bank directories written during this run, awaiting `publish_pending_banks`.
+_PENDING_BANK_DIRS = set()
+
+
 def write_wav_mono(path, seg, sr):
-    """Quantize a float mono signal and atomically replace its 16-bit PCM WAV."""
+    """Quantize a float mono signal and atomically replace its 16-bit PCM WAV.
+
+    A baker always writes a plain WAV, under the recording's LOGICAL name
+    (`family_NOTE_dyn.wav`). Where that lands in a published bank the directory
+    is registered, and `publish_pending_banks` converts the finished bank to
+    FLAC at the end of the run.
+
+    The encode deliberately does NOT happen here. It did in the first attempt at
+    this, which put two ffmpeg subprocesses in the innermost loop of every
+    recipe and a `subprocess` dependency in the one function every archive-cache
+    test reaches with a faked `subprocess.run`. Converting a finished directory
+    instead is a single pass, is restartable, and keeps the container decision
+    out of the DSP path.
+    """
     pcm = struct.pack(f"<{len(seg)}h",
                       *[max(-32768, min(32767, int(v * 32767))) for v in seg])
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -4261,6 +4399,57 @@ def write_wav_mono(path, seg, sr):
         if os.path.exists(part):
             os.remove(part)
         raise
+    if _is_bank_destination(path):
+        _PENDING_BANK_DIRS.add(os.path.dirname(os.path.abspath(path)))
+
+
+def _read_wav_pcm(path):
+    """The raw frame bytes of a mono 16-bit WAV, for round-trip comparison."""
+    with wave.open(path, "rb") as w:
+        return w.readframes(w.getnframes())
+
+
+def publish_pending_banks():
+    """Convert every bank this run wrote from WAV to its packaged FLAC.
+
+    One pass over the directories `write_wav_mono` registered. Each file is
+    encoded, decoded back, and compared against the WAV's own on-disk PCM
+    before that WAV is removed, so a published bank has always round-tripped
+    and a failure part-way leaves the WAV for the next run to finish rather
+    than a truncated FLAC.
+
+    Returns the number of files converted.
+    """
+    banks = sorted(_PENDING_BANK_DIRS)
+    if not banks:
+        return 0
+    _require_ffmpeg()
+    converted = 0
+    for bank in banks:
+        # A registered directory can belong to a caller's temporary tree -- the
+        # tests bake into one and then discard it -- so a bank that no longer
+        # exists is nothing to publish rather than an error.
+        if not os.path.isdir(bank):
+            continue
+        for name in sorted(os.listdir(bank)):
+            if not name.endswith(".wav"):
+                continue
+            wav_path = os.path.join(bank, name)
+            flac_path = os.path.join(bank, packaged_name(name))
+            part = flac_path + ".part"
+            try:
+                _encode_flac(wav_path, part)
+                if _decode_flac_pcm(part) != _read_wav_pcm(wav_path):
+                    raise ValueError(f"{flac_path}: FLAC encode was not bit-exact")
+                os.replace(part, flac_path)
+            except Exception:
+                if os.path.exists(part):
+                    os.remove(part)
+                raise
+            os.remove(wav_path)
+            converted += 1
+    _PENDING_BANK_DIRS.clear()
+    return converted
 
 
 def _bake_bagpipe(src):
@@ -5237,6 +5426,19 @@ def _print_sample_rows(rows):
             print(f"{r[0]:26} {r[1]:9.2f} {r[2]:9.2f} {r[3]:9.2f} {r[4]:7.1f} {r[5]:5.2f} {r[6]:6.3f}")
 
 
+def _finish(rows):
+    """Publish the banks this run wrote, then print the recipe table.
+
+    Every path through `main` that writes a bank ends here. Keeping the publish
+    step beside the print, rather than only at the bottom of `main`, is what
+    stops `--sax-only` (which returns early) from leaving its bank as WAV.
+    """
+    published = publish_pending_banks()
+    _print_sample_rows(rows)
+    if published:
+        print(f"packaged {published} samples as {PACKAGED_EXT}")
+
+
 def _family_selection(args):
     """Return (`local_only`, selected families) for command-line arguments."""
     local_only = "--local-only" in args
@@ -5358,12 +5560,18 @@ def _validate_only_families(only):
 
 
 def _validate_generated_output_inventory(family, expected, repo_root=None, output_dir=None):
-    """Fail closed when an output retains an obsolete generated WAV.
+    """Fail closed when an output retains an obsolete generated sample.
 
-    `family=None` validates every WAV in a complete disposable output directory;
-    packaged banks pass their filename prefix and validate only that family.
+    `family=None` validates every generated file in a complete disposable output
+    directory; packaged banks pass their filename prefix and validate only that
+    family.
+
+    Both sides are compared as PACKAGED names. Callers pass the logical `.wav`
+    names their recipe uses, and the directory holds `.flac`; normalising here
+    rather than at every caller is what stops this guard silently comparing two
+    different vocabularies and finding everything unexpected.
     """
-    expected = set(expected)
+    expected = {packaged_name(name) for name in expected}
     root = REPO_ROOT if repo_root is None else repo_root
     out_dir = (
         os.path.dirname(sample_output_path(f"{family}_.wav", root))
@@ -5376,14 +5584,14 @@ def _validate_generated_output_inventory(family, expected, repo_root=None, outpu
         return
     unexpected = sorted(
         name for name in os.listdir(out_dir)
-        if name.endswith(".wav")
+        if name.endswith((".wav", PACKAGED_EXT))
         and (family is None or name.startswith(f"{family}_"))
-        and name not in expected
+        and packaged_name(name) not in expected
     )
     if unexpected:
         label = "generated" if family is None else f"{family} output"
         raise ValueError(
-            f"{label} contains unexpected generated WAVs: "
+            f"{label} contains unexpected generated samples: "
             + ", ".join(unexpected)
         )
 
@@ -5458,6 +5666,10 @@ def main():
         print(f"B1 sustain pilot: {os.path.realpath(output_dir)}")
         return
 
+    # Fail on a missing encoder NOW, not after an hour of fetching and DSP. Every
+    # path from here writes a bank, and a bank is only finished once it is FLAC.
+    _require_ffmpeg()
+
     socket.setdefaulttimeout(60)
     # `--local-only` skips the fetched full bank (network + rewriting the tracked
     # core/orchestral WAVs) and regenerates ONLY the local gong intake below.
@@ -5501,7 +5713,7 @@ def main():
         sax_src = os.path.join(tempfile.gettempdir(), "mtg_sax_src", MTG_SAX_REV)
         os.makedirs(sax_src, exist_ok=True)
         rows += _bake_mtg_sax(sax_src)
-        _print_sample_rows(rows)
+        _finish(rows)
         return
     if not local_only:
         src = os.path.join(tempfile.gettempdir(), "vsco2ce_src", VSCO_REV)
@@ -5743,7 +5955,7 @@ def main():
     # Family selection keeps `--only=<other>` from rewriting either tracked bank.
     rows += _bake_selected_local_banks(only)
 
-    _print_sample_rows(rows)
+    _finish(rows)
 
 
 if __name__ == "__main__":

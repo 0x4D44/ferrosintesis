@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import hashlib
 import importlib.util
 import io
@@ -50,15 +51,15 @@ class FretNoiseBakeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             manifest = Path(tmp) / "BAKE-SHA256"
             manifest.write_text(
-                f"# pins\n{digest}  fretnoise_rr01.wav\n", encoding="utf-8"
+                f"# pins\n{digest}  fretnoise_rr01.flac\n", encoding="utf-8"
             )
             self.assertEqual(
                 BAKE.load_output_pins(manifest),
-                {"fretnoise_rr01.wav": digest},
+                {"fretnoise_rr01.flac": digest},
             )
             manifest.write_text(
-                f"{digest}  fretnoise_rr01.wav\n"
-                f"{digest}  fretnoise_rr01.wav\n",
+                f"{digest}  fretnoise_rr01.flac\n"
+                f"{digest}  fretnoise_rr01.flac\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(SystemExit, "duplicate"):
@@ -68,26 +69,34 @@ class FretNoiseBakeTests(unittest.TestCase):
                 BAKE.load_output_pins(manifest)
 
     def test_output_verifier_checks_generated_and_committed_bytes(self) -> None:
-        name = "fretnoise_rr01.wav"
+        """The committed side is read through the injected PCM reader.
+
+        `read_committed=Path.read_bytes` keeps this a test of the VERIFIER — the
+        pin bookkeeping and the three error paths — without needing ffmpeg or a
+        real FLAC stream. The default reader decodes FLAC, and that route is
+        exercised end-to-end by the canonical `--verify` test below.
+        """
+        name = "fretnoise_rr01.flac"
         payload = b"canonical payload"
         digest = hashlib.sha256(payload).hexdigest()
         generated = [(name, payload, 0.0, 0.0, 0.0, 0.0)]
+        verify = functools.partial(
+            BAKE.output_pin_errors, read_committed=Path.read_bytes
+        )
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp)
             (out_dir / name).write_bytes(payload)
-            self.assertEqual(
-                BAKE.output_pin_errors(generated, {name: digest}, out_dir), []
-            )
+            self.assertEqual(verify(generated, {name: digest}, out_dir), [])
             (out_dir / name).write_bytes(b"canonical payloae")
-            errors = BAKE.output_pin_errors(generated, {name: digest}, out_dir)
+            errors = verify(generated, {name: digest}, out_dir)
             self.assertEqual(len(errors), 1)
             self.assertIn("committed sha256", errors[0])
             (out_dir / name).write_bytes(payload)
-            (out_dir / "fretnoise_rr99.wav").write_bytes(payload)
-            errors = BAKE.output_pin_errors(generated, {name: digest}, out_dir)
+            (out_dir / "fretnoise_rr99.flac").write_bytes(payload)
+            errors = verify(generated, {name: digest}, out_dir)
             self.assertEqual(
                 errors,
-                ["fretnoise_rr99.wav: committed output has no SHA-256 pin"],
+                ["fretnoise_rr99.flac: committed output has no SHA-256 pin"],
             )
 
     def test_canonical_verify_rebakes_without_touching_assets(self) -> None:
@@ -99,15 +108,16 @@ class FretNoiseBakeTests(unittest.TestCase):
         out_dir = root / "crates" / "ferrosintesis-samples-fretnoise" / "samples"
         before = {
             path.name: (path.read_bytes(), path.stat().st_mtime_ns)
-            for path in sorted(out_dir.glob("fretnoise_rr*.wav"))
+            for path in sorted(out_dir.glob("fretnoise_rr*.flac"))
         }
+        self.assertEqual(len(before), 12, "the committed bank was not found")
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
             io.StringIO()
         ):
             self.assertEqual(BAKE.main(["--verify"]), 0)
         after = {
             path.name: (path.read_bytes(), path.stat().st_mtime_ns)
-            for path in sorted(out_dir.glob("fretnoise_rr*.wav"))
+            for path in sorted(out_dir.glob("fretnoise_rr*.flac"))
         }
         self.assertEqual(after, before)
 

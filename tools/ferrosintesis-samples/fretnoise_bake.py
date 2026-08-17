@@ -2,8 +2,9 @@
 """Bake or verify the GM 120 fret-noise round-robin bank (stdlib + NumPy).
 
 Input : samples/fret-noise-eastman-e1d/cuts/fret_rrNN.wav  (24-bit, 48 kHz, mono)
-Output: crates/ferrosintesis-samples-fretnoise/samples/fretnoise_rrNN.wav
-        (16-bit, 44.1 kHz, mono — the format parse_wav / the drum path require)
+Output: crates/ferrosintesis-samples-fretnoise/samples/fretnoise_rrNN.flac
+        (16-bit, 44.1 kHz, mono — losslessly FLAC-compressed, which parse_wav
+        decodes; the PCM is exactly what a WAV bank held)
 
 The set of NN is DISCOVERED from the cuts directory, never hard-coded: the cuts are
 the authoritative inventory, so adding a 13th cut bakes a 13th take instead of being
@@ -19,8 +20,10 @@ Steps, per file:
   3. TPDF dither to 16-bit (two independent uniforms, +-1 LSB), the repo's dither.
 
 Byte identity is scoped to the canonical Windows x86-64 environment declared by
-CANONICAL_* below and requirements-fretnoise-bake.txt. ``--verify`` bakes entirely
-in memory, checks every generated and committed SHA-256, and never writes an asset.
+CANONICAL_* below and requirements-fretnoise-bake.txt, and the pins are over the
+16-bit PCM rather than the FLAC container, so an ffmpeg upgrade cannot invalidate
+them (see `bake_payloads`). ``--verify`` bakes entirely in memory, checks every
+generated and committed SHA-256, and never writes an asset.
 The committed cuts are authoritative (the Downloads masters live outside the repo).
 
 Run from the repo (worktree) root:
@@ -33,6 +36,7 @@ import hashlib
 import platform
 import re
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -51,7 +55,39 @@ CANONICAL_PYTHON = (3, 14, 3)
 CANONICAL_NUMPY = "2.4.4"
 CANONICAL_PLATFORM = "win32"
 CANONICAL_MACHINE = "AMD64"
-PIN_RE = re.compile(r"^([0-9a-f]{64})  (fretnoise_rr\d{2}\.wav)$")
+PIN_RE = re.compile(r"^([0-9a-f]{64})  (fretnoise_rr\d{2}\.flac)$")
+
+
+def wav_from_pcm(pcm: bytes, sr: int = DST_SR) -> bytes:
+    """Wrap raw 16-bit mono PCM in a canonical 44-byte RIFF/WAVE header."""
+    return (b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVE" + b"fmt "
+            + struct.pack("<IHHIIHH", 16, 1, 1, sr, sr * 2, 2, 16)
+            + b"data" + struct.pack("<I", len(pcm)) + pcm)
+
+
+def encode_flac(pcm: bytes, destination: Path) -> None:
+    """Encode raw PCM to FLAC via ffmpeg, and prove the PCM survived."""
+    wav = destination.with_suffix(".part.wav")
+    try:
+        wav.write_bytes(wav_from_pcm(pcm))
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-i", str(wav),
+             "-c:a", "flac", "-compression_level", "12", "-f", "flac",
+             str(destination)],
+            check=True)
+    finally:
+        if wav.exists():
+            wav.unlink()
+    if decode_flac_pcm(destination) != pcm:
+        raise SystemExit(f"{destination.name}: FLAC encode was not bit-exact")
+
+
+def decode_flac_pcm(path: Path) -> bytes:
+    """The raw 16-bit PCM inside a committed bank file."""
+    return subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(path),
+         "-f", "s16le", "-acodec", "pcm_s16le", "-"],
+        stdout=subprocess.PIPE, check=True).stdout
 
 
 def find_repo_root(start: Path) -> Path:
@@ -208,16 +244,16 @@ def tpdf_dither_16(x: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     return np.clip(q, -32768, 32767).astype("<i2")
 
 
-def wav16_bytes(pcm16: np.ndarray, sr: int = DST_SR) -> bytes:
-    data = pcm16.tobytes()
-    hdr = b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVEfmt "
-    hdr += struct.pack("<IHHIIHH", 16, 1, 1, sr, sr * 2, 2, 16)
-    hdr += b"data" + struct.pack("<I", len(data))
-    return hdr + data
-
-
 def bake_payloads(src_dir: Path) -> list[tuple[str, bytes, float, float, float, float]]:
-    """Generate every output in memory before any tracked file can be replaced."""
+    """Generate every output in memory before any tracked file can be replaced.
+
+    The payload is the raw 16-bit PCM, and that is deliberately what gets pinned.
+    The bank ships as FLAC, and pinning the FLAC BYTES would tie this oracle to
+    one ffmpeg build: a version bump that changed a block-size heuristic would
+    fail every pin while the audio was untouched. The PCM is what this script's
+    DSP determines, so pinning it keeps the guarantee we actually want -- a
+    re-bake reproduces the same audio -- and survives an encoder upgrade.
+    """
     ordinals = discover_cuts(src_dir)
     # One shared RNG consumed sequentially, so every file's dither depends on the
     # total sample count of all its predecessors — the ordinal order below is what
@@ -239,8 +275,8 @@ def bake_payloads(src_dir: Path) -> list[tuple[str, bytes, float, float, float, 
         pcm = tpdf_dither_16(y, rng)
         payloads.append(
             (
-                f"fretnoise_rr{i:02d}.wav",
-                wav16_bytes(pcm),
+                f"fretnoise_rr{i:02d}.flac",
+                pcm.tobytes(),
                 rms,
                 20 * np.log10(gain),
                 20 * np.log10(float(np.abs(y).max()) + 1e-12),
@@ -254,8 +290,14 @@ def output_pin_errors(
     payloads: list[tuple[str, bytes, float, float, float, float]],
     pins: dict[str, str],
     out_dir: Path | None = None,
+    read_committed=decode_flac_pcm,
 ) -> list[str]:
-    """Check generated pins and, for verification, the committed output files."""
+    """Check generated pins and, for verification, the committed output files.
+
+    `read_committed` extracts the PCM a committed file holds, and is injected so
+    the verifier can be unit-tested on synthetic payloads without an encoder.
+    Both sides are compared as PCM, which is what the pins record.
+    """
     generated = {name: payload for name, payload, *_ in payloads}
     errors = []
     for name in sorted(set(generated) - set(pins)):
@@ -263,7 +305,7 @@ def output_pin_errors(
     for name in sorted(set(pins) - set(generated)):
         errors.append(f"{name}: pinned output was not generated")
     if out_dir is not None:
-        committed_names = {path.name for path in out_dir.glob("fretnoise_rr*.wav")}
+        committed_names = {path.name for path in out_dir.glob("fretnoise_rr*.flac")}
         for name in sorted(committed_names - set(pins)):
             errors.append(f"{name}: committed output has no SHA-256 pin")
     for name in sorted(set(generated) & set(pins)):
@@ -275,7 +317,7 @@ def output_pin_errors(
             if not committed.is_file():
                 errors.append(f"{name}: committed output is missing")
             else:
-                digest = hashlib.sha256(committed.read_bytes()).hexdigest()
+                digest = hashlib.sha256(read_committed(committed)).hexdigest()
                 if digest != pins[name]:
                     errors.append(f"{name}: committed sha256 {digest} != pinned {pins[name]}")
     return errors
@@ -323,7 +365,7 @@ def main(argv: list[str] | None = None) -> int:
 
     out_dir.mkdir(parents=True, exist_ok=True)
     for name, payload, *_ in payloads:
-        (out_dir / name).write_bytes(payload)
+        encode_flac(payload, out_dir / name)
     print(f"\nbaked {len(payloads)} files, {total_bytes / 1024:.0f} KiB total, into {out_dir}")
     return 0
 

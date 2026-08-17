@@ -28,7 +28,7 @@ Usage:
     (SOURCE defaults to samples/banjo/banjo-5string-openG-2026-07-23.opus)
 """
 from __future__ import annotations
-import math, os, shutil, struct, subprocess, sys, tempfile
+import math, os, re, shutil, struct, subprocess, sys, tempfile
 from pathlib import Path
 import numpy as np
 
@@ -37,7 +37,11 @@ SRC = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "samples/banjo/banjo-5s
 OUT = REPO / "crates/ferrosintesis-samples-orchestral2/samples"
 SR = 44100
 NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-BANJO_GLOB = "banjo_*.wav"
+# Staging writes WAV, because `validate_wav16_contract` is a RIFF-header check and
+# is worth keeping; the published bank is FLAC, and `publish_banjo_bank` encodes on
+# the way out. The two globs are therefore deliberately different containers.
+STAGING_GLOB = "banjo_*.wav"
+BANJO_GLOB = "banjo_*.flac"
 EXPECTED_BANJO_FILE_COUNT = 24
 np.random.seed(1234)  # deterministic dither
 
@@ -55,15 +59,18 @@ def _quoted_fields(line: str) -> list[str]:
 
 
 def _sample_crate_banjo_files(repo: Path = REPO) -> frozenset[str]:
+    """The banjo takes the orchestral2 crate embeds, read from its table.
+
+    Scanned over the WHOLE file rather than line by line. The generated table is
+    rustfmt'd, and rustfmt wraps an entry whose name pushes it past
+    `fn_call_width` — so the name and its `include_bytes!` land on separate
+    lines. A line-oriented scan that required both on one line therefore missed
+    every longer name silently: it reported 14 of 24 takes once `.wav` became
+    `.flac` and the sharps grew a character.
+    """
     lib = repo / "crates/ferrosintesis-samples-orchestral2/src/lib.rs"
-    names = set()
-    for raw in lib.read_text(encoding="utf-8").splitlines():
-        if "include_bytes!" not in raw:
-            continue
-        for field in _quoted_fields(raw):
-            if field.startswith("banjo_") and field.endswith(".wav"):
-                names.add(field)
-    return frozenset(names)
+    text = lib.read_text(encoding="utf-8")
+    return frozenset(re.findall(r'"(banjo_[^"/]*\.flac)"', text))
 
 
 def _sampler_banjo_files(repo: Path = REPO) -> frozenset[str]:
@@ -202,16 +209,44 @@ def validate_wav16_contract(path: Path) -> None:
         raise RuntimeError(f"{path.name}: data chunk size is invalid")
 
 
+def staging_name(packaged: str) -> str:
+    """The staging WAV that becomes a given published FLAC."""
+    return packaged[: -len(".flac")] + ".wav"
+
+
+def encode_flac(wav: Path, flac: Path) -> None:
+    """Encode a staging WAV losslessly, and prove the PCM survived it.
+
+    ffmpeg is already this script's decoder, so it is the encoder too. The
+    round-trip check is not ceremony: a bank is embedded verbatim into the crate
+    and never re-examined, so an encoder that dropped or shifted a frame would
+    ship silently.
+    """
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-i", str(wav),
+         "-c:a", "flac", "-compression_level", "12", "-f", "flac", str(flac)],
+        check=True)
+    decoded = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(flac),
+         "-f", "s16le", "-acodec", "pcm_s16le", "-"],
+        stdout=subprocess.PIPE, check=True).stdout
+    if decoded != wav.read_bytes()[44:]:
+        raise RuntimeError(f"{flac.name}: FLAC encode was not bit-exact")
+
+
 def validate_banjo_output_plan(staging: Path, repo: Path = REPO) -> frozenset[str]:
     expected = expected_banjo_files(repo)
-    actual = {p.name for p in staging.glob(BANJO_GLOB)}
+    # Staging holds the WAVs the extractor just wrote; compare them against the
+    # expected bank under the published name, since that is what the crate table
+    # and sampler.rs both speak.
+    actual = {p.stem + ".flac" for p in staging.glob(STAGING_GLOB)}
     if actual != expected:
         raise RuntimeError(
             "banjo regeneration produced the wrong file set; "
             f"missing: {_format_names(expected - actual)}; "
             f"unexpected: {_format_names(actual - expected)}")
     for name in sorted(expected):
-        validate_wav16_contract(staging / name)
+        validate_wav16_contract(staging / staging_name(name))
     return expected
 
 
@@ -219,6 +254,11 @@ def publish_banjo_bank(
         staging: Path, out: Path = OUT, repo: Path = REPO,
         replace_file=os.replace) -> None:
     expected = validate_banjo_output_plan(staging, repo)
+    # Encode BEFORE touching the published bank, so an encoder failure cannot
+    # leave the bank half-replaced -- the replace loop below is the only step
+    # that mutates `out`, and it is what the rollback path unwinds.
+    for name in sorted(expected):
+        encode_flac(staging / staging_name(name), staging / name)
     out.mkdir(parents=True, exist_ok=True)
     originals = {p.name for p in out.glob(BANJO_GLOB)}
     with tempfile.TemporaryDirectory(

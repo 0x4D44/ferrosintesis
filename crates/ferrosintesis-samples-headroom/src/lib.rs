@@ -196,15 +196,15 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
 ];
 
 static ALIASES: [(&str, &str); 9] = [
-    ("headroom_C2_f_rr2.wav", "headroom_C2_mf_rr2.flac"),
-    ("headroom_C3_f_rr2.wav", "headroom_C3_mf_rr2.flac"),
-    ("headroom_C4_f_rr2.wav", "headroom_C4_mf_rr2.flac"),
-    ("headroom_C5_f_rr2.wav", "headroom_C5_mf_rr2.flac"),
-    ("headroom_C6_f_rr2.wav", "headroom_C6_mf_rr2.flac"),
-    ("headroom_F#2_f_rr2.wav", "headroom_F#2_mf_rr2.flac"),
-    ("headroom_F#3_f_rr2.wav", "headroom_F#3_mf_rr2.flac"),
-    ("headroom_F#4_f_rr2.wav", "headroom_F#4_mf_rr2.flac"),
-    ("headroom_F#5_f_rr2.wav", "headroom_F#5_mf_rr2.flac"),
+    ("headroom_C2_f_rr2.flac", "headroom_C2_mf_rr2.flac"),
+    ("headroom_C3_f_rr2.flac", "headroom_C3_mf_rr2.flac"),
+    ("headroom_C4_f_rr2.flac", "headroom_C4_mf_rr2.flac"),
+    ("headroom_C5_f_rr2.flac", "headroom_C5_mf_rr2.flac"),
+    ("headroom_C6_f_rr2.flac", "headroom_C6_mf_rr2.flac"),
+    ("headroom_F#2_f_rr2.flac", "headroom_F#2_mf_rr2.flac"),
+    ("headroom_F#3_f_rr2.flac", "headroom_F#3_mf_rr2.flac"),
+    ("headroom_F#4_f_rr2.flac", "headroom_F#4_mf_rr2.flac"),
+    ("headroom_F#5_f_rr2.flac", "headroom_F#5_mf_rr2.flac"),
 ];
 
 /// Returns the embedded sample bytes for an exact (case-sensitive) name.

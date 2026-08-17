@@ -244,7 +244,9 @@ class PrepareSampleBankTests(unittest.TestCase):
         for name in sorted(prepare.SOURCES):
             if not name.startswith("piano_"):
                 continue
-            x, sr = prepare.read_wav(os.path.join(sample_dir, name))
+            x, sr = prepare.read_wav(
+                os.path.join(sample_dir, prepare.packaged_name(name))
+            )
             self.assertEqual(sr, prepare.OUT_SR)
             bank[name] = x
 
@@ -866,10 +868,11 @@ class PrepareSampleBankTests(unittest.TestCase):
                 names = prepare.piano_take_names(note, dyn)
                 payloads = []
                 for name in names:
-                    with open(os.path.join(sample_dir, name), "rb") as sample:
+                    packaged = os.path.join(sample_dir, prepare.packaged_name(name))
+                    with open(packaged, "rb") as sample:
                         payloads.append(sample.read())
                 if len(names) == 1:
-                    missing_rr2 = f"piano_{note}_{dyn}_rr2.wav"
+                    missing_rr2 = prepare.packaged_name(f"piano_{note}_{dyn}_rr2.wav")
                     self.assertFalse(os.path.exists(os.path.join(sample_dir, missing_rr2)))
                 else:
                     self.assertNotEqual(
@@ -1071,7 +1074,7 @@ class PrepareSampleBankTests(unittest.TestCase):
             if not os.path.isdir(sample_dir):
                 continue
             for name in sorted(os.listdir(sample_dir)):
-                if not name.endswith(".wav"):
+                if not name.endswith((".wav", prepare.PACKAGED_EXT)):
                     continue
                 path = os.path.join(sample_dir, name)
                 one_shot, step, ordinary_step = self._onset_continuity(path)
@@ -2740,12 +2743,18 @@ class PackagedRecipeRoutingTest(unittest.TestCase):
 
     @staticmethod
     def packaged_in(name):
-        """The sample crate that actually ships `name`, read from the tree."""
+        """The sample crate that actually ships `name`, read from the tree.
+
+        Takes a recording's logical name and looks for the packaged file, so a
+        caller names the recording it means rather than the container it is
+        currently stored in.
+        """
         crates_dir = os.path.join(prepare.REPO_ROOT, "crates")
+        packaged = prepare.packaged_name(name)
         return {
             crate
             for crate in os.listdir(crates_dir)
-            if os.path.isfile(os.path.join(crates_dir, crate, "samples", name))
+            if os.path.isfile(os.path.join(crates_dir, crate, "samples", packaged))
         }
 
     def test_the_two_bottle_banks_ship_in_different_crates(self):
@@ -2832,6 +2841,12 @@ class SelectedFamilyPreflightTest(unittest.TestCase):
         owned = prepare._family_output_sets()
         self.assertGreater(len(owned), 30, "the derived family map collapsed")
 
+        # Compared in the PACKAGED vocabulary, because that is the vocabulary the
+        # pre-flight this test underwrites compares in. The subject is which
+        # RECORDINGS a table names, never which container they are stored in: the
+        # tables say `harp_C4.wav` and the committed bank holds `harp_C4.flac`,
+        # and normalising both sides is what keeps this a test of inventory drift
+        # rather than of the container decision.
         on_disk = {}
         crates = os.path.join(prepare.REPO_ROOT, "crates")
         for crate in os.listdir(crates):
@@ -2839,13 +2854,15 @@ class SelectedFamilyPreflightTest(unittest.TestCase):
             if not os.path.isdir(sample_dir):
                 continue
             for name in os.listdir(sample_dir):
-                if name.endswith(".wav"):
-                    on_disk.setdefault(name.split("_", 1)[0], set()).add(name)
+                if name.endswith((".wav", prepare.PACKAGED_EXT)):
+                    on_disk.setdefault(name.split("_", 1)[0], set()).add(
+                        prepare.packaged_name(name)
+                    )
 
         for family, expected in sorted(owned.items()):
             with self.subTest(family=family):
                 self.assertEqual(
-                    expected,
+                    {prepare.packaged_name(name) for name in expected},
                     on_disk.get(family, set()),
                     f"{family}: the source table and the committed directory disagree",
                 )
@@ -3256,13 +3273,28 @@ class ObsoleteOwnedOutputTest(unittest.TestCase):
                 {"somebank"}, {"somebank_C4_mf.wav"}, output_dir=out_dir
             )
 
-    def test_every_baker_validates_before_it_reads_a_source(self):
+    def test_every_baker_validates_before_it_writes_an_output(self):
         """Source-shape, because the ordering of ten bakers cannot be observed
-        from outside without running all ten (several need fetched archives)."""
+        from outside without running all ten (several need fetched archives).
+
+        The anchor is the first WRITE, not the first read, and that is the
+        invariant rather than a convenience. What MM-BUG-KILN-00182/00191 needed
+        is that no output is written while an obsolete owned file still sits in
+        the crate -- once a bake starts replacing files, a stale sibling will be
+        picked up by the next inventory refresh and embedded.
+
+        Ordering the validator before the first READ cannot be required, because
+        several banks derive their expected output set FROM the sources: MTG sax
+        drops any zone whose f0 confidence is too low, so its expectation does
+        not exist until the selection loop has run. Demanding a pre-read
+        validation there would mean hand-maintaining the expected set, which is
+        the defect class this whole guard exists to prevent.
+        """
         source = open(
             os.path.join(os.path.dirname(__file__), "prepare.py"), encoding="utf-8"
         ).read()
         checked = 0
+        ordered = 0
         for name in re.findall(r"^def (_?bake_\w+)\(", source, re.M):
             body = re.split(r"^def ", source.split(f"def {name}(", 1)[1],
                             maxsplit=1, flags=re.M)[0]
@@ -3270,13 +3302,20 @@ class ObsoleteOwnedOutputTest(unittest.TestCase):
                 continue
             checked += 1
             validate_at = body.index("_validate_generated_output_families")
-            read_at = body.find("read_wav(")
+            write_at = body.find("write_wav_mono(")
+            if write_at != -1:
+                ordered += 1
             self.assertTrue(
-                read_at == -1 or validate_at < read_at,
-                f"{name} reads a source before validating its owned outputs",
+                write_at == -1 or validate_at < write_at,
+                f"{name} writes an output before validating its owned outputs",
             )
         self.assertGreaterEqual(
             checked, 8, "the baker scan stopped finding validators; it guards nothing"
+        )
+        # Without this the assertion above passes on any baker that simply has no
+        # recognizable write, which is how a renamed writer would silence it.
+        self.assertGreaterEqual(
+            ordered, 8, "no baker had a write to order against; the anchor moved"
         )
 
 
@@ -3334,6 +3373,21 @@ class KawaiProvenanceMappingTest(unittest.TestCase):
             self.assert_matches_bake_mapping(wrong)
 
 
+def as_packaged_manifest(mapping):
+    """Restate an alias map in the vocabulary a committed `ALIASES` file speaks.
+
+    The bake source maps are keyed by LOGICAL name (`kawai_C2_mf.wav`); the
+    committed manifest names the files actually on disk, which are FLAC, because
+    the generated `get()` resolves an alias and then looks it up in `SAMPLES`.
+    Both sides of the comparison must therefore speak the same one, and the
+    source map is the side that gets translated.
+    """
+    return {
+        prepare.packaged_name(alias): prepare.packaged_name(canonical)
+        for alias, canonical in mapping.items()
+    }
+
+
 class KawaiAliasDeduplicationTest(unittest.TestCase):
     """MM-BUG-KILN-00162: logical cells must not duplicate physical payloads."""
 
@@ -3372,9 +3426,9 @@ class KawaiAliasDeduplicationTest(unittest.TestCase):
         self.assertEqual(
             gen_crate_lib.read_aliases(
                 os.path.dirname(self.ALIASES_PATH),
-                sorted(expected_physical),
+                sorted(prepare.packaged_name(name) for name in expected_physical),
             ),
-            expected_aliases,
+            as_packaged_manifest(expected_aliases),
             "the package alias manifest must be derived from the bake source map",
         )
 
@@ -3429,9 +3483,9 @@ class SteinwayAliasDeduplicationTest(unittest.TestCase):
         self.assertEqual(
             gen_crate_lib.read_aliases(
                 os.path.dirname(self.ALIASES_PATH),
-                sorted(expected_physical),
+                sorted(prepare.packaged_name(name) for name in expected_physical),
             ),
-            expected_aliases,
+            as_packaged_manifest(expected_aliases),
             "the package alias manifest must be derived from the bake source map",
         )
 
@@ -3535,7 +3589,8 @@ class GeneratedCrateDocHeaderTest(unittest.TestCase):
             if name.startswith("ferrosintesis-samples-")
             and os.path.isfile(os.path.join(crates_dir, name, "src", "lib.rs"))
         )
-        self.assertEqual(len(crates), 25, "sample-crate census changed")
+        # 24 since the dark-Salamander alternate bank was removed on 2026.08.17.
+        self.assertEqual(len(crates), 24, "sample-crate census changed")
 
         failures = []
         for crate in crates:
@@ -3743,6 +3798,102 @@ class B1StrictPredicateTest(unittest.TestCase):
             regen_samples_table.b1_tail_payload_size(bytes(wav), "nonzero-pad.wav")
 
 
+class PackagedContainerTest(unittest.TestCase):
+    """The FLAC read/write path the packaged banks depend on.
+
+    `read_wav` dispatches on the container and the bake publishes FLAC, so these
+    are the two halves of one contract: what `publish_pending_banks` writes must
+    read back as the samples that went in. Nothing else in this suite exercises
+    the decoder directly — every other test reaches it through a committed bank,
+    which cannot distinguish a correct decoder from a consistently wrong one.
+    """
+
+    SAMPLES = [0, 1, -1, 32767, -32768, 1234, -4321, 0]
+
+    def write_source(self, directory, name="probe.wav"):
+        path = os.path.join(directory, name)
+        with wave.open(path, "wb") as handle:
+            handle.setnchannels(1)
+            handle.setsampwidth(2)
+            handle.setframerate(prepare.OUT_SR)
+            handle.writeframes(struct.pack(f"<{len(self.SAMPLES)}h", *self.SAMPLES))
+        return path
+
+    def test_streaminfo_reports_the_stream_it_was_encoded_with(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.write_source(tmp)
+            flac = os.path.join(tmp, "probe.flac")
+            prepare._encode_flac(source, flac)
+            self.assertEqual(
+                prepare._flac_streaminfo(flac), (prepare.OUT_SR, 1, 16)
+            )
+
+    def test_a_flac_reads_back_as_the_samples_that_were_encoded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.write_source(tmp)
+            flac = os.path.join(tmp, "probe.flac")
+            prepare._encode_flac(source, flac)
+
+            from_wav, wav_rate = prepare.read_wav(source)
+            from_flac, flac_rate = prepare.read_wav(flac)
+
+            self.assertEqual(wav_rate, prepare.OUT_SR)
+            self.assertEqual(flac_rate, prepare.OUT_SR)
+            self.assertEqual(from_flac, from_wav)
+            self.assertEqual(
+                [int(round(v * 32768.0)) for v in from_flac], self.SAMPLES
+            )
+
+    def test_the_dispatch_follows_the_bytes_not_the_extension(self):
+        """A misnamed file is still read correctly, which is the point of the magic
+        check — a `.wav` holding FLAC would otherwise fail inside `wave`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.write_source(tmp)
+            flac = os.path.join(tmp, "probe.flac")
+            prepare._encode_flac(source, flac)
+            misnamed = os.path.join(tmp, "actually_flac.wav")
+            os.replace(flac, misnamed)
+
+            samples, rate = prepare.read_wav(misnamed)
+            self.assertEqual(rate, prepare.OUT_SR)
+            self.assertEqual([int(round(v * 32768.0)) for v in samples], self.SAMPLES)
+
+    def test_publish_converts_a_registered_bank_and_removes_the_wav(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bank = os.path.join(tmp, "crates", "some-bank", "samples")
+            os.makedirs(bank)
+            self.addCleanup(prepare._PENDING_BANK_DIRS.clear)
+            prepare._PENDING_BANK_DIRS.clear()
+            prepare.write_wav_mono(
+                os.path.join(bank, "probe_C4.wav"),
+                [v / 32768.0 for v in self.SAMPLES],
+                prepare.OUT_SR,
+            )
+            self.assertEqual(os.listdir(bank), ["probe_C4.wav"])
+
+            self.assertEqual(prepare.publish_pending_banks(), 1)
+
+            self.assertEqual(os.listdir(bank), ["probe_C4.flac"])
+            self.assertEqual(prepare._PENDING_BANK_DIRS, set())
+            # A second call has nothing registered, so it is a no-op rather than
+            # re-encoding a bank that is already published.
+            self.assertEqual(prepare.publish_pending_banks(), 0)
+
+    def test_a_scratch_write_is_left_as_a_wav(self):
+        """Only a bank destination is packaged; caches and scratch stay WAV."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self.addCleanup(prepare._PENDING_BANK_DIRS.clear)
+            prepare._PENDING_BANK_DIRS.clear()
+            scratch = os.path.join(tmp, "cache", "decoded.wav")
+            prepare.write_wav_mono(
+                scratch, [v / 32768.0 for v in self.SAMPLES], prepare.OUT_SR
+            )
+            self.assertTrue(os.path.isfile(scratch))
+            self.assertEqual(prepare._PENDING_BANK_DIRS, set())
+            self.assertEqual(prepare.publish_pending_banks(), 0)
+            self.assertTrue(os.path.isfile(scratch), "scratch must survive publish")
+
+
 class BottleLoopTest(unittest.TestCase):
     """MM-BUG-KILN-00065: the GM 76 whole-voice loop must have exactly one owner.
 
@@ -3777,12 +3928,15 @@ class BottleLoopTest(unittest.TestCase):
             written = os.path.join(root, "crates", "ferrosintesis-samples-bottle",
                                    "samples", prepare.BOTTLE_LOOP_OUT)
             self.assertTrue(os.path.exists(written), "the bake wrote no file")
-        committed = os.path.join(prepare.REPO_ROOT, "crates",
-                                 "ferrosintesis-samples-bottle", "samples",
-                                 prepare.BOTTLE_LOOP_OUT)
-        with wave.open(committed, "rb") as w:
-            n = w.getnframes()
-            want = list(struct.unpack(f"<{n}h", w.readframes(n)))
+        committed = os.path.join(
+            prepare.REPO_ROOT, "crates", "ferrosintesis-samples-bottle", "samples",
+            prepare.packaged_name(prepare.BOTTLE_LOOP_OUT),
+        )
+        # Read through `read_wav`, which dispatches on the container, and scale the
+        # normalized floats back to the int16 the bake compares in. A 16-bit sample
+        # divided by 32768 and multiplied back is exact in float64.
+        samples, _sr = prepare.read_wav(committed)
+        want = [int(round(v * 32768.0)) for v in samples]
         self.assertEqual(len(got), len(want), "the bake produced a different length")
         worst = max(abs(a - b) for a, b in zip(got, want))
         peak = max(abs(v) for v in want)

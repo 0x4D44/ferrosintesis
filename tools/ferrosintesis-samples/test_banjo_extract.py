@@ -37,8 +37,11 @@ class BanjoPublicationTest(unittest.TestCase):
             old = f"old bank: {name}".encode()
             (self.out / name).write_bytes(old)
             self.old_bytes[name] = old
+            # Staging holds WAVs — publication is what encodes them — so the
+            # staged file carries the take's WAV name, not its published one.
             banjo_extract.write_wav16(
-                self.staging / name, np.array([0.0, 0.25, -0.25, 0.0]))
+                self.staging / banjo_extract.staging_name(name),
+                np.array([0.0, 0.25, -0.25, 0.0]))
 
     def assert_old_bank_unchanged(self):
         self.assertEqual(
@@ -49,7 +52,8 @@ class BanjoPublicationTest(unittest.TestCase):
             self.assertEqual((self.out / name).read_bytes(), old)
 
     def test_missing_zone_is_rejected_before_publication(self):
-        (self.staging / sorted(self.expected)[0]).unlink()
+        missing = banjo_extract.staging_name(sorted(self.expected)[0])
+        (self.staging / missing).unlink()
 
         with self.assertRaisesRegex(RuntimeError, "missing: banjo_"):
             banjo_extract.publish_banjo_bank(self.staging, self.out)
@@ -74,15 +78,22 @@ class BanjoPublicationTest(unittest.TestCase):
         self.assert_old_bank_unchanged()
 
     def test_complete_bank_replaces_every_file_and_removes_obsolete_ones(self):
-        (self.out / "banjo_obsolete.wav").write_bytes(b"obsolete")
+        (self.out / "banjo_obsolete.flac").write_bytes(b"obsolete")
 
         banjo_extract.publish_banjo_bank(self.staging, self.out)
 
+        # Checked against the published directory directly.
+        # `validate_banjo_output_plan` inspects STAGING, so it is not the oracle
+        # for what landed.
         self.assertEqual(
-            banjo_extract.validate_banjo_output_plan(self.out), self.expected)
-        self.assertFalse((self.out / "banjo_obsolete.wav").exists())
+            {path.name for path in self.out.glob(banjo_extract.BANJO_GLOB)},
+            set(self.expected),
+        )
+        self.assertFalse((self.out / "banjo_obsolete.flac").exists())
         for name, old in self.old_bytes.items():
-            self.assertNotEqual((self.out / name).read_bytes(), old)
+            published = (self.out / name).read_bytes()
+            self.assertNotEqual(published, old)
+            self.assertEqual(published[:4], b"fLaC", f"{name} is not FLAC")
 
 
 if __name__ == "__main__":

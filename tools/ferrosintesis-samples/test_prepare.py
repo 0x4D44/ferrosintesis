@@ -560,7 +560,7 @@ class PrepareSampleBankTests(unittest.TestCase):
                     self.assertEqual(handle.read(), expected)
             self.assertFalse(any(".b1-stage-" in name for name in os.listdir(output_dir)))
 
-    def test_b1_sustain_pilot_output_is_outside_every_git_tree_and_empty(self):
+    def test_b1_sustain_pilot_output_is_outside_registered_git_worktrees_and_empty(self):
         with tempfile.TemporaryDirectory() as root:
             accepted = os.path.join(root, "new-output")
             self.assertEqual(
@@ -575,13 +575,35 @@ class PrepareSampleBankTests(unittest.TestCase):
                     accepted, repo_root=prepare.REPO_ROOT
                 )
 
-        with tempfile.TemporaryDirectory() as git_root:
-            os.makedirs(os.path.join(git_root, ".git"))
-            nested = os.path.join(git_root, "untracked", "pilot")
-            with self.assertRaisesRegex(ValueError, "Git working tree"):
-                prepare.validate_b1_pilot_output_dir(
+        # An unrelated repository above the destination is not one of this
+        # repository's worktrees.  In particular, this models a user's home
+        # directory carrying a dotfiles repository while %TEMP% lives below it.
+        with tempfile.TemporaryDirectory() as unrelated_root:
+            os.makedirs(os.path.join(unrelated_root, ".git"))
+            nested = os.path.join(unrelated_root, "untracked", "pilot")
+            try:
+                actual = prepare.validate_b1_pilot_output_dir(
                     nested, repo_root=prepare.REPO_ROOT
                 )
+            except ValueError as exc:
+                self.fail(f"unrelated Git marker was rejected: {exc}")
+            self.assertEqual(
+                actual,
+                os.path.realpath(nested),
+            )
+
+        with tempfile.TemporaryDirectory() as registered_root:
+            nested = os.path.join(registered_root, "untracked", "pilot")
+            git_worktrees = mock.Mock(
+                stdout=f"worktree {os.path.realpath(registered_root)}\n"
+            )
+            with mock.patch.object(
+                prepare.subprocess, "run", return_value=git_worktrees
+            ):
+                with self.assertRaisesRegex(ValueError, "registered Git working tree"):
+                    prepare.validate_b1_pilot_output_dir(
+                        nested, repo_root=prepare.REPO_ROOT
+                    )
 
         with self.assertRaisesRegex(ValueError, "repository"):
             prepare.validate_b1_pilot_output_dir(

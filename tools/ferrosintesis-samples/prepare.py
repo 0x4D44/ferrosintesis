@@ -3202,11 +3202,41 @@ def _path_is_within(path, root):
         return False
 
 
+def _git_worktree_roots(repo_root):
+    """Return the registered worktree roots for the repository at `repo_root`."""
+    try:
+        result = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=repo_root,
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ValueError(
+            "B1 pilot output cannot verify this repository's Git worktrees"
+        ) from exc
+
+    roots = tuple(
+        os.path.realpath(os.path.abspath(line[len("worktree "):]))
+        for line in result.stdout.splitlines()
+        if line.startswith("worktree ")
+    )
+    if not roots:
+        raise ValueError(
+            "B1 pilot output cannot verify this repository's Git worktrees"
+        )
+    return roots
+
+
 def validate_b1_pilot_output_dir(path, repo_root=None):
     """Resolve and fail closed on the offline pilot's output destination.
 
     The pilot exists to make disposable listening controls. It may never point at
-    this repo, another worktree, or a directory that already carries artifacts.
+    this repo, another registered worktree, or a directory that already carries
+    artifacts.
     """
     # Call-time, not import-time (MM-BUG-NMI-00003).
     repo_root = REPO_ROOT if repo_root is None else repo_root
@@ -3215,14 +3245,11 @@ def validate_b1_pilot_output_dir(path, repo_root=None):
     if _path_is_within(resolved, repo):
         raise ValueError("B1 pilot output must be outside the repository")
 
-    cursor = resolved
-    while True:
-        if os.path.exists(os.path.join(cursor, ".git")):
-            raise ValueError("B1 pilot output must be outside every Git working tree")
-        parent = os.path.dirname(cursor)
-        if parent == cursor:
-            break
-        cursor = parent
+    if any(_path_is_within(resolved, root)
+           for root in _git_worktree_roots(repo)):
+        raise ValueError(
+            "B1 pilot output must be outside every registered Git working tree"
+        )
 
     if os.path.exists(resolved):
         if not os.path.isdir(resolved) or os.listdir(resolved):

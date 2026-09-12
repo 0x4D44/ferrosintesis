@@ -2757,9 +2757,10 @@ class PackagedRecipeRoutingTest(unittest.TestCase):
     """MM-BUG-KILN-00190: a crate's documented recipe must touch only that crate.
 
     `-musescore`'s PROVENANCE says to regenerate with `--only=...,bottle,...`. That
-    selector answered for TWO unrelated banks — the MuseScore SF3 breath onset
-    `bottle_C6.wav` in `-musescore`, and the separately sourced whole-voice loop
-    `bottleloop_G3.wav` in `-bottle` — so following one crate's published recipe
+    selector answered for TWO unrelated banks — the MuseScore SF3 breath onset,
+    logically named `bottle_C6.wav` and packaged as `bottle_C6.flac` in `-musescore`,
+    and the separately sourced whole-voice loop `bottleloop_G3.wav`, packaged as
+    `bottleloop_G3.flac` in `-bottle` — so following one crate's published recipe
     silently rewrote another crate's active asset.
     """
 
@@ -2767,9 +2768,9 @@ class PackagedRecipeRoutingTest(unittest.TestCase):
     def packaged_in(name):
         """The sample crate that actually ships `name`, read from the tree.
 
-        Takes a recording's logical name and looks for the packaged file, so a
-        caller names the recording it means rather than the container it is
-        currently stored in.
+        Takes a logical or already-packaged name and looks for the packaged file.
+        Logical names are normalized so callers can name the recording they mean
+        rather than the container it is currently stored in.
         """
         crates_dir = os.path.join(prepare.REPO_ROOT, "crates")
         packaged = prepare.packaged_name(name)
@@ -2787,14 +2788,31 @@ class PackagedRecipeRoutingTest(unittest.TestCase):
         points at `-bottle` while the onset it names ships in `-musescore` — the
         mapping is a safety net for the generic discovery path, not a description of
         where this bake writes. Reading the tree avoids encoding either routing's
-        assumption into the test.
+        assumption into the test. The lookup below therefore uses the physical
+        packaged names; logical-name normalization remains covered by the helper.
         """
-        onset = self.packaged_in("bottle_C6.wav")
-        loop = self.packaged_in(prepare.BOTTLE_LOOP_OUT)
+        onset = self.packaged_in("bottle_C6.flac")
+        loop = self.packaged_in(prepare.packaged_name(prepare.BOTTLE_LOOP_OUT))
         self.assertEqual(onset, {"ferrosintesis-samples-musescore"})
         self.assertEqual(loop, {"ferrosintesis-samples-bottle"})
         self.assertNotEqual(
             onset, loop, "the two bottle banks must live in different crates"
+        )
+
+    def test_the_retired_bottle_wav_name_is_not_in_any_sample_crate(self):
+        """A direct inventory check must catch a stale WAV behind name normalization."""
+        crates_dir = os.path.join(prepare.REPO_ROOT, "crates")
+        stale = {
+            crate
+            for crate in os.listdir(crates_dir)
+            if os.path.isfile(
+                os.path.join(crates_dir, crate, "samples", "bottle_C6.wav")
+            )
+        }
+        self.assertEqual(
+            stale,
+            set(),
+            "retired bottle_C6.wav must not remain in a sample crate",
         )
 
     def test_only_bottle_does_not_reach_the_separate_loop_crate(self):

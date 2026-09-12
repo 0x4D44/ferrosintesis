@@ -6,15 +6,15 @@
 - **Area:** sample tooling / test environment
 - **Raised:** 2026-08-15T21:41:47Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260912T204012Z-ee9a3612
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-NMI-00004-run-fix-20260912T204012Z-ee9a3612
+- **Owner base:** 94edbcfef226986d6ac28330020bc301fa5207d9
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-12T20:40:12Z
+- **Owner until:** 2026-09-12T22:40:12Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

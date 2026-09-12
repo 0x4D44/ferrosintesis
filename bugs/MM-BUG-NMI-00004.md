@@ -1,25 +1,25 @@
 # MM-BUG-NMI-00004 — b1 sustain-pilot output-dir validator false-positives when the user home directory is itself a Git working tree
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample tooling / test environment
 - **Raised:** 2026-08-15T21:41:47Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260912T204012Z-ee9a3612
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-NMI-00004-run-fix-20260912T204012Z-ee9a3612
-- **Owner base:** 94edbcfef226986d6ac28330020bc301fa5207d9
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-12T20:40:12Z
-- **Owner until:** 2026-09-12T22:40:12Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-15T21:41:47Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-15T21:41:47Z, raised via `deltic bugs new`) -> Fixed (2026-09-12T20:50:02Z, deltic:auto role=fix run=fix-20260912T204012Z-ee9a3612 branch=task/bug-MM-BUG-NMI-00004-run-fix-20260912T204012Z-ee9a3612 code=075b5251 gate=manual)
 
 ## Observation
 

@@ -168,7 +168,10 @@ def main():
     lines.append("    use std::path::Path;")
     lines.append("")
     lines.append("    // Aggregate byte size of the embedded samples; regenerate with")
-    lines.append("    // gen_crate_lib.py and re-pin if the bank changes.")
+    lines.append(
+        "    // gen_crate_lib.py and re-pin if the bank changes. FLAC banks are "
+        "pinned to ffmpeg libavformat Lavf62.12.101."
+    )
     lines.append(f"    const EXPECTED_BYTES: usize = {total};")
     lines.append("")
     lines.append("    #[test]")
@@ -197,7 +200,12 @@ def main():
     lines.append("    fn every_sample_is_a_nonempty_bank_file_with_the_expected_size() {")
     lines.append("        assert_eq!(")
     lines.append("            SAMPLES.iter().map(|(_, b)| b.len()).sum::<usize>(),")
-    lines.append("            EXPECTED_BYTES")
+    lines.append("            EXPECTED_BYTES,")
+    lines.append(
+        '            "packaged sample byte total differs; for FLAC banks, the pin is '
+        'ffmpeg libavformat Lavf62.12.101 — check the encoder/version and recipe '
+        'before re-pinning",'
+    )
     lines.append("        );")
     lines.append("        for (name, bytes) in SAMPLES {")
     lines.append('            assert!(bytes.len() >= 12, "{name} is too short to be a sample");')
@@ -259,7 +267,7 @@ def main():
 
     out = os.path.join(crate, "src", "lib.rs")
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    with open(out, "w", newline="\n") as f:
+    with open(out, "w", newline="\n", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
     # rustfmt the result rather than trying to reproduce its heuristics here. An entry is

@@ -4476,6 +4476,7 @@ class GenCrateLibMixedContainerTest(unittest.TestCase):
         self.assertIn(
             f"const EXPECTED_BYTES: usize = {len(flac) + len(wav)};", generated
         )
+        self.assertIn("ffmpeg libavformat Lavf62.12.101", generated)
         self.assertIn(
             "//! committed `samples/*.wav` / `samples/*.flac`; consumers normally reach it through",
             generated,
@@ -4690,6 +4691,45 @@ class PackagedContainerTest(unittest.TestCase):
             self.assertEqual(
                 prepare._flac_streaminfo(flac), (prepare.OUT_SR, 1, 16)
             )
+            prepare._assert_pinned_flac_encoder_metadata(flac)
+
+    def test_encoder_metadata_drift_names_ffmpeg(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.write_source(tmp)
+            flac = os.path.join(tmp, "probe.flac")
+            prepare._encode_flac(source, flac)
+            with open(flac, "rb") as handle:
+                mutated = bytearray(handle.read())
+
+            for index, (marker, replacement) in enumerate(
+                (
+                    (b"Lavf62.12.101", b"Lavf62.12.100"),
+                    (b"encoder=Lavf62.12.101", b"encoder=Lavf62.12.100"),
+                )
+            ):
+                with self.subTest(marker=marker):
+                    candidate = bytearray(mutated)
+                    offset = candidate.find(marker)
+                    self.assertGreaterEqual(
+                        offset, 0, "the fixture must contain ffmpeg metadata"
+                    )
+                    candidate[offset : offset + len(marker)] = replacement
+                    drifted = os.path.join(tmp, f"drifted-{index}.flac")
+                    with open(drifted, "wb") as handle:
+                        handle.write(candidate)
+
+                    with self.assertRaisesRegex(ValueError, "ffmpeg.*encoder"):
+                        prepare._assert_pinned_flac_encoder_metadata(drifted)
+
+    def test_unpinned_ffmpeg_build_names_the_expected_encoder_pin(self):
+        output = (
+            "ffmpeg version 8.0.0-custom\n"
+            "libavformat 61. 4.100 / 61. 4.100\n"
+        )
+        completed = mock.Mock(stdout=output)
+        with mock.patch.object(prepare.subprocess, "run", return_value=completed):
+            with self.assertRaisesRegex(RuntimeError, "ffmpeg encoder.*expected"):
+                prepare._require_pinned_flac_ffmpeg()
 
     def test_a_flac_reads_back_as_the_samples_that_were_encoded(self):
         with tempfile.TemporaryDirectory() as tmp:

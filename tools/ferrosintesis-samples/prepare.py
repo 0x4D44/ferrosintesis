@@ -4359,13 +4359,142 @@ def _require_ffmpeg():
         )
 
 
+_PINNED_FFMPEG_VERSION = "8.1.1"
+_PINNED_FLAC_VENDOR = b"Lavf62.12.101"
+_PINNED_FLAC_ENCODER = b"encoder=" + _PINNED_FLAC_VENDOR
+
+
+def _require_pinned_flac_ffmpeg():
+    """Reject an ffmpeg build whose FLAC container bytes are not our pin."""
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise RuntimeError(
+            "ffmpeg is required to verify the pinned FLAC encoder: "
+            f"{error}"
+        ) from error
+    output = result.stdout or ""
+    version_match = re.search(
+        r"^ffmpeg version ([0-9]+(?:\.[0-9]+){2})", output, re.MULTILINE
+    )
+    format_match = re.search(
+        r"^libavformat\s+(\d+)\.\s*(\d+)\.(\d+)", output, re.MULTILINE
+    )
+    executable_version = version_match.group(1) if version_match else "unknown"
+    flac_vendor = (
+        f"Lavf{format_match.group(1)}.{format_match.group(2)}.{format_match.group(3)}"
+        if format_match
+        else "unknown"
+    )
+    expected_vendor = _PINNED_FLAC_VENDOR.decode("ascii")
+    if executable_version != _PINNED_FFMPEG_VERSION or flac_vendor != expected_vendor:
+        raise RuntimeError(
+            "ffmpeg encoder is not pinned for FLAC bank regeneration: "
+            f"found ffmpeg {executable_version} / {flac_vendor}, expected "
+            f"ffmpeg {_PINNED_FFMPEG_VERSION} / {expected_vendor}."
+        )
+
+
+def _read_flac_metadata(path):
+    """Return the FLAC bytes and metadata blocks before the encoded frames."""
+    with open(path, "rb") as f:
+        data = f.read()
+    if len(data) < 4 or data[:4] != b"fLaC":
+        raise ValueError(f"{path}: ffmpeg did not produce a FLAC stream")
+
+    blocks = []
+    offset = 4
+    while True:
+        if offset + 4 > len(data):
+            raise ValueError(f"{path}: ffmpeg produced truncated FLAC metadata")
+        header = data[offset]
+        length = int.from_bytes(data[offset + 1 : offset + 4], "big")
+        end = offset + 4 + length
+        if end > len(data):
+            raise ValueError(f"{path}: ffmpeg produced truncated FLAC metadata block")
+        blocks.append((header, data[offset + 4 : end]))
+        offset = end
+        if header & 0x80:
+            break
+    return data, blocks, offset
+
+
+def _parse_vorbis_comment(body, path):
+    """Parse a FLAC VORBIS_COMMENT body into its vendor and UTF-8 comment bytes."""
+    if len(body) < 8:
+        raise ValueError(f"{path}: ffmpeg produced a truncated FLAC encoder comment")
+    vendor_length = int.from_bytes(body[:4], "little")
+    cursor = 4
+    vendor_end = cursor + vendor_length
+    if vendor_end + 4 > len(body):
+        raise ValueError(f"{path}: ffmpeg produced a truncated FLAC encoder vendor")
+    vendor = body[cursor:vendor_end]
+    cursor = vendor_end
+    count = int.from_bytes(body[cursor : cursor + 4], "little")
+    cursor += 4
+    comments = []
+    for _ in range(count):
+        if cursor + 4 > len(body):
+            raise ValueError(f"{path}: ffmpeg produced a truncated FLAC comment length")
+        length = int.from_bytes(body[cursor : cursor + 4], "little")
+        cursor += 4
+        end = cursor + length
+        if end > len(body):
+            raise ValueError(f"{path}: ffmpeg produced a truncated FLAC comment")
+        comments.append(body[cursor:end])
+        cursor = end
+    if cursor != len(body):
+        raise ValueError(f"{path}: ffmpeg produced trailing FLAC comment data")
+    return vendor, comments
+
+
+def _assert_pinned_flac_encoder_metadata(path):
+    """Reject a FLAC whose ffmpeg vendor or encoder comment is not pinned."""
+    _data, blocks, _frame_offset = _read_flac_metadata(path)
+    comments = [
+        _parse_vorbis_comment(body, path)
+        for header, body in blocks
+        if (header & 0x7F) == 4
+    ]
+    encoder_comments = [
+        comment
+        for _vendor, block_comments in comments
+        for comment in block_comments
+        if comment.lower().startswith(b"encoder=")
+    ]
+    vendors = [vendor for vendor, _block_comments in comments]
+    if (
+        vendors != [_PINNED_FLAC_VENDOR]
+        or encoder_comments != [_PINNED_FLAC_ENCODER]
+    ):
+        actual_vendor = vendors[0] if len(vendors) == 1 else b"<missing or multiple>"
+        actual_encoder = (
+            encoder_comments[0]
+            if len(encoder_comments) == 1
+            else b"<missing or multiple>"
+        )
+        raise ValueError(
+            f"{path}: ffmpeg FLAC encoder metadata is not pinned: expected "
+            f"vendor {_PINNED_FLAC_VENDOR!r}, encoder {_PINNED_FLAC_ENCODER!r}; "
+            f"found vendor {actual_vendor!r}, encoder {actual_encoder!r}"
+        )
+
+
 def _encode_flac(wav_path, flac_path):
     _require_ffmpeg()
+    _require_pinned_flac_ffmpeg()
     subprocess.run(
-        ["ffmpeg", "-v", "error", "-y", "-i", wav_path,
+        ["ffmpeg", "-v", "error", "-fflags", "+bitexact", "-y", "-i", wav_path,
          "-c:a", "flac", "-compression_level", "12", "-f", "flac", flac_path],
         check=True,
     )
+    _assert_pinned_flac_encoder_metadata(flac_path)
 
 
 def _decode_flac_pcm(flac_path):

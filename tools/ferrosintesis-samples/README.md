@@ -199,6 +199,11 @@ atomically so an interrupted run cannot leave a partial final cache file. Piano,
 violin, and flute output routes to the core package; every other family routes to
 the orchestral package.
 
+Published FLAC container totals are pinned to ffmpeg 8.1.1 with libavformat
+`Lavf62.12.101`. `prepare.py` checks that encoder pin before a bake and checks
+the emitted FLAC metadata before publication; do not re-pin `EXPECTED_BYTES` on
+another encoder build.
+
 ```powershell
 python3 tools/ferrosintesis-samples/prepare.py
 ```

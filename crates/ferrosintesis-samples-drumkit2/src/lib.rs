@@ -419,7 +419,8 @@ mod tests {
         const EXPECTED_BYTES: usize = 4301372;
         assert_eq!(
             SAMPLES.iter().map(|(_, bytes)| bytes.len()).sum::<usize>(),
-            EXPECTED_BYTES
+            EXPECTED_BYTES,
+            "packaged sample byte total differs; for FLAC banks, the pin is ffmpeg libavformat Lavf62.12.101 — check the encoder/version and recipe before re-pinning",
         );
         for (name, bytes) in SAMPLES {
             assert!(bytes.len() >= 12, "{name} is too short to be a sample");

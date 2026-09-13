@@ -6,15 +6,15 @@
 - **Area:** orchestral2 sample generation / family publication atomicity
 - **Raised:** 2026-08-17T04:26:14Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T164231Z-1cdf7492
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00265-run-fix-20260913T164231Z-1cdf7492
+- **Owner base:** 69cad3278718368bedfc5965e98ea5522ca7ec80
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T16:42:31Z
+- **Owner until:** 2026-09-13T18:42:31Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

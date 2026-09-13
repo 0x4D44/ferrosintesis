@@ -4122,6 +4122,176 @@ class GrandWholeBankPublicationTest(unittest.TestCase):
         self.assert_no_transaction_artifacts()
 
 
+class MuseScoreGrandWholeBankPublicationTest(unittest.TestCase):
+    """MM-BUG-KILN-00255: failed MuseScore-grand bakes preserve the old bank."""
+
+    ROOTS = (40, 52, 64)
+
+    def setUp(self):
+        self.repo_root = tempfile.mkdtemp()
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.repo_root, True)
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.addCleanup(prepare._PENDING_BANK_DIRS.clear)
+        self.sample_dir = os.path.join(
+            self.repo_root,
+            "crates",
+            "ferrosintesis-samples-musescore-grand",
+            "samples",
+        )
+        os.makedirs(self.sample_dir)
+        self.logical_names = tuple(
+            f"musescoregrand_{prepare._midi_name(root)}.wav" for root in self.ROOTS
+        )
+        self.packaged_names = tuple(
+            prepare.packaged_name(name) for name in self.logical_names
+        )
+        for name in self.packaged_names:
+            pathlib.Path(self.sample_dir, name).write_bytes(b"old-musescore-grand-" + name.encode())
+        self.sf3_path = os.path.join(self.src, "MuseScore_General.sf3")
+        pathlib.Path(self.sf3_path).write_bytes(self.fake_sf3(self.ROOTS))
+
+    @staticmethod
+    def chunk(tag, payload):
+        padding = b"\0" if len(payload) % 2 else b""
+        return tag + struct.pack("<I", len(payload)) + payload + padding
+
+    @classmethod
+    def fake_sf3(cls, roots):
+        """Build the smallest SF3-shaped fixture the grand extractor accepts."""
+        smpl = b"".join(bytes((65 + i,)) * 4 for i, _ in enumerate(roots))
+        shdr = []
+        for i, root in enumerate(roots):
+            record = bytearray(46)
+            record[:20] = f"fixture{i}".encode("ascii").ljust(20, b"\0")
+            start, end = i * 4, (i + 1) * 4
+            record[20:40] = struct.pack("<IIIII", start, end, start, end, 44100)
+            record[40] = root
+            record[44:46] = struct.pack("<H", 1)
+            shdr.append(bytes(record))
+
+        def instrument(name, first_bag):
+            record = bytearray(22)
+            record[:len(name)] = name
+            record[20:22] = struct.pack("<H", first_bag)
+            return bytes(record)
+
+        inst = b"".join(
+            (
+                instrument(b"Piano MF-low", 0),
+                instrument(b"Piano MF-high", len(roots)),
+                instrument(b"terminal", len(roots) * 2),
+            )
+        )
+        ibag = b"".join(struct.pack("<HH", index, 0) for index in range(len(roots) * 2 + 1))
+        igen = b"".join(
+            struct.pack("<HH", 53, sample_id)
+            for sample_id in tuple(range(len(roots))) * 2
+        )
+
+        def list_chunk(kind, children):
+            return cls.chunk(b"LIST", kind + b"".join(children))
+
+        sdta = list_chunk(b"sdta", [cls.chunk(b"smpl", smpl)])
+        pdta = list_chunk(
+            b"pdta",
+            [
+                cls.chunk(b"inst", inst),
+                cls.chunk(b"ibag", ibag),
+                cls.chunk(b"igen", igen),
+                cls.chunk(b"shdr", b"".join(shdr)),
+            ],
+        )
+        payload = b"sfbk" + sdta + pdta
+        return b"RIFF" + struct.pack("<I", len(payload)) + payload
+
+    def snapshot_bank(self):
+        return {
+            name: pathlib.Path(self.sample_dir, name).read_bytes()
+            for name in sorted(os.listdir(self.sample_dir))
+        }
+
+    @staticmethod
+    def decode_fixture(argv, check):
+        output = argv[-1]
+        with wave.open(output, "wb") as handle:
+            handle.setnchannels(1)
+            handle.setsampwidth(2)
+            handle.setframerate(prepare.OUT_SR)
+            handle.writeframes(struct.pack("<4h", 0, 8192, -8192, 0))
+
+    @staticmethod
+    def measure_fixture(_samples, _sr, _low, _high):
+        return 440.0, 1.0
+
+    def run_bake(self, measure):
+        prepare._PENDING_BANK_DIRS.clear()
+        with (
+            mock.patch.object(prepare, "REPO_ROOT", self.repo_root),
+            mock.patch.object(
+                prepare, "ensure_musescore_general_sf3", return_value=self.sf3_path
+            ),
+            mock.patch.object(prepare.shutil, "which", return_value="ffmpeg"),
+            mock.patch.object(prepare.subprocess, "run", side_effect=self.decode_fixture),
+            mock.patch.object(prepare, "trim_to_onset", return_value=[0.0, 0.25, -0.25, 0.0]),
+            mock.patch.object(prepare, "measure_f0", side_effect=measure),
+        ):
+            return prepare._bake_musescore_grand(self.src)
+
+    def assert_exact_old_bank(self, before):
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assertEqual(sorted(os.listdir(self.sample_dir)), sorted(self.packaged_names))
+
+    def test_late_transform_failure_never_touches_the_previous_bank(self):
+        before = self.snapshot_bank()
+        calls = 0
+
+        def fail_on_third(*args):
+            nonlocal calls
+            calls += 1
+            if calls == 3:
+                raise OSError("late MuseScore-grand transform")
+            return self.measure_fixture(*args)
+
+        with self.assertRaisesRegex(OSError, "late MuseScore-grand transform"):
+            self.run_bake(fail_on_third)
+
+        self.assertEqual(calls, 3)
+        self.assert_exact_old_bank(before)
+
+    def test_replacement_failure_rolls_back_the_previous_bank(self):
+        before = self.snapshot_bank()
+        replacements = 0
+        fail_at = len(self.packaged_names) + 2
+        real_replace = prepare.atomic_replace
+
+        def fake_encode(_wav, flac):
+            pathlib.Path(flac).write_bytes(b"new-musescore-grand-flac")
+
+        def fail_during_publication(source, destination):
+            nonlocal replacements
+            replacements += 1
+            if replacements == fail_at:
+                raise OSError("injected MuseScore-grand publication failure")
+            return real_replace(source, destination)
+
+        with (
+            mock.patch.object(prepare, "_encode_flac", side_effect=fake_encode),
+            mock.patch.object(prepare, "_decode_flac_pcm", return_value=b"pcm"),
+            mock.patch.object(prepare, "_read_wav_pcm", return_value=b"pcm"),
+            mock.patch.object(
+                prepare, "atomic_replace", side_effect=fail_during_publication
+            ),
+        ):
+            with self.assertRaisesRegex(
+                OSError, "injected MuseScore-grand publication failure"
+            ):
+                self.run_bake(self.measure_fixture)
+
+        self.assertGreater(replacements, fail_at)
+        self.assert_exact_old_bank(before)
+
+
 class GrandSampleApiContractTest(unittest.TestCase):
     """MM-BUG-KILN-00243: grand API docs and lookup keys match the FLAC bank."""
 

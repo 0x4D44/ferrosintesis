@@ -5053,9 +5053,11 @@ def _bake_musescore_grand(src):
     multisample (GM 1 CC0=2). Resolves 'Piano MF-low' + 'Piano MF-high' by NAME,
     takes one sample per distinct originalPitch in the C2..C6+ range, decodes each Ogg
     (ffmpeg), keeps 1.5 s of body (`trim_to_onset`), and re-measures the root in a
-    tight window. Writes `musescoregrand_<pitch>.wav`; returns print rows. Single
-    velocity: the LA blend + model carry the dynamics."""
-    sf3 = open(ensure_musescore_general_sf3(src), "rb").read()
+    tight window. Stages `musescoregrand_<pitch>.wav` files privately, then publishes
+    one verified FLAC bank; returns print rows. Single velocity: the LA blend + model
+    carry the dynamics."""
+    with open(ensure_musescore_general_sf3(src), "rb") as source:
+        sf3 = source.read()
     assert sf3[0:4] == b"RIFF" and sf3[8:12] == b"sfbk", "not an SF2/SF3 file"
 
     def u16(b, o):
@@ -5111,31 +5113,47 @@ def _bake_musescore_grand(src):
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     out_dir = os.path.join(REPO_ROOT, "crates",
                            "ferrosintesis-samples-musescore-grand", "samples")
-    os.makedirs(out_dir, exist_ok=True)
+    logical_names = tuple(
+        f"musescoregrand_{_midi_name(root)}.wav" for root in sorted(best)
+    )
     _validate_generated_output_families(
         {"musescoregrand"},
-        {f"musescoregrand_{_midi_name(root)}.wav" for root in best},
+        logical_names,
         output_dir=out_dir)
     rows = []
-    for root in sorted(best):
-        start, end = best[root]
-        ogg = os.path.join(src, f"msgrand_{root}.ogg")
-        wav = os.path.join(src, f"msgrand_{root}.wav")
-        with open(ogg, "wb") as f:
-            f.write(sf3[smpl_off + start:smpl_off + end])
-        subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-                        "-i", ogg, "-acodec", "pcm_s16le", wav], check=True)
-        x, wsr = read_wav(wav)
-        if wsr != OUT_SR:
-            x = resample(x, wsr, OUT_SR)
-            wsr = OUT_SR
-        seg = trim_to_onset(x, wsr, 1.5, 0.6)
-        nominal = _midi_hz(root)
-        f0, conf = measure_f0(seg, wsr, nominal * 0.8, nominal * 1.4)
-        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
-        out_name = f"musescoregrand_{_midi_name(root)}.wav"
-        write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
-        rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+    with tempfile.TemporaryDirectory(prefix=".musescoregrand-bank-") as staging:
+        for root in sorted(best):
+            start, end = best[root]
+            ogg = os.path.join(src, f"msgrand_{root}.ogg")
+            wav = os.path.join(src, f"msgrand_{root}.wav")
+            with open(ogg, "wb") as f:
+                f.write(sf3[smpl_off + start:smpl_off + end])
+            subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                            "-i", ogg, "-acodec", "pcm_s16le", wav], check=True)
+            x, wsr = read_wav(wav)
+            if wsr != OUT_SR:
+                x = resample(x, wsr, OUT_SR)
+                wsr = OUT_SR
+            seg = trim_to_onset(x, wsr, 1.5, 0.6)
+            nominal = _midi_hz(root)
+            f0, conf = measure_f0(seg, wsr, nominal * 0.8, nominal * 1.4)
+            cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+            out_name = f"musescoregrand_{_midi_name(root)}.wav"
+            write_wav_mono(os.path.join(staging, out_name), seg, wsr)
+            rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+        staged = {
+            name for name in os.listdir(staging)
+            if name.endswith((".wav", PACKAGED_EXT))
+        }
+        if staged != set(logical_names):
+            raise ValueError(
+                "musescoregrand staging output is incomplete: expected "
+                f"{len(logical_names)} WAVs, found {len(staged)}"
+            )
+        _validate_generated_output_inventory(
+            None, logical_names, output_dir=staging
+        )
+        _publish_staged_flac_bank(staging, out_dir, logical_names, "musescoregrand")
     return rows
 
 

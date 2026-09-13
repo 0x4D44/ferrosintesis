@@ -6,15 +6,15 @@
 - **Area:** grand sample crate / deterministic regeneration
 - **Raised:** 2026-08-16T22:56:39Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T070407Z-86a459d0
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00244-run-fix-20260913T070407Z-86a459d0
+- **Owner base:** fbda54cae628b5939ae29f3245e99dc6c809fa96
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T07:04:07Z
+- **Owner until:** 2026-09-13T09:04:07Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

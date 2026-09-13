@@ -3944,6 +3944,73 @@ For comparison, the text mentions {self.COMMAND}.
         bottle.assert_not_called()
 
 
+class GrandFlacRegenerationWorkflowTest(unittest.TestCase):
+    """MM-BUG-KILN-00244: scoped grand regeneration republishes the FLAC bank."""
+
+    def test_scoped_grand_regeneration_replaces_flac_bank_without_wav_duplicates(self):
+        logical_names = ("grand_C4_f.wav", "grand_C4_mf.wav")
+        grand_sources = {
+            name: f"fixture/{name}" for name in logical_names
+        }
+        packaged_names = tuple(prepare.packaged_name(name) for name in logical_names)
+        source_samples = [0.0, 0.25, -0.25, 0.5, -0.5, 0.0]
+
+        with tempfile.TemporaryDirectory() as root:
+            sample_dir = (
+                pathlib.Path(root)
+                / "crates"
+                / "ferrosintesis-samples-grand"
+                / "samples"
+            )
+            sample_dir.mkdir(parents=True)
+            initial = {
+                name: b"fLaC-old-" + name.encode("ascii")
+                for name in packaged_names
+            }
+            for name, payload in initial.items():
+                (sample_dir / name).write_bytes(payload)
+            self.assertEqual(
+                sorted(path.name for path in sample_dir.iterdir()),
+                sorted(packaged_names),
+            )
+
+            def fake_prepare(name, _source_dir):
+                return (
+                    source_samples,
+                    prepare.OUT_SR,
+                    (name, None, None, None, None, None, len(source_samples) / prepare.OUT_SR),
+                )
+
+            prepare._PENDING_BANK_DIRS.clear()
+            try:
+                with mock.patch.object(prepare, "REPO_ROOT", root), mock.patch.object(
+                    prepare, "GRAND_SOURCES", grand_sources
+                ), mock.patch.object(
+                    prepare, "ensure_salamander_sources"
+                ) as ensure_sources, mock.patch.object(
+                    prepare, "_prepare_generic_source_sample", side_effect=fake_prepare
+                ), mock.patch.object(
+                    prepare, "_require_ffmpeg"
+                ), mock.patch.object(
+                    prepare, "_print_sample_rows"
+                ), mock.patch.object(
+                    prepare.sys, "argv", ["prepare.py", "--only=grand"]
+                ):
+                    prepare.main()
+            finally:
+                prepare._PENDING_BANK_DIRS.clear()
+
+            self.assertEqual(
+                sorted(path.name for path in sample_dir.iterdir()),
+                sorted(packaged_names),
+            )
+            for name in packaged_names:
+                payload = (sample_dir / name).read_bytes()
+                self.assertTrue(payload.startswith(b"fLaC"), name)
+                self.assertNotEqual(payload, initial[name], name)
+            ensure_sources.assert_called_once()
+
+
 class GrandSampleApiContractTest(unittest.TestCase):
     """MM-BUG-KILN-00243: grand API docs and lookup keys match the FLAC bank."""
 

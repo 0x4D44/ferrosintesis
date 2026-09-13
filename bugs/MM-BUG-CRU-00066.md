@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00066 — Five more packaged one-shots start far from silence and pass the continuity sweep
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample assets / onset continuity
 - **Raised:** 2026-09-13T19:23:43Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T205331Z-55b12432
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00066-run-fix-20260913T205331Z-55b12432
-- **Owner base:** 4999b06948267942cbd3f553434f7b84511465aa
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T20:53:31Z
-- **Owner until:** 2026-09-13T22:53:31Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:23:43Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:23:43Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T21:20:32Z, deltic:auto role=fix run=fix-20260913T205331Z-55b12432 branch=task/bug-MM-BUG-CRU-00066-run-fix-20260913T205331Z-55b12432 code=4f4f6d9e30eb903612b828e84352fd56e32830c3 gate=manual)
 
 ## Observation
 

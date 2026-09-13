@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00038 — Shipped NOTICE instructs distributors to reproduce ten attribution notices; nine exist and nine are listed
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** licensing / attribution documentation
 - **Raised:** 2026-08-18T00:07:44Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T064720Z-27ceb47a
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00038-run-fix-20260913T064720Z-27ceb47a
-- **Owner base:** 0bbcf5a5bd3b7990518870f287ae06ad5c27c5c0
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T06:47:20Z
-- **Owner until:** 2026-09-13T08:47:20Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T00:07:44Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-18T00:07:44Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T07:03:13Z, deltic:auto role=fix run=fix-20260913T064720Z-27ceb47a branch=task/bug-MM-BUG-CRUCIBLE-00038-run-fix-20260913T064720Z-27ceb47a code=d975f7bb2f66d5a2bbccfd2186e16e5e4a67a14b gate=manual)
 
 ## Observation
 

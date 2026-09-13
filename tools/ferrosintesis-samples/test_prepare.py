@@ -1900,6 +1900,129 @@ class YdpWholeBankPublicationTest(unittest.TestCase):
         )
 
 
+class ClavinetWholeBankPublicationTest(unittest.TestCase):
+    """MM-BUG-KILN-00220: a failed clavinet rebake preserves the whole bank."""
+
+    ROOTS = (31, 36, 43, 48, 55, 60, 67, 72, 79, 84, 91)
+
+    def setUp(self):
+        self.repo_root = tempfile.mkdtemp()
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.repo_root, True)
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.addCleanup(prepare._PENDING_BANK_DIRS.clear)
+        self.sample_dir = os.path.join(
+            self.repo_root,
+            "crates",
+            "ferrosintesis-samples-clavinet",
+            "samples",
+        )
+        os.makedirs(self.sample_dir)
+        self.expected = tuple(sorted(
+            f"clavinet_{prepare._midi_name(root)}.wav" for root in self.ROOTS
+        ))
+        for name in self.expected:
+            packaged = prepare.packaged_name(name)
+            payload = f"old clavinet bank: {packaged}".encode("ascii")
+            with open(os.path.join(self.sample_dir, packaged), "wb") as output:
+                output.write(payload)
+
+    def snapshot_bank(self):
+        snapshot = {}
+        for name in sorted(os.listdir(self.sample_dir)):
+            with open(os.path.join(self.sample_dir, name), "rb") as source:
+                snapshot[name] = source.read()
+        return snapshot
+
+    @staticmethod
+    def staged_note(_x, _root_hz, _sr, _t60):
+        return [0.0, 0.25, -0.25, 0.0]
+
+    def run_bake(self, transform=None):
+        sf3 = os.path.join(self.src, "MS_Basic.sf3")
+        with open(sf3, "wb") as source:
+            source.write(b"synthetic sf3 bytes")
+        zones = [
+            (root, 0, 1, 0, 1, prepare.OUT_SR, 17)
+            for root in self.ROOTS
+        ]
+        if transform is None:
+            transform = self.staged_note
+        with (
+            mock.patch.object(prepare, "REPO_ROOT", self.repo_root),
+            mock.patch.object(prepare, "ensure_musescore_sf3", return_value=sf3),
+            mock.patch.object(prepare, "_sf_preset_zones", return_value=(0, zones)),
+            mock.patch.object(prepare.subprocess, "run"),
+            mock.patch.object(
+                prepare, "read_wav", return_value=([0.0, 0.25], prepare.OUT_SR)
+            ),
+            mock.patch.object(prepare, "_bake_clavinet_note", side_effect=transform),
+            mock.patch.object(prepare, "measure_f0", return_value=(440.0, 1.0)),
+        ):
+            return prepare._bake_clavinet(self.src)
+
+    def assert_no_clavinet_transaction_artifacts(self):
+        self.assertEqual(
+            [
+                name for name in os.listdir(self.sample_dir)
+                if name.endswith((".wav", ".part"))
+                or name.startswith(".clavinet-backup-")
+            ],
+            [],
+        )
+
+    def test_late_transform_failure_never_touches_the_previous_bank(self):
+        before = self.snapshot_bank()
+        calls = 0
+
+        def fail_on_fifth(_x, _root_hz, _sr, _t60):
+            nonlocal calls
+            calls += 1
+            if calls == 5:
+                raise OSError("late clavinet transform")
+            return self.staged_note(_x, _root_hz, _sr, _t60)
+
+        with self.assertRaisesRegex(OSError, "late clavinet transform"):
+            self.run_bake(fail_on_fifth)
+
+        self.assertEqual(calls, 5)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assert_no_clavinet_transaction_artifacts()
+
+    def test_publication_failure_rolls_back_every_selected_file(self):
+        before = self.snapshot_bank()
+        replacements = 0
+        fail_at = len(self.expected) + 3
+        real_replace = prepare.atomic_replace
+
+        def fake_encode(_wav, flac):
+            with open(flac, "wb") as output:
+                output.write(b"new-flac")
+
+        def fail_during_publication(source, destination):
+            nonlocal replacements
+            replacements += 1
+            if replacements == fail_at:
+                raise OSError("injected clavinet publication failure")
+            return real_replace(source, destination)
+
+        with (
+            mock.patch.object(prepare, "_encode_flac", side_effect=fake_encode),
+            mock.patch.object(prepare, "_decode_flac_pcm", return_value=b"pcm"),
+            mock.patch.object(prepare, "_read_wav_pcm", return_value=b"pcm"),
+            mock.patch.object(
+                prepare, "atomic_replace", side_effect=fail_during_publication
+            ),
+        ):
+            with self.assertRaisesRegex(
+                    OSError, "injected clavinet publication failure"):
+                self.run_bake()
+
+        self.assertGreater(replacements, fail_at)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assert_no_clavinet_transaction_artifacts()
+
+
 class YdpArchiveCacheTest(unittest.TestCase):
     """MM-BUG-KILN-00141: YDP warm caches remain bound to the archive pin."""
 

@@ -4693,14 +4693,112 @@ def _bake_clavinet_note(x, root_hz, sr, t60, keep_s=None, fade_s=None):
     return [v * 0.9 / pk for v in out]
 
 
+def _publish_clavinet_bank(staging_dir, output_dir, logical_names):
+    """Encode and publish one complete clavinet bank, rolling back replacements."""
+    logical_names = tuple(sorted(logical_names))
+    packaged_names = tuple(packaged_name(name) for name in logical_names)
+    if len(set(packaged_names)) != len(packaged_names):
+        raise ValueError("clavinet logical names collapse to duplicate packaged names")
+
+    staged = {
+        name for name in os.listdir(staging_dir)
+        if name.endswith((".wav", PACKAGED_EXT))
+    }
+    if staged != set(logical_names):
+        raise ValueError(
+            "clavinet staging output is incomplete: expected "
+            f"{len(logical_names)} WAVs, found {len(staged)}"
+        )
+
+    os.makedirs(output_dir, exist_ok=True)
+    mixed = sorted(
+        name for name in os.listdir(output_dir)
+        if name.endswith(".wav") and packaged_name(name) in packaged_names
+    )
+    if mixed:
+        raise ValueError(
+            "clavinet output contains mixed WAV/FLAC containers: "
+            + ", ".join(mixed)
+        )
+
+    parts = {}
+    backup_dir = None
+    cleanup_backup = True
+    backups = {}
+    published = []
+    try:
+        # Finish and verify every FLAC before moving one old bank entry aside.
+        for logical, packaged in zip(logical_names, packaged_names):
+            wav = os.path.join(staging_dir, logical)
+            validate_pcm16_wav(wav)
+            descriptor, part = tempfile.mkstemp(
+                prefix=f".{packaged}.", suffix=".part", dir=output_dir
+            )
+            os.close(descriptor)
+            parts[packaged] = part
+            try:
+                _encode_flac(wav, part)
+                if _decode_flac_pcm(part) != _read_wav_pcm(wav):
+                    raise ValueError(f"{packaged}: FLAC encode was not bit-exact")
+            except Exception:
+                if os.path.exists(part):
+                    os.remove(part)
+                parts[packaged] = None
+                raise
+
+        backup_dir = tempfile.mkdtemp(prefix=".clavinet-backup-", dir=output_dir)
+        try:
+            for packaged in packaged_names:
+                destination = os.path.join(output_dir, packaged)
+                if os.path.exists(destination):
+                    backup = os.path.join(backup_dir, packaged)
+                    atomic_replace(destination, backup)
+                    backups[packaged] = backup
+            for packaged in packaged_names:
+                destination = os.path.join(output_dir, packaged)
+                atomic_replace(parts[packaged], destination)
+                parts[packaged] = None
+                published.append(destination)
+        except Exception as error:
+            rollback_errors = []
+            for destination in reversed(published):
+                try:
+                    if os.path.exists(destination):
+                        os.remove(destination)
+                except OSError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            for packaged, backup in reversed(tuple(backups.items())):
+                if not os.path.exists(backup):
+                    continue
+                try:
+                    atomic_replace(backup, os.path.join(output_dir, packaged))
+                except OSError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            if rollback_errors:
+                cleanup_backup = False
+                raise RuntimeError(
+                    "clavinet bank publication failed and rollback was incomplete: "
+                    + "; ".join(rollback_errors)
+                ) from error
+            raise
+    finally:
+        for part in parts.values():
+            if part is not None and os.path.exists(part):
+                os.remove(part)
+        if backup_dir is not None and cleanup_backup:
+            shutil.rmtree(backup_dir, ignore_errors=True)
+
+
 def _bake_clavinet(src):
     """Extract + decode + bake the 11 GM7 clavinet zones from MS Basic.sf3.
 
-    Writes `clavinet_<sounding-pitch>.wav` into the MIT-licensed
-    `ferrosintesis-samples-clavinet` crate; returns print-table rows. Ogg decode
-    shells out to ffmpeg (mono 16-bit 44.1 kHz PCM), matching the drumkit's FLAC path.
+    Publishes the logical `clavinet_<sounding-pitch>.wav` names as a complete FLAC
+    bank in the MIT-licensed `ferrosintesis-samples-clavinet` crate; returns print-table
+    rows. Ogg decode shells out to ffmpeg (mono 16-bit 44.1 kHz PCM), matching the
+    drumkit's FLAC path.
     """
-    sf3 = open(ensure_musescore_sf3(src), "rb").read()
+    with open(ensure_musescore_sf3(src), "rb") as source:
+        sf3 = source.read()
     smpl_off, zones = _sf_preset_zones(sf3, 7)
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-clavinet", "samples")
@@ -4708,27 +4806,43 @@ def _bake_clavinet(src):
         {"clavinet"},
         {f"clavinet_{_midi_name(root)}.wav" for root, *_ in zones},
         output_dir=out_dir)
+    logical_names = {
+        f"clavinet_{_midi_name(root)}.wav" for root, *_ in zones
+    }
     rows = []
-    for root, start, end, _sl, _el, _sr, _sample_type in sorted(zones):
-        ogg = os.path.join(src, f"clavinet_{root}.ogg")
-        wav = os.path.join(src, f"clavinet_{root}.wav")
-        with open(ogg, "wb") as f:
-            f.write(sf3[smpl_off + start:smpl_off + end])
-        subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-                        "-i", ogg, "-acodec", "pcm_s16le", wav], check=True)
-        x, wsr = read_wav(wav)
-        if wsr != OUT_SR:
-            x = resample(x, wsr, OUT_SR)
-            wsr = OUT_SR
-        seg = _bake_clavinet_note(x, _midi_hz(root), wsr, clavinet_t60(root))
-        # measure the baked note's root over its steady body (the zone table uses the
-        # MEASURED fundamental, as every other bank does)
-        nominal = _midi_hz(root)
-        f0, conf = measure_f0(seg, wsr, nominal * 0.85, nominal * 1.2)
-        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
-        out_name = f"clavinet_{_midi_name(root)}.wav"
-        write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
-        rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+    with tempfile.TemporaryDirectory(prefix=".clavinet-bank-") as staging:
+        for root, start, end, _sl, _el, _sr, _sample_type in sorted(zones):
+            ogg = os.path.join(src, f"clavinet_{root}.ogg")
+            wav = os.path.join(src, f"clavinet_{root}.wav")
+            with open(ogg, "wb") as f:
+                f.write(sf3[smpl_off + start:smpl_off + end])
+            subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                            "-i", ogg, "-acodec", "pcm_s16le", wav], check=True)
+            x, wsr = read_wav(wav)
+            if wsr != OUT_SR:
+                x = resample(x, wsr, OUT_SR)
+                wsr = OUT_SR
+            seg = _bake_clavinet_note(x, _midi_hz(root), wsr, clavinet_t60(root))
+            # measure the baked note's root over its steady body (the zone table uses the
+            # MEASURED fundamental, as every other bank does)
+            nominal = _midi_hz(root)
+            f0, conf = measure_f0(seg, wsr, nominal * 0.85, nominal * 1.2)
+            cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+            out_name = f"clavinet_{_midi_name(root)}.wav"
+            write_wav_mono(os.path.join(staging, out_name), seg, wsr)
+            rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+        staged = {
+            name for name in os.listdir(staging)
+            if name.endswith((".wav", PACKAGED_EXT))
+        }
+        if staged != logical_names:
+            raise ValueError(
+                "clavinet staging output is incomplete: expected "
+                f"{len(logical_names)} WAVs, found {len(staged)}"
+            )
+        _validate_generated_output_inventory(
+            None, logical_names, output_dir=staging)
+        _publish_clavinet_bank(staging, out_dir, logical_names)
     return rows
 
 
@@ -5783,9 +5897,10 @@ def _print_sample_rows(rows):
 def _finish(rows):
     """Publish the banks this run wrote, then print the recipe table.
 
-    Generic paths through `main` end here. The bass path publishes its own
-    all-or-nothing transaction before entering the generic loop, while keeping
-    this final step is what stops `--sax-only` from leaving its bank as WAV.
+    Generic paths through `main` end here. The bass and clavinet paths publish
+    their own all-or-nothing transactions before entering the generic loop,
+    while keeping this final step is what stops `--sax-only` from leaving its
+    bank as WAV.
     """
     published = publish_pending_banks()
     _print_sample_rows(rows)

@@ -225,4 +225,27 @@ mod tests {
         assert_eq!(take_name(ROUND_ROBINS), take_name(0));
         assert_eq!(take_name(ROUND_ROBINS + 3), take_name(3));
     }
+
+    #[test]
+    fn packaged_provenance_hands_off_to_the_immutable_source_record() {
+        const README: &str = include_str!("../README.md");
+        const PROVENANCE: &str = include_str!("../PROVENANCE.md");
+        const SOURCE_URL: &str = "https://github.com/0x4D44/ferrosintesis/blob/17804653d5c104f649d30828e5667b486e3d7ccb/samples/fret-noise-eastman-e1d/README.md";
+
+        assert!(
+            README.contains("The takes, level")
+                && README
+                    .contains("measurements, cut map and bake procedure are in `PROVENANCE.md`."),
+            "README must direct users to the packaged provenance handoff"
+        );
+        assert!(
+            PROVENANCE.contains("The detailed source record is")
+                && PROVENANCE.contains("external to this published crate"),
+            "packaged provenance must explain why the source record is linked externally"
+        );
+        assert!(
+            PROVENANCE.contains(SOURCE_URL),
+            "packaged provenance must link the immutable source record"
+        );
+    }
 }

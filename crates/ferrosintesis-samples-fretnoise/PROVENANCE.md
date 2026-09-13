@@ -17,8 +17,10 @@ accompanies.
 
 Recorded 48 kHz / 24-bit stereo (two takes, `DR0000_0203` and `DR0000_0204`). The
 in-repo performance archive and the 12 selected lossless cuts live under
-`samples/fret-noise-eastman-e1d/` in the workspace root; the full recording provenance,
-level measurements, and the cut map are in that directory's `README.md`.
+`samples/fret-noise-eastman-e1d/` in the workspace root. The detailed source record is
+external to this published crate; follow the [immutable source record](https://github.com/0x4D44/ferrosintesis/blob/17804653d5c104f649d30828e5667b486e3d7ccb/samples/fret-noise-eastman-e1d/README.md)
+for the full recording provenance, level measurements, and cut map. The checksums below
+preserve evidence for the committed source files at those local paths.
 
 ### Committed-source checksums
 

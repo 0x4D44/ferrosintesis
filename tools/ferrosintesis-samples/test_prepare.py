@@ -4305,6 +4305,21 @@ class Orchestral2RegenerationRecipeTest(unittest.TestCase):
         )
         self.assertNotIn("prepare.py --only=<family>", provenance)
 
+    def test_packaged_docs_and_lookup_rustdoc_describe_flac_contract(self):
+        crate = pathlib.Path(prepare.REPO_ROOT) / "crates" / "ferrosintesis-samples-orchestral2"
+        readme = (crate / "README.md").read_text(encoding="utf-8").replace("\r\n", "\n")
+        provenance = (crate / "PROVENANCE.md").read_text(encoding="utf-8").replace(
+            "\r\n", "\n"
+        )
+        lib = (crate / "src" / "lib.rs").read_text(encoding="utf-8").replace("\r\n", "\n")
+
+        self.assertIn("every shipped FLAC family", readme)
+        self.assertIn("physical payloads shipped in this package are FLAC files under", provenance)
+        self.assertIn("source or bake inputs, not packaged payloads", provenance)
+        self.assertIn("the `.flac` suffix", lib)
+        self.assertNotIn("Names include the `.wav` suffix", lib)
+        self.assertNotIn("packaged WAV", readme)
+
 
 class GrandRegenerationRecipeTest(unittest.TestCase):
     """MM-BUG-KILN-00135/00142: the copyable recipe selects only the grand family."""

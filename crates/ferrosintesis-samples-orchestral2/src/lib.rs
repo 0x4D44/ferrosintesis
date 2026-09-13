@@ -11,9 +11,9 @@
 
 #![forbid(unsafe_code)]
 
-/// Embedded (file-name, bytes) pairs. Names are exact and case-sensitive. Kept as a
-/// slice (not a fixed-size array) so families can be added without threading a count
-/// constant through the file.
+/// Embedded (file-name, bytes) pairs. Names are exact and case-sensitive, including
+/// the `.flac` suffix. Kept as a slice (not a fixed-size array) so families can be
+/// added without threading a count constant through the file.
 static SAMPLES: &[(&str, &[u8])] = &[
     (
         "banjo_A#3.flac",
@@ -407,7 +407,8 @@ static SAMPLES: &[(&str, &[u8])] = &[
 /// Number of embedded sample files.
 pub const FILE_COUNT: usize = SAMPLES.len();
 
-/// Returns the embedded sample bytes for an exact (case-sensitive) name.
+/// Returns the embedded FLAC bytes for an exact (case-sensitive) name, including its
+/// `.flac` suffix.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
         .iter()
@@ -468,5 +469,11 @@ mod tests {
             assert_eq!(&bytes[..4], b"fLaC", "{name} is not a FLAC sample");
         }
         assert_eq!(get("missing.wav"), None);
+    }
+
+    #[test]
+    fn lookup_uses_exact_flac_keys() {
+        assert!(get("banjo_A#3.flac").is_some());
+        assert_eq!(get("banjo_A#3.wav"), None);
     }
 }

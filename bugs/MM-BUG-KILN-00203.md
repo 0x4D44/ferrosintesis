@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00203 — Accent-cymbal audio oracle admits silent and click-only assets
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drumkit2 audio validation
 - **Raised:** 2026-08-16T07:17:00Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T145322Z-8da22b38
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00203-run-fix-20260913T145322Z-8da22b38
-- **Owner base:** a40fa9157f2ac87e620eb68501435c3b50c2e440
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T14:53:22Z
-- **Owner until:** 2026-09-13T16:53:22Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T07:17:00Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T07:17:00Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:00:05Z, deltic:auto role=fix run=fix-20260913T145322Z-8da22b38 branch=task/bug-MM-BUG-KILN-00203-run-fix-20260913T145322Z-8da22b38 code=ba9b3ff224b19c6c786f705d52678b9d4eff2a7a gate=manual)
 
 ## Observation
 

@@ -558,9 +558,7 @@ fn has_manifest_dir_marker(tokens: &[Token]) -> bool {
 }
 
 fn has_parent_path_component(value: &str) -> bool {
-    value
-        .split(|character| character == '/' || character == '\\')
-        .any(|component| component == "..")
+    value.split(['/', '\\']).any(|component| component == "..")
 }
 
 fn statement_slices(tokens: &[Token]) -> Vec<&[Token]> {

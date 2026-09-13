@@ -4,6 +4,9 @@ Compile-time sample payload for
 [`ferrosintesis`](https://crates.io/crates/ferrosintesis). This crate embeds
 158 mono, 16-bit, 44.1 kHz FLAC recordings (attack transients + looped sustains):
 
+The canonical packaged inventory is [`PROVENANCE.md`](PROVENANCE.md); it lists every
+shipped FLAC family and file count without duplicating the inventory here.
+
 - 24 violin/cello ensemble onsets for the GM 48–49 string sections;
 - 56 brass onsets for trumpet, muted trumpet, trombone, tuba, and horn;
 - 36 reed onsets for oboe, bassoon, and clarinet;

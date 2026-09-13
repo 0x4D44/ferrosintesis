@@ -4643,6 +4643,69 @@ class GenericFamilyWholeBankPublicationTest(unittest.TestCase):
         )
 
 
+class StringsGenericScopedPublicationTest(unittest.TestCase):
+    """MM-BUG-KILN-00271: the Strings recipe publishes one exact FLAC bank."""
+
+    def test_strings_selector_replaces_all_three_families_without_wav_duplicates(self):
+        tables = (prepare.SOLO_CELLO_URLS, prepare.SOLO_DBASS_URLS, prepare.PIZZBASS_URLS)
+        expected = {
+            name
+            for table in tables
+            for name in table
+        }
+        repo_root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, repo_root, True)
+        sample_dir = pathlib.Path(
+            repo_root, "crates", "ferrosintesis-samples-strings", "samples"
+        )
+        sample_dir.mkdir(parents=True)
+        for name in expected:
+            (sample_dir / prepare.packaged_name(name)).write_bytes(b"old bank")
+
+        source_calls = []
+
+        def fake_ensure_source(name, _url, _src):
+            source_calls.append(name)
+
+        def fake_transform(name, _src):
+            segment = [0.0, 0.25, -0.25, 0.0]
+            row = (name, 440.0, 440.0, 440.0, 0.0, 1.0, len(segment) / prepare.OUT_SR)
+            return segment, prepare.OUT_SR, row
+
+        def fake_encode(_wav, flac):
+            pathlib.Path(flac).write_bytes(b"new flac")
+
+        patches = (
+            mock.patch.object(prepare, "REPO_ROOT", repo_root),
+            mock.patch.object(prepare, "_source_tables", return_value=tables),
+            mock.patch.object(prepare, "ensure_source", side_effect=fake_ensure_source),
+            mock.patch.object(
+                prepare, "_prepare_generic_source_sample", side_effect=fake_transform
+            ),
+            mock.patch.object(prepare, "_require_ffmpeg"),
+            mock.patch.object(prepare, "_encode_flac", side_effect=fake_encode),
+            mock.patch.object(prepare, "_decode_flac_pcm", return_value=b"pcm"),
+            mock.patch.object(prepare, "_read_wav_pcm", return_value=b"pcm"),
+            mock.patch.object(prepare.socket, "setdefaulttimeout"),
+            mock.patch.object(
+                prepare.sys,
+                "argv",
+                ["prepare.py", "--only=cellosolo,dbass,pizzbass"],
+            ),
+        )
+        with contextlib.ExitStack() as stack:
+            for patcher in patches:
+                stack.enter_context(patcher)
+            prepare.main()
+
+        self.assertEqual(set(source_calls), expected)
+        self.assertEqual(len(source_calls), len(expected))
+        published = {path.name for path in sample_dir.iterdir() if path.is_file()}
+        self.assertEqual(published, {prepare.packaged_name(name) for name in expected})
+        self.assertFalse(any(path.suffix == ".wav" for path in sample_dir.iterdir()))
+        self.assertFalse(any(path.name.endswith(".part") for path in sample_dir.iterdir()))
+
+
 class GrandRegenerationRecipeTest(unittest.TestCase):
     """MM-BUG-KILN-00135/00142: the copyable recipe selects only the grand family."""
 

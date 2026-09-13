@@ -8,13 +8,15 @@ version = 1
 # Per-integration identity rides the git SHA.
 version_bump = "release-only"
 
-# `--no-default-features` (the modeled-only synth the README offers to anyone who does
-# not want the embedded samples) gets its OWN clippy step. It is a shipped configuration,
-# and the default-feature clippy above cannot see it: every item reachable only through
-# `embedded-samples` is compiled out, so dead code accumulated there unnoticed until
-# MM-BUG-KILN-00070. One crate, no asset crates to build, so the cost is small.
+# The modeled-only synth and CLI configurations advertised by their READMEs each get
+# OWN package-scoped `--no-default-features` clippy and test steps. The default-feature
+# workspace gates cannot see code compiled out in either package, so dead code accumulated
+# there unnoticed until MM-BUG-KILN-00070. Keep these commands package-scoped: a
+# workspace-wide no-default run lets render-catalog re-enable the library's
+# `embedded-samples` feature through Cargo feature unification. Neither package builds
+# the asset crates, so the added coverage is cheap.
 #
-# The matching modeled-only test step is paired with the default-feature workspace test.
+# These modeled-only test steps are paired with the default-feature workspace test.
 # Some perceptual oracles genuinely require embedded samples; a no-default run cannot
 # replace them. `no_default_gate_is_paired_with_embedded_sample_coverage` pins this pair
 # so neither shipped configuration can silently lose its own coverage (MM-BUG-KILN-00090).
@@ -55,8 +57,10 @@ fallback = [
   { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
   { program = "cargo", args = ["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["clippy", "-p", "ferrosintesis", "--no-default-features", "--all-targets", "--locked", "--", "-D", "warnings"] },
+  { program = "cargo", args = ["clippy", "-p", "ferrosintesis-cli", "--no-default-features", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["test", "-p", "ferrosintesis", "--no-default-features", "--locked"] },
-  { program = "cargo", args = ["test", "--workspace", "--locked"] },
+  { program = "cargo", args = ["test", "-p", "ferrosintesis-cli", "--no-default-features", "--locked"] },
+  { program = "cargo", args = ["test", "--workspace", "--all-targets", "--locked"] },
   { program = "python3", args = ["-m", "unittest", "discover", "-s", "tools/ferrosintesis-samples"] },
 ]
 
@@ -67,7 +71,9 @@ gate = [
   { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
   { program = "cargo", args = ["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["clippy", "-p", "ferrosintesis", "--no-default-features", "--all-targets", "--locked", "--", "-D", "warnings"] },
+  { program = "cargo", args = ["clippy", "-p", "ferrosintesis-cli", "--no-default-features", "--all-targets", "--locked", "--", "-D", "warnings"] },
   { program = "cargo", args = ["test", "-p", "ferrosintesis", "--no-default-features", "--locked"] },
-  { program = "cargo", args = ["test", "--workspace", "--locked"] },
+  { program = "cargo", args = ["test", "-p", "ferrosintesis-cli", "--no-default-features", "--locked"] },
+  { program = "cargo", args = ["test", "--workspace", "--all-targets", "--locked"] },
   { program = "python3", args = ["-m", "unittest", "discover", "-s", "tools/ferrosintesis-samples"] },
 ]

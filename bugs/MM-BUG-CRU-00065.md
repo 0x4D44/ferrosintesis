@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00065 — Bake-inventory source-scan oracle pins the pre-grouping main() loop text, so the correct KILN-00207 refactor turned cargo test red
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** ferrosintesis / sample-bake inventory oracle
 - **Raised:** 2026-09-13T19:23:43Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T204241Z-ad8a5da9
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00065-run-fix-20260913T204241Z-ad8a5da9
-- **Owner base:** 5c82da9a12b7e426cf76cbc3cadb9185c9a4c1bc
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T20:42:41Z
-- **Owner until:** 2026-09-13T22:42:41Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:23:43Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:23:43Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T20:53:01Z, deltic:auto role=fix run=fix-20260913T204241Z-ad8a5da9 branch=task/bug-MM-BUG-CRU-00065-run-fix-20260913T204241Z-ad8a5da9 code=8c68e218f1e6df052ebc08b0a7f00a2a27d22fde gate=manual)
 
 ## Observation
 

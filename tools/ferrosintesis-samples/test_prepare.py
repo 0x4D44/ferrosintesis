@@ -6001,6 +6001,21 @@ def as_packaged_manifest(mapping):
     }
 
 
+def steinway_packaged_alias_manifest(expected_physical, expected_aliases):
+    """Derive Steinway's source-dedup and legacy WAV aliases in manifest form."""
+    expected_manifest = as_packaged_manifest(expected_aliases)
+    packaged_physical = (
+        prepare.packaged_name(name) for name in expected_physical
+    )
+    expected_manifest.update(
+        {
+            f"{pathlib.Path(name).stem}.wav": name
+            for name in packaged_physical
+        }
+    )
+    return expected_manifest
+
+
 class KawaiAliasDeduplicationTest(unittest.TestCase):
     """MM-BUG-KILN-00162: logical cells must not duplicate physical payloads."""
 
@@ -6087,6 +6102,9 @@ class SteinwayAliasDeduplicationTest(unittest.TestCase):
         expected_physical, expected_aliases = prepare._canonicalize_source_aliases(
             prepare._STEINWAYB_LOGICAL_SOURCES
         )
+        expected_manifest = steinway_packaged_alias_manifest(
+            expected_physical, expected_aliases
+        )
         self.assert_aliases_cover_logical_sources(
             prepare.STEINWAYB_SOURCES,
             prepare.STEINWAYB_ALIASES,
@@ -6098,9 +6116,42 @@ class SteinwayAliasDeduplicationTest(unittest.TestCase):
                 os.path.dirname(self.ALIASES_PATH),
                 sorted(prepare.packaged_name(name) for name in expected_physical),
             ),
-            as_packaged_manifest(expected_aliases),
-            "the package alias manifest must be derived from the bake source map",
+            expected_manifest,
+            "the package alias manifest must cover source deduplication and WAV compatibility",
         )
+
+    def test_declared_aliases_reject_missing_or_incorrect_source_and_legacy_rows(self):
+        expected_physical, expected_aliases = prepare._canonicalize_source_aliases(
+            prepare._STEINWAYB_LOGICAL_SOURCES
+        )
+        expected_manifest = steinway_packaged_alias_manifest(
+            expected_physical, expected_aliases
+        )
+        declared = gen_crate_lib.read_aliases(
+            os.path.dirname(self.ALIASES_PATH),
+            sorted(prepare.packaged_name(name) for name in expected_physical),
+        )
+        cases = {
+            "missing duplicate alias": ("steinwayb_C2_f.flac", None),
+            "incorrect duplicate alias": (
+                "steinwayb_C2_f.flac",
+                "steinwayb_C2_pp_rr2.flac",
+            ),
+            "missing legacy alias": ("steinwayb_C2_pp.wav", None),
+            "incorrect legacy alias": (
+                "steinwayb_C2_pp.wav",
+                "steinwayb_C2_pp_rr2.flac",
+            ),
+        }
+        for description, (alias, replacement) in cases.items():
+            with self.subTest(description=description):
+                mutated = dict(declared)
+                if replacement is None:
+                    mutated.pop(alias)
+                else:
+                    mutated[alias] = replacement
+                with self.assertRaises(AssertionError):
+                    self.assertEqual(mutated, expected_manifest)
 
     def test_missing_alias_is_rejected_by_the_source_derived_oracle(self):
         _, expected = prepare._canonicalize_source_aliases(

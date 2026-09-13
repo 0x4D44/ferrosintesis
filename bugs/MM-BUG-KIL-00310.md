@@ -6,15 +6,15 @@
 - **Area:** sampler / drum-kit test derivation
 - **Raised:** 2026-08-19T09:33:22Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T235329Z-2306268a
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KIL-00310-run-fix-20260913T235329Z-2306268a
+- **Owner base:** 539453f4f2b5dfb1aeb6ac1f442b9f559e5c2e55
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T23:53:29Z
+- **Owner until:** 2026-09-14T01:53:29Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

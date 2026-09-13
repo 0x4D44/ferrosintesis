@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / realtime velocity-corrected voices
 - **Raised:** 2026-08-17T09:41:38Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T191604Z-320cdd3d
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00276-run-verify-20260913T191604Z-320cdd3d
+- **Owner base:** 5c493c63128a9140a8ee60f1566adb873f6f92af
+- **Owner fingerprint:** sha256:fa34526a2ac80946105341331feb64ed26d676cf72cf510e0d521aa3c3a49490
+- **Owner since:** 2026-09-13T19:16:04Z
+- **Owner until:** 2026-09-13T21:16:04Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

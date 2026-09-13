@@ -839,19 +839,17 @@ mod tests {
     #[test]
     fn noteon_burst_is_bounded_and_capped() {
         let mut synth = RealtimeSynth::new(opts());
-        // Far more note-ons than either budget, all distinct (channel, key) pairs
-        // so each is a fresh voice rather than a retrigger.
-        let mut spawned = 0usize;
-        'outer: for ch in 0u8..9 {
-            for key in 21u8..=108 {
-                synth.write_byte(0x90 | ch);
-                synth.write_byte(key);
-                synth.write_byte(80);
-                spawned += 1;
-                if spawned >= LIVE_MAX_PENDING * 2 {
-                    break 'outer;
-                }
-            }
+        // Far more note-ons than either budget. The first 792 use distinct
+        // (channel, key) pairs so each is a fresh voice; the remaining notes
+        // repeat those valid pairs only because MIDI has nine channels × 88
+        // piano keys, not because the burst should stop below its budget.
+        for i in 0..LIVE_MAX_PENDING * 2 {
+            let slot = i % (9 * 88);
+            let ch = (slot / 88) as u8;
+            let key = 21 + (slot % 88) as u8;
+            synth.write_byte(0x90 | ch);
+            synth.write_byte(key);
+            synth.write_byte(80);
         }
         assert!(
             synth.pending.len() <= LIVE_MAX_PENDING,

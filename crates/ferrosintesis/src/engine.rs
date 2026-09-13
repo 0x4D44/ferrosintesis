@@ -12438,6 +12438,29 @@ mod tests {
         assert_eq!(checked, 540, "the configuration sweep shrank");
     }
 
+    /// The differential oracle above proves the result, not the cost. Keep a
+    /// source-level guard on the implementation shape so a future equivalent
+    /// rewrite cannot restore `Vec::remove` inside the over-cap loop and put a
+    /// quadratic operation back on the realtime audio thread.
+    #[test]
+    fn enforce_voice_cap_uses_a_single_linear_retain_pass() {
+        let source = include_str!("engine.rs");
+        let body = source
+            .split_once("pub(crate) fn enforce_voice_cap(&mut self, cap: usize) {")
+            .and_then(|(_, rest)| rest.split_once("\n    pub(crate) fn handle_event"))
+            .map(|(body, _)| body)
+            .expect("enforce_voice_cap body must remain source-visible");
+
+        assert!(
+            body.contains("self.active.retain("),
+            "voice capping must filter in one linear pass"
+        );
+        assert!(
+            !body.contains(".remove("),
+            "voice capping must not reintroduce quadratic Vec::remove"
+        );
+    }
+
     /// MM-BUG-KILN-00013: the cap steals the RIGHT voices — the oldest first,
     /// and any released (decaying) voice before an older un-released one — not
     /// just the right COUNT.

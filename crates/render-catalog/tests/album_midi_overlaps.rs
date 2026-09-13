@@ -72,9 +72,11 @@ impl NoteAudit {
 
 /// The universal GM System On message body, as `midi::decode_sysex_payload` matches it:
 /// `F0 7E <device> 09 01 F7`, with the framing `F0` already consumed and the payload
-/// still carrying its terminating `F7`. The device byte is any value.
+/// still carrying its terminating `F7`. The device byte is any seven-bit value.
 fn is_gm_system_on(payload: &[u8]) -> bool {
-    matches!(payload.strip_suffix(&[0xf7]), Some([0x7e, _, 0x09, 0x01]))
+    payload.strip_suffix(&[0xf7]).is_some_and(|body| {
+        body.iter().all(|&byte| byte < 0x80) && matches!(body, [0x7e, _, 0x09, 0x01])
+    })
 }
 
 fn track_note_events(
@@ -362,6 +364,26 @@ mod controls {
         let mut events = vec![0x00, 0x90, 60, 100, 0x0a];
         events.extend_from_slice(&GM_SYSTEM_ON);
         assert_eq!(audit(&[&events]), NoteAudit::default());
+    }
+
+    /// A high-bit device byte is invalid SysEx data. It must not reset the audit,
+    /// just as `midi::decode_sysex_payload` ignores the same production message.
+    #[test]
+    fn high_bit_gm_system_on_device_does_not_reset_the_audit() {
+        let events = [
+            0x00, 0x90, 60, 100, 0x0a, // first note remains held
+            0xf0, 0x05, 0x7e, 0xff, 0x09, 0x01, 0xf7, 0x00, 0x90, 60,
+            100, // malformed reset cannot clear the first note
+            0x00, 0x80, 60, 0,
+        ];
+        assert_eq!(
+            audit(&[&events]),
+            NoteAudit {
+                overlaps: 1,
+                unmatched_note_ons: 1,
+                ..NoteAudit::default()
+            }
+        );
     }
 
     /// The reset is ordered before other events at the same tick, exactly as

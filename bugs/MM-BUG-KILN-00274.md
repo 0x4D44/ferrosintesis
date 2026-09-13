@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / SMF parser resource bounds
 - **Raised:** 2026-08-17T09:41:16Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T191249Z-3ad85db7
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00274-run-verify-20260913T191249Z-3ad85db7
+- **Owner base:** 3006a1b272d3627677d9a12775b93e6df96a9c53
+- **Owner fingerprint:** sha256:72f79c27dff5856b7fa6d91fe1bbe1093e7b9314c65411c2e55470c685a895c1
+- **Owner since:** 2026-09-13T19:12:49Z
+- **Owner until:** 2026-09-13T21:12:49Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

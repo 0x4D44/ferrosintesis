@@ -6,15 +6,15 @@
 - **Area:** MuseScore sample package / regeneration scope
 - **Raised:** 2026-08-13T22:31:45Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T204611Z-e539bda7
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00190-run-verify-20260913T204611Z-e539bda7
+- **Owner base:** 25a14b4601b9355ecc00c4fde5bd6da86c9df30b
+- **Owner fingerprint:** sha256:308db0175143aa704b5a5cd8839870307e241f49ce82380d115642eeb4836591
+- **Owner since:** 2026-09-13T20:46:11Z
+- **Owner until:** 2026-09-13T22:46:11Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00265 — Orchestral2 family regeneration can publish a partial mixed bank after a late failure
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** orchestral2 sample generation / family publication atomicity
 - **Raised:** 2026-08-17T04:26:14Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T164231Z-1cdf7492
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00265-run-fix-20260913T164231Z-1cdf7492
-- **Owner base:** 69cad3278718368bedfc5965e98ea5522ca7ec80
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T16:42:31Z
-- **Owner until:** 2026-09-13T18:42:31Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T04:26:14Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T04:26:14Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:53:31Z, deltic:auto role=fix run=fix-20260913T164231Z-1cdf7492 branch=task/bug-MM-BUG-KILN-00265-run-fix-20260913T164231Z-1cdf7492 code=dc135609700fbed7bb02c16e31b203655e3f0eaa gate=manual)
 
 ## Observation
 

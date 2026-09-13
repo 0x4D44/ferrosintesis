@@ -6,15 +6,15 @@
 - **Area:** gong sample crate / deterministic regeneration
 - **Raised:** 2026-08-16T21:53:11Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T062419Z-07b08de2
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00239-run-fix-20260913T062419Z-07b08de2
+- **Owner base:** b73321a5ff4dc066f9faf8a7716c11bfe6500b0b
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T06:24:19Z
+- **Owner until:** 2026-09-13T08:24:19Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

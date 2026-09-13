@@ -35,6 +35,17 @@ mod tests {
             .to_path_buf()
     }
 
+    fn local_link_path(target: &str) -> Option<&str> {
+        if target.is_empty()
+            || target.starts_with("http://")
+            || target.starts_with("https://")
+            || target.starts_with('#')
+        {
+            return None;
+        }
+        Some(target.split('#').next().unwrap_or(target))
+    }
+
     /// MM-BUG-KILN-00193: a link in a PACKAGED document must resolve inside the
     /// published package.
     ///
@@ -74,22 +85,18 @@ mod tests {
                     let end = rest.find(')').unwrap_or(rest.len());
                     ((), &rest[..end])
                 }) {
-                    if target.starts_with("http://")
-                        || target.starts_with("https://")
-                        || target.starts_with('#')
-                        || target.is_empty()
-                    {
+                    let Some(path) = local_link_path(target) else {
                         continue;
-                    }
+                    };
                     checked_links += 1;
-                    if target.starts_with("../") || target.starts_with('/') {
+                    if path.starts_with("../") || path.starts_with('/') {
                         errors.push(format!(
                             "{crate_name}/{doc} links `{target}`, which escapes the \
                              published package"
                         ));
                         continue;
                     }
-                    if !crate_dir.join(target).exists() {
+                    if !crate_dir.join(path).exists() {
                         errors.push(format!(
                             "{crate_name}/{doc} links `{target}`, which does not exist"
                         ));
@@ -97,7 +104,7 @@ mod tests {
                     }
                     // In the archive too, not merely on disk: cargo publishes only what
                     // `include` names.
-                    let top = target.split('/').next().unwrap_or(target);
+                    let top = path.split('/').next().unwrap_or(path);
                     let covered = include.contains(&format!("\"{top}\""))
                         || include.contains(&format!("\"{top}/**\""));
                     if !covered {
@@ -120,6 +127,17 @@ mod tests {
             errors.len(),
             errors.join("\n  ")
         );
+    }
+
+    #[test]
+    fn local_link_path_strips_fragments_but_preserves_non_local_links() {
+        assert_eq!(local_link_path("README.md#lookup-keys"), Some("README.md"));
+        assert_eq!(
+            local_link_path("https://example.test/README.md#lookup-keys"),
+            None
+        );
+        assert_eq!(local_link_path("#lookup-keys"), None);
+        assert_eq!(local_link_path(""), None);
     }
 
     /// MM-BUG-KILN-00196: what a crate PACKAGES and what its oracle CHECKS must be

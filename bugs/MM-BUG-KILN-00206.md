@@ -6,15 +6,15 @@
 - **Area:** sample crate generation / output durability
 - **Raised:** 2026-08-16T08:41:07Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T150200Z-99fda007
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00206-run-fix-20260913T150200Z-99fda007
+- **Owner base:** de048333e03e53624da788a2a49ccbafb493b2d2
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T15:02:00Z
+- **Owner until:** 2026-09-13T17:02:00Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -673,11 +673,11 @@ mod tests {
         text.split_whitespace().rev().find_map(number_value)
     }
 
-    /// Return count phrases in the NOTICE's legal-instruction paragraph that disagree with
-    /// the attribution set derived from the feature list and each bank's licence evidence.
-    /// A count may be omitted entirely; if prose states one, it must be correct.
-    fn notice_attribution_count_mismatches(notice: &str, expected: usize) -> Vec<String> {
-        let normalized = notice.split_whitespace().collect::<Vec<_>>().join(" ");
+    /// Return count phrases in shipped attribution prose that disagree with the attribution
+    /// set derived from the feature list and each bank's licence evidence. A count may be
+    /// omitted entirely; if prose states one, it must be correct.
+    fn attribution_count_mismatches(text: &str, expected: usize) -> Vec<String> {
+        let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
         let lower = normalized.to_ascii_lowercase();
         let mut mismatches = Vec::new();
         if let Some((before, _)) = lower.split_once("below are not") {
@@ -707,6 +707,29 @@ mod tests {
                 }
             }
         }
+
+        let words: Vec<&str> = lower.split_whitespace().collect();
+        for (index, word) in words.iter().enumerate() {
+            if word.trim_matches(|character: char| {
+                !character.is_ascii_alphanumeric() && character != '-'
+            }) != "attribution-bearing"
+            {
+                continue;
+            }
+            let start = index.saturating_sub(5);
+            let end = (index + 6).min(words.len());
+            let value = (start..index)
+                .rev()
+                .chain((index + 1)..end)
+                .find_map(|position| number_value(words[position]));
+            if let Some(value) = value {
+                if value != expected {
+                    mismatches.push(format!(
+                        "{value} near `attribution-bearing` (expected {expected})"
+                    ));
+                }
+            }
+        }
         mismatches
     }
 
@@ -719,11 +742,29 @@ mod tests {
              YOU MUST REPRODUCE THE {stale} NOTICES LISTED HERE.\n\
              concatenating those {stale} satisfies every obligation below."
         );
-        let mismatches = notice_attribution_count_mismatches(&notice, expected);
+        let mismatches = attribution_count_mismatches(&notice, expected);
         assert_eq!(
             mismatches.len(),
             3,
             "the oracle must reject each stale obligation count: {mismatches:?}"
+        );
+
+        let hidden = format!("This index covers {stale} attribution-bearing crates.");
+        let hidden_mismatches = attribution_count_mismatches(&hidden, expected);
+        assert_eq!(
+            hidden_mismatches.len(),
+            1,
+            "the oracle must reject a stale count outside its three legacy phrases: \
+             {hidden_mismatches:?}"
+        );
+
+        let historical = format!("five of these {stale} attribution-bearing banks");
+        let historical_mismatches = attribution_count_mismatches(&historical, expected);
+        assert_eq!(
+            historical_mismatches.len(),
+            1,
+            "the oracle must bind a compound phrase to its total count: \
+             {historical_mismatches:?}"
         );
     }
 
@@ -737,6 +778,13 @@ mod tests {
     #[test]
     fn readme_names_every_attribution_bearing_sample_bank() {
         let readme = read(&crates_dir().join("ferrosintesis").join("README.md"));
+        let expected_count = attribution_bearing_sample_crates().len();
+        let count_mismatches = attribution_count_mismatches(&readme, expected_count);
+        assert!(
+            count_mismatches.is_empty(),
+            "crates/ferrosintesis/README.md states stale attribution count(s):\n  {}",
+            count_mismatches.join("\n  ")
+        );
 
         let mut missing = Vec::new();
         let mut unlicensed = Vec::new();
@@ -834,7 +882,7 @@ mod tests {
 
         let notice = read(&notice_path);
         let expected_notice_count = attribution_bearing_sample_crates().len();
-        let count_mismatches = notice_attribution_count_mismatches(&notice, expected_notice_count);
+        let count_mismatches = attribution_count_mismatches(&notice, expected_notice_count);
         assert!(
             count_mismatches.is_empty(),
             "crates/ferrosintesis/NOTICE states stale attribution count(s):\n  {}",

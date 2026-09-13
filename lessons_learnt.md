@@ -10,6 +10,10 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **Bind attribution counts to their noun phrase, not fixed sentence offsets** (`licensing.rs:attribution_count_mismatches`).
+  - A stale “five of these ten” survived because the oracle only inspected three old NOTICE
+    sentences. Scan every shipped attribution phrase and derive its expected count instead.
+
 - 2026.09.13 — **Archive guards must lex char literals and gate optional corpus walks** (`archive_boundary.rs`).
   - A phantom string from `\"'\"` hid every later function, while `env!("CARGO_MANIFEST_DIR")`
     left the marker inside a string token. Tokenize chars first, recognize the macro shape, and

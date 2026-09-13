@@ -249,8 +249,8 @@ licence here. The remaining banks are CC0 and require nothing.
 This table is not maintained by hand. `licensing.rs` derives the attribution-bearing
 set from the `embedded-samples` feature list and each bank's own `license` field, and
 fails the build if a bank is missing here or ships without a packaged `NOTICE` — so a
-new CC-BY bank cannot land silently uncredited, which is exactly how five of these ten
-came to be omitted before (MM-BUG-KILN-00060). It caught the B1 upright the same way
+new CC-BY bank cannot land silently uncredited, which is exactly how omissions in this
+table came to be before (MM-BUG-KILN-00060). It caught the B1 upright the same way
 back when that first-party bank still declared MIT OR Apache-2.0: "we own it" is not
 an exemption the derivation recognises — correctly, since a downstream distributor has
 no way to know that. The B1 was re-dedicated **CC0 1.0** on 2026.07.25 and so has left

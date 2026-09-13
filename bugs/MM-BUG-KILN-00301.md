@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00301 — Integration gate never runs example tests and never builds the CLI's advertised --no-default-features config, leaving its only unit test vacuous
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:56:22Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T224848Z-329ad481
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00301-run-fix-20260913T224848Z-329ad481
-- **Owner base:** 4eb2b9bfa76e752e25168a0d9815d92a5150c1cf
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:48:48Z
-- **Owner until:** 2026-09-14T00:48:48Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:56:22Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-17T22:56:22Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T23:15:40Z, deltic:auto role=fix run=fix-20260913T224848Z-329ad481 branch=task/bug-MM-BUG-KILN-00301-run-fix-20260913T224848Z-329ad481 code=f5d6035931c5539eb98842641645c72e96597ccb gate=manual)
 
 ## Observation
 

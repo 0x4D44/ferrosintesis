@@ -6,15 +6,15 @@
 - **Area:** mandolin sample crate / packaged provenance
 - **Raised:** 2026-08-20T12:21:24Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T194535Z-9d03e62f
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00050-run-verify-20260913T194535Z-9d03e62f
+- **Owner base:** 43852a0fdc7072ac7dc7b39c18892473c525293c
+- **Owner fingerprint:** sha256:e76e0b363711c0a15b667120c6beb86a07dcccc2f1fcbce8dca1d2f0e75d35d3
+- **Owner since:** 2026-09-13T19:45:35Z
+- **Owner until:** 2026-09-13T21:45:35Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

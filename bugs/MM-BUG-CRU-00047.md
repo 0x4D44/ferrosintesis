@@ -6,15 +6,15 @@
 - **Area:** grand sample crate / regeneration prerequisites
 - **Raised:** 2026-08-20T11:08:24Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T194457Z-1152435c
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00047-run-verify-20260913T194457Z-1152435c
+- **Owner base:** dc4a0226cae680a87604f39aaca4f24d7aa80783
+- **Owner fingerprint:** sha256:45ee5bc87c99d20feb943863465877cbb0cdc35c9644c9f3a14866dfd39097f1
+- **Owner since:** 2026-09-13T19:44:57Z
+- **Owner until:** 2026-09-13T21:44:57Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00043 — Packaged licence-evidence copies are bound to no oracle, so the published legal evidence can silently diverge from its attested SHA-256
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample asset crates / provenance oracles
 - **Raised:** 2026-08-18T06:59:48Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T081134Z-14ada163
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00043-run-fix-20260913T081134Z-14ada163
-- **Owner base:** d1b6c42bfbd5eff77b5bb9e926856836132e206d
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T08:11:34Z
-- **Owner until:** 2026-09-13T10:11:34Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T06:59:48Z, raised via `deltic bugs new` model=claude-fable-5)
+- **State history:** Open (2026-08-18T06:59:48Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-09-13T08:20:22Z, deltic:auto role=fix run=fix-20260913T081134Z-14ada163 branch=task/bug-MM-BUG-CRUCIBLE-00043-run-fix-20260913T081134Z-14ada163 code=d39c5356c4805af72fc613e0d4ad3a6e4aedd117 gate=manual)
 
 ## Observation
 

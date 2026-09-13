@@ -31,6 +31,10 @@ root), leaving a recorded attack that swells into a looped
 plateau body (`ferrosintesis` finds the pitch-synchronous loop at construction). Voices
 the GM 76 blown bottle.
 
+`bottleloop_G3.flac` is a historical/source filename retained for compatibility, not a
+pitch assertion. Consumers must use the measured root 205.0 Hz (approximately G-sharp 3),
+exposed as `MEASURED_ROOT_HZ` by this crate; do not infer pitch from the filename.
+
 The exact recipe, as the code applies it:
 
 | Step | Value |

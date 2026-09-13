@@ -4495,13 +4495,18 @@ pub fn sax_loop_voice(program: u8, key: u8, vel: u8, sr: f32, seed: u32) -> Opti
 /// isn't critical — sane in-mix level is enough.
 const BOTTLE_LOOP_GAIN: f32 = 0.65;
 
+#[cfg(feature = "embedded-samples")]
+const BOTTLE_LOOP_ROOT_HZ: f32 = ferrosintesis_samples_bottle::MEASURED_ROOT_HZ;
+#[cfg(not(feature = "embedded-samples"))]
+const BOTTLE_LOOP_ROOT_HZ: f32 = 205.0;
+
 /// Single-zone bank for the GM 76 blown-bottle LA loop (Freesound 349867, CC0 1.0),
 /// measured root 205.0 Hz.
 fn bottle_loop_bank() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
         bank!(
-            "bottleloop_G3.flac" => 205.0,
+            "bottleloop_G3.flac" => BOTTLE_LOOP_ROOT_HZ,
         )
     })
 }

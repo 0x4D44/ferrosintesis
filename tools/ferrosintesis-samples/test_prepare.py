@@ -6297,6 +6297,38 @@ class GongRegenerationWorkflowTest(unittest.TestCase):
                 self.assertEqual(payload[:4], b"fLaC", name)
 
 
+class BottleMeasuredRootMetadataTest(unittest.TestCase):
+    """MM-BUG-KILN-00214: the historical G3 filename must expose its measured root."""
+
+    def test_public_metadata_and_docs_override_filename_pitch_inference(self):
+        repo = pathlib.Path(prepare.REPO_ROOT)
+        crate = repo / "crates" / "ferrosintesis-samples-bottle"
+        lib = (crate / "src" / "lib.rs").read_text(encoding="utf-8")
+        sampler = (repo / "crates" / "ferrosintesis" / "src" / "sampler.rs").read_text(
+            encoding="utf-8"
+        )
+        documents = {
+            name: (crate / name).read_text(encoding="utf-8")
+            for name in ("README.md", "PROVENANCE.md")
+        }
+
+        metadata = re.search(
+            r"pub const MEASURED_ROOT_HZ: f32 = ([0-9]+(?:\.[0-9]+)?);", lib
+        )
+        self.assertIsNotNone(metadata)
+        self.assertEqual(float(metadata.group(1)), 205.0)
+        self.assertIn("bottleloop_G3.flac\" => BOTTLE_LOOP_ROOT_HZ", sampler)
+        self.assertIn("ferrosintesis_samples_bottle::MEASURED_ROOT_HZ", sampler)
+
+        for name, text in documents.items():
+            with self.subTest(document=name):
+                self.assertIn("bottleloop_G3.flac", text)
+                self.assertRegex(text, r"(?i)historical.*filename|filename.*historical")
+                self.assertIn("205.0 Hz", text)
+                self.assertRegex(text, r"(?i)G-sharp 3")
+                self.assertRegex(text, r"(?i)do not infer|must use")
+
+
 class BottleLoopTest(unittest.TestCase):
     """MM-BUG-KILN-00065: the GM 76 whole-voice loop must have exactly one owner.
 

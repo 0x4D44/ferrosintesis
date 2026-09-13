@@ -12,6 +12,12 @@
 /// Number of sample files embedded in this package.
 pub const FILE_COUNT: usize = 1;
 
+/// Measured root frequency of the recording in `bottleloop_G3.flac`.
+///
+/// The historical/source filename is retained for compatibility; it is not an
+/// equal-tempered pitch claim. Consumers must use this measured value when repitching.
+pub const MEASURED_ROOT_HZ: f32 = 205.0;
+
 static SAMPLES: [(&str, &[u8]); 1] = [(
     "bottleloop_G3.flac",
     include_bytes!("../samples/bottleloop_G3.flac"),

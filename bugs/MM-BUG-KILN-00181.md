@@ -6,15 +6,15 @@
 - **Area:** sample generation / archive cache reliability
 - **Raised:** 2026-08-13T17:58:10Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T204009Z-2ee71f4f
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00181-run-verify-20260913T204009Z-2ee71f4f
+- **Owner base:** 8ceb7049324f06a08b8535f7887379ca0e11e06a
+- **Owner fingerprint:** sha256:1ee9a401aa5afa058c03ef1538be1aa9f2579ea8d8de8d9948b81d83462cef4a
+- **Owner since:** 2026-09-13T20:40:09Z
+- **Owner until:** 2026-09-13T22:40:09Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

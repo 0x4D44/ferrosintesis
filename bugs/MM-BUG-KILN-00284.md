@@ -6,15 +6,15 @@
 - **Area:** core drum-kit sample crate / audio validation
 - **Raised:** 2026-08-17T11:40:04Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T185158Z-892715cf
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00284-run-fix-20260913T185158Z-892715cf
+- **Owner base:** 9514a6def413f851e388899cc0183f91394ca20a
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T18:51:58Z
+- **Owner until:** 2026-09-13T20:51:58Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

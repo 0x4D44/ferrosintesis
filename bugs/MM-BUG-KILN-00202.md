@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00202 — Inherited cold-cache marker still bypasses process isolation
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drumkit2 cache regression
 - **Raised:** 2026-08-16T07:16:52Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T144510Z-778d98c1
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00202-run-fix-20260913T144510Z-778d98c1
-- **Owner base:** 14db577862ec847680ca84276e9e43b9e18131f7
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T14:45:10Z
-- **Owner until:** 2026-09-13T16:45:10Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T07:16:52Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T07:16:52Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T14:51:34Z, deltic:auto role=fix run=fix-20260913T144510Z-778d98c1 branch=task/bug-MM-BUG-KILN-00202-run-fix-20260913T144510Z-778d98c1 code=50696dc28e0744a77045bc208fd8eb0dfce277af gate=manual)
 
 ## Observation
 

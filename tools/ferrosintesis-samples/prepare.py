@@ -4565,6 +4565,102 @@ def _read_wav_pcm(path):
         return w.readframes(w.getnframes())
 
 
+def _publish_staged_flac_bank(staging_dir, output_dir, logical_names, label):
+    """Encode and atomically publish a complete staged bank with rollback."""
+    logical_names = tuple(sorted(logical_names))
+    packaged_names = tuple(packaged_name(name) for name in logical_names)
+    if len(set(packaged_names)) != len(packaged_names):
+        raise ValueError(f"{label} logical names collapse to duplicate packaged names")
+
+    staged = {
+        name for name in os.listdir(staging_dir)
+        if name.endswith((".wav", PACKAGED_EXT))
+    }
+    if staged != set(logical_names):
+        raise ValueError(
+            f"{label} staging output is incomplete: expected "
+            f"{len(logical_names)} WAVs, found {len(staged)}"
+        )
+
+    os.makedirs(output_dir, exist_ok=True)
+    mixed = sorted(
+        name for name in os.listdir(output_dir)
+        if name.endswith(".wav") and packaged_name(name) in packaged_names
+    )
+    if mixed:
+        raise ValueError(
+            f"{label} output contains mixed WAV/FLAC containers: "
+            + ", ".join(mixed)
+        )
+
+    parts = {}
+    backup_dir = None
+    cleanup_backup = True
+    backups = {}
+    published = []
+    try:
+        # Finish and verify every FLAC before moving one old bank entry aside.
+        for logical, packaged in zip(logical_names, packaged_names):
+            wav = os.path.join(staging_dir, logical)
+            validate_pcm16_wav(wav)
+            descriptor, part = tempfile.mkstemp(
+                prefix=f".{packaged}.", suffix=".part", dir=output_dir
+            )
+            os.close(descriptor)
+            parts[packaged] = part
+            try:
+                _encode_flac(wav, part)
+                if _decode_flac_pcm(part) != _read_wav_pcm(wav):
+                    raise ValueError(f"{packaged}: FLAC encode was not bit-exact")
+            except Exception:
+                if os.path.exists(part):
+                    os.remove(part)
+                parts[packaged] = None
+                raise
+
+        backup_dir = tempfile.mkdtemp(prefix=f".{label}-backup-", dir=output_dir)
+        try:
+            for packaged in packaged_names:
+                destination = os.path.join(output_dir, packaged)
+                if os.path.exists(destination):
+                    backup = os.path.join(backup_dir, packaged)
+                    atomic_replace(destination, backup)
+                    backups[packaged] = backup
+            for packaged in packaged_names:
+                destination = os.path.join(output_dir, packaged)
+                atomic_replace(parts[packaged], destination)
+                parts[packaged] = None
+                published.append(destination)
+        except Exception as error:
+            rollback_errors = []
+            for destination in reversed(published):
+                try:
+                    if os.path.exists(destination):
+                        os.remove(destination)
+                except OSError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            for packaged, backup in reversed(tuple(backups.items())):
+                if not os.path.exists(backup):
+                    continue
+                try:
+                    atomic_replace(backup, os.path.join(output_dir, packaged))
+                except OSError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            if rollback_errors:
+                cleanup_backup = False
+                raise RuntimeError(
+                    f"{label} bank publication failed and rollback was incomplete: "
+                    + "; ".join(rollback_errors)
+                ) from error
+            raise
+    finally:
+        for part in parts.values():
+            if part is not None and os.path.exists(part):
+                os.remove(part)
+        if backup_dir is not None and cleanup_backup:
+            shutil.rmtree(backup_dir, ignore_errors=True)
+
+
 def publish_pending_banks():
     """Convert every bank this run wrote from WAV to its packaged FLAC.
 
@@ -4824,98 +4920,9 @@ def _bake_clavinet_note(x, root_hz, sr, t60, keep_s=None, fade_s=None):
 
 def _publish_clavinet_bank(staging_dir, output_dir, logical_names):
     """Encode and publish one complete clavinet bank, rolling back replacements."""
-    logical_names = tuple(sorted(logical_names))
-    packaged_names = tuple(packaged_name(name) for name in logical_names)
-    if len(set(packaged_names)) != len(packaged_names):
-        raise ValueError("clavinet logical names collapse to duplicate packaged names")
-
-    staged = {
-        name for name in os.listdir(staging_dir)
-        if name.endswith((".wav", PACKAGED_EXT))
-    }
-    if staged != set(logical_names):
-        raise ValueError(
-            "clavinet staging output is incomplete: expected "
-            f"{len(logical_names)} WAVs, found {len(staged)}"
-        )
-
-    os.makedirs(output_dir, exist_ok=True)
-    mixed = sorted(
-        name for name in os.listdir(output_dir)
-        if name.endswith(".wav") and packaged_name(name) in packaged_names
+    return _publish_staged_flac_bank(
+        staging_dir, output_dir, logical_names, "clavinet"
     )
-    if mixed:
-        raise ValueError(
-            "clavinet output contains mixed WAV/FLAC containers: "
-            + ", ".join(mixed)
-        )
-
-    parts = {}
-    backup_dir = None
-    cleanup_backup = True
-    backups = {}
-    published = []
-    try:
-        # Finish and verify every FLAC before moving one old bank entry aside.
-        for logical, packaged in zip(logical_names, packaged_names):
-            wav = os.path.join(staging_dir, logical)
-            validate_pcm16_wav(wav)
-            descriptor, part = tempfile.mkstemp(
-                prefix=f".{packaged}.", suffix=".part", dir=output_dir
-            )
-            os.close(descriptor)
-            parts[packaged] = part
-            try:
-                _encode_flac(wav, part)
-                if _decode_flac_pcm(part) != _read_wav_pcm(wav):
-                    raise ValueError(f"{packaged}: FLAC encode was not bit-exact")
-            except Exception:
-                if os.path.exists(part):
-                    os.remove(part)
-                parts[packaged] = None
-                raise
-
-        backup_dir = tempfile.mkdtemp(prefix=".clavinet-backup-", dir=output_dir)
-        try:
-            for packaged in packaged_names:
-                destination = os.path.join(output_dir, packaged)
-                if os.path.exists(destination):
-                    backup = os.path.join(backup_dir, packaged)
-                    atomic_replace(destination, backup)
-                    backups[packaged] = backup
-            for packaged in packaged_names:
-                destination = os.path.join(output_dir, packaged)
-                atomic_replace(parts[packaged], destination)
-                parts[packaged] = None
-                published.append(destination)
-        except Exception as error:
-            rollback_errors = []
-            for destination in reversed(published):
-                try:
-                    if os.path.exists(destination):
-                        os.remove(destination)
-                except OSError as rollback_error:
-                    rollback_errors.append(str(rollback_error))
-            for packaged, backup in reversed(tuple(backups.items())):
-                if not os.path.exists(backup):
-                    continue
-                try:
-                    atomic_replace(backup, os.path.join(output_dir, packaged))
-                except OSError as rollback_error:
-                    rollback_errors.append(str(rollback_error))
-            if rollback_errors:
-                cleanup_backup = False
-                raise RuntimeError(
-                    "clavinet bank publication failed and rollback was incomplete: "
-                    + "; ".join(rollback_errors)
-                ) from error
-            raise
-    finally:
-        for part in parts.values():
-            if part is not None and os.path.exists(part):
-                os.remove(part)
-        if backup_dir is not None and cleanup_backup:
-            shutil.rmtree(backup_dir, ignore_errors=True)
 
 
 def _bake_clavinet(src):
@@ -5885,103 +5892,46 @@ def _prepare_generic_source_sample(fn, family_src):
     return seg, sr, (fn, root, f0, cand, cents, conf, len(seg) / sr)
 
 
+def _publish_grand_bank(staging_dir, output_dir, logical_names):
+    """Encode and atomically publish one complete grand bank with rollback."""
+    return _publish_staged_flac_bank(staging_dir, output_dir, logical_names, "grand")
+
+
+def _bake_grand(src):
+    """Bake the Salamander grand bank in a private staging directory."""
+    logical_names = tuple(sorted(GRAND_SOURCES))
+    out_dir = os.path.dirname(sample_output_path(logical_names[0]))
+    _validate_generated_output_families(
+        {"grand"}, logical_names, output_dir=out_dir
+    )
+    rows = []
+    with tempfile.TemporaryDirectory(prefix=".grand-bank-") as staging:
+        for fn in logical_names:
+            seg, sr, row = _prepare_generic_source_sample(fn, src)
+            write_wav_mono(os.path.join(staging, fn), seg, sr)
+            rows.append(row)
+        staged = {
+            name for name in os.listdir(staging)
+            if name.endswith((".wav", PACKAGED_EXT))
+        }
+        if staged != set(logical_names):
+            raise ValueError(
+                "grand staging output is incomplete: expected "
+                f"{len(logical_names)} WAVs, found {len(staged)}"
+            )
+        _validate_generated_output_inventory(
+            None, logical_names, output_dir=staging
+        )
+        _publish_grand_bank(staging, out_dir, logical_names)
+    return rows
+
+
 _BASS_FAMILIES = frozenset(("fingerbass", "pickbass"))
 
 
 def _publish_bass_bank(staging_dir, output_dir, logical_names):
     """Encode and atomically publish a complete selected bass bank with rollback."""
-    logical_names = tuple(sorted(logical_names))
-    packaged_names = tuple(packaged_name(name) for name in logical_names)
-    if len(set(packaged_names)) != len(packaged_names):
-        raise ValueError("bass logical names collapse to duplicate packaged names")
-
-    staged = {
-        name for name in os.listdir(staging_dir)
-        if name.endswith((".wav", PACKAGED_EXT))
-    }
-    if staged != set(logical_names):
-        raise ValueError(
-            "bass staging output is incomplete: expected "
-            f"{len(logical_names)} WAVs, found {len(staged)}"
-        )
-
-    os.makedirs(output_dir, exist_ok=True)
-    mixed = sorted(
-        name for name in os.listdir(output_dir)
-        if name.endswith(".wav") and packaged_name(name) in packaged_names
-    )
-    if mixed:
-        raise ValueError(
-            "bass output contains mixed WAV/FLAC containers: "
-            + ", ".join(mixed)
-        )
-
-    parts = {}
-    backup_dir = None
-    cleanup_backup = True
-    backups = {}
-    published = []
-    try:
-        # Finish and verify every FLAC before moving one old bank entry aside.
-        for logical, packaged in zip(logical_names, packaged_names):
-            wav = os.path.join(staging_dir, logical)
-            validate_pcm16_wav(wav)
-            descriptor, part = tempfile.mkstemp(
-                prefix=f".{packaged}.", suffix=".part", dir=output_dir
-            )
-            os.close(descriptor)
-            parts[packaged] = part
-            try:
-                _encode_flac(wav, part)
-                if _decode_flac_pcm(part) != _read_wav_pcm(wav):
-                    raise ValueError(f"{packaged}: FLAC encode was not bit-exact")
-            except Exception:
-                if os.path.exists(part):
-                    os.remove(part)
-                parts[packaged] = None
-                raise
-
-        backup_dir = tempfile.mkdtemp(prefix=".bass-backup-", dir=output_dir)
-        try:
-            for packaged in packaged_names:
-                destination = os.path.join(output_dir, packaged)
-                if os.path.exists(destination):
-                    backup = os.path.join(backup_dir, packaged)
-                    atomic_replace(destination, backup)
-                    backups[packaged] = backup
-            for packaged in packaged_names:
-                destination = os.path.join(output_dir, packaged)
-                atomic_replace(parts[packaged], destination)
-                parts[packaged] = None
-                published.append(destination)
-        except Exception as error:
-            rollback_errors = []
-            for destination in reversed(published):
-                try:
-                    if os.path.exists(destination):
-                        os.remove(destination)
-                except OSError as rollback_error:
-                    rollback_errors.append(str(rollback_error))
-            for packaged, backup in reversed(tuple(backups.items())):
-                if not os.path.exists(backup):
-                    continue
-                try:
-                    atomic_replace(backup, os.path.join(output_dir, packaged))
-                except OSError as rollback_error:
-                    rollback_errors.append(str(rollback_error))
-            if rollback_errors:
-                cleanup_backup = False
-                raise RuntimeError(
-                    "bass bank publication failed and rollback was incomplete: "
-                    + "; ".join(rollback_errors)
-                ) from error
-            raise
-    finally:
-        for part in parts.values():
-            if part is not None and os.path.exists(part):
-                os.remove(part)
-        if backup_dir is not None and cleanup_backup:
-            shutil.rmtree(backup_dir, ignore_errors=True)
+    return _publish_staged_flac_bank(staging_dir, output_dir, logical_names, "bass")
 
 
 def _bake_bass(src, only):
@@ -6421,6 +6371,7 @@ def main():
             ensure_bagpipe_sources(src)
         if want("grand"):
             ensure_salamander_sources(src)
+            rows += _bake_grand(src)
         if want("steinwayb"):
             ensure_direct_sources(src, STEINWAYB_SOURCES, "steinwayb")
         if want("kawai"):
@@ -6542,7 +6493,7 @@ def main():
             | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
         ):
             fam = fn.split("_")[0]
-            if fam in _BASS_FAMILIES or not want(fam):
+            if fam == "grand" or fam in _BASS_FAMILIES or not want(fam):
                 continue
             family_src = headroom_src if fn in HEADROOM_SOURCES else src
             seg, sr, row = _prepare_generic_source_sample(fn, family_src)

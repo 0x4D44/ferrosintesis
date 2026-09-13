@@ -4011,6 +4011,117 @@ class GrandFlacRegenerationWorkflowTest(unittest.TestCase):
             ensure_sources.assert_called_once()
 
 
+class GrandWholeBankPublicationTest(unittest.TestCase):
+    """MM-BUG-KILN-00245: failed grand bakes preserve the previous bank."""
+
+    def setUp(self):
+        self.repo_root = tempfile.mkdtemp()
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.repo_root, True)
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.addCleanup(prepare._PENDING_BANK_DIRS.clear)
+        self.sample_dir = os.path.join(
+            self.repo_root,
+            "crates",
+            "ferrosintesis-samples-grand",
+            "samples",
+        )
+        os.makedirs(self.sample_dir)
+        self.expected = tuple(
+            sorted(("grand_C4_f.wav", "grand_C4_mf.wav", "grand_C5_f.wav"))
+        )
+        self.grand_sources = {name: f"fixture/{name}" for name in self.expected}
+        for name in self.expected:
+            packaged = prepare.packaged_name(name)
+            with open(os.path.join(self.sample_dir, packaged), "wb") as output:
+                output.write(f"old grand bank: {packaged}".encode("ascii"))
+
+    def snapshot_bank(self):
+        return {
+            name: pathlib.Path(self.sample_dir, name).read_bytes()
+            for name in sorted(os.listdir(self.sample_dir))
+        }
+
+    @staticmethod
+    def staged_sample(fn, _src):
+        segment = [0.0, 0.25, -0.25, 0.0]
+        row = (fn, 440.0, 440.0, 440.0, 0.0, 1.0, len(segment) / prepare.OUT_SR)
+        return segment, prepare.OUT_SR, row
+
+    def run_bake(self, transform):
+        with (
+            mock.patch.object(prepare, "REPO_ROOT", self.repo_root),
+            mock.patch.object(prepare, "GRAND_SOURCES", self.grand_sources),
+            mock.patch.object(
+                prepare, "_prepare_generic_source_sample", side_effect=transform
+            ),
+        ):
+            return prepare._bake_grand(self.src)
+
+    def assert_no_transaction_artifacts(self):
+        self.assertEqual(
+            [
+                name
+                for name in os.listdir(self.sample_dir)
+                if name.endswith((".wav", ".part"))
+                or name.startswith(".grand-backup-")
+            ],
+            [],
+        )
+
+    def test_late_transform_failure_never_touches_the_previous_bank(self):
+        before = self.snapshot_bank()
+        calls = 0
+
+        def fail_on_third(fn, src):
+            nonlocal calls
+            calls += 1
+            if calls == 3:
+                raise OSError("late grand transform")
+            return self.staged_sample(fn, src)
+
+        with self.assertRaisesRegex(OSError, "late grand transform"):
+            self.run_bake(fail_on_third)
+
+        self.assertEqual(calls, 3)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assert_no_transaction_artifacts()
+
+    def test_publication_failure_rolls_back_every_selected_file(self):
+        before = self.snapshot_bank()
+        replacements = 0
+        fail_at = len(self.expected) + 2
+        real_replace = prepare.atomic_replace
+
+        def fake_encode(_wav, flac):
+            with open(flac, "wb") as output:
+                output.write(b"new-flac")
+
+        def fail_during_publication(source, destination):
+            nonlocal replacements
+            replacements += 1
+            if replacements == fail_at:
+                raise OSError("injected grand publication failure")
+            return real_replace(source, destination)
+
+        with (
+            mock.patch.object(prepare, "_encode_flac", side_effect=fake_encode),
+            mock.patch.object(prepare, "_decode_flac_pcm", return_value=b"pcm"),
+            mock.patch.object(prepare, "_read_wav_pcm", return_value=b"pcm"),
+            mock.patch.object(
+                prepare, "atomic_replace", side_effect=fail_during_publication
+            ),
+        ):
+            with self.assertRaisesRegex(
+                OSError, "injected grand publication failure"
+            ):
+                self.run_bake(self.staged_sample)
+
+        self.assertGreater(replacements, fail_at)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assert_no_transaction_artifacts()
+
+
 class GrandSampleApiContractTest(unittest.TestCase):
     """MM-BUG-KILN-00243: grand API docs and lookup keys match the FLAC bank."""
 

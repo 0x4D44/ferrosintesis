@@ -4,6 +4,7 @@ import io
 import json
 import math
 import os
+import pathlib
 import random
 import re
 import shutil
@@ -4545,6 +4546,67 @@ class PackagedContainerTest(unittest.TestCase):
             self.assertEqual(prepare._PENDING_BANK_DIRS, set())
             self.assertEqual(prepare.publish_pending_banks(), 0)
             self.assertTrue(os.path.isfile(scratch), "scratch must survive publish")
+
+
+class GongRegenerationWorkflowTest(unittest.TestCase):
+    """MM-BUG-KILN-00239: the documented Gong command must publish the bank it bakes."""
+
+    def test_local_only_replaces_the_committed_flac_bank_without_wav_duplicates(self):
+        package = "ferrosintesis-samples-gong"
+        sample_dir = os.path.join(
+            prepare.REPO_ROOT, "crates", package, "samples"
+        )
+        expected = sorted(
+            prepare.packaged_name(name) for name in prepare.LOCAL_SOURCES
+        )
+
+        with tempfile.TemporaryDirectory() as root:
+            isolated_sample_dir = os.path.join(root, "crates", package, "samples")
+            os.makedirs(isolated_sample_dir)
+            for name in expected:
+                shutil.copyfile(
+                    os.path.join(sample_dir, name),
+                    os.path.join(isolated_sample_dir, name),
+                )
+            self.assertEqual(sorted(os.listdir(isolated_sample_dir)), expected)
+            first, second = expected
+            first_path = os.path.join(isolated_sample_dir, first)
+            second_path = os.path.join(isolated_sample_dir, second)
+            first_payload = pathlib.Path(first_path).read_bytes()
+            second_payload = pathlib.Path(second_path).read_bytes()
+            pathlib.Path(first_path).write_bytes(second_payload)
+            pathlib.Path(second_path).write_bytes(first_payload)
+            before = {
+                name: pathlib.Path(os.path.join(isolated_sample_dir, name)).read_bytes()
+                for name in expected
+            }
+
+            replaced = []
+            real_replace = os.replace
+
+            def record_replacement(source, destination):
+                if (
+                    os.path.dirname(destination) == isolated_sample_dir
+                    and destination.endswith(prepare.PACKAGED_EXT)
+                ):
+                    replaced.append(os.path.basename(destination))
+                return real_replace(source, destination)
+
+            prepare._PENDING_BANK_DIRS.clear()
+            self.addCleanup(prepare._PENDING_BANK_DIRS.clear)
+            with mock.patch.object(prepare, "REPO_ROOT", root), mock.patch.object(
+                prepare.os, "replace", side_effect=record_replacement
+            ), mock.patch.object(
+                sys, "argv", ["prepare.py", "--local-only"]
+            ), mock.patch("sys.stdout", new=io.StringIO()):
+                prepare.main()
+
+            self.assertEqual(sorted(os.listdir(isolated_sample_dir)), expected)
+            self.assertEqual(sorted(replaced), expected)
+            for name in expected:
+                payload = pathlib.Path(os.path.join(isolated_sample_dir, name)).read_bytes()
+                self.assertNotEqual(payload, before[name], name)
+                self.assertEqual(payload[:4], b"fLaC", name)
 
 
 class BottleLoopTest(unittest.TestCase):

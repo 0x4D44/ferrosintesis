@@ -6,15 +6,15 @@
 - **Area:** sample package / bottle regeneration documentation
 - **Raised:** 2026-08-16T11:38:32Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T152407Z-60202476
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00212-run-fix-20260913T152407Z-60202476
+- **Owner base:** fa8d2a975bb6d8a8c8871943407b9a13fd436099
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T15:24:07Z
+- **Owner until:** 2026-09-13T17:24:07Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

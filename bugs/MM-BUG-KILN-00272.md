@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00272 — Steinway FLAC migration dropped half of the legacy WAV lookup keys
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** Steinway sample crate / public lookup compatibility
 - **Raised:** 2026-08-17T08:39:21Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T200846Z-c8e4a290
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00272-run-verify-20260913T200846Z-c8e4a290
-- **Owner base:** bb1ed7c2da8f95dc5300ea8fa02a5d2591204ee6
-- **Owner fingerprint:** sha256:e0a868f6bcdd1d41ab55b83a8fb901bbbccc3c7946b2dc8956ef771e78e33e30
-- **Owner since:** 2026-09-13T20:08:46Z
-- **Owner until:** 2026-09-13T22:08:46Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T08:39:21Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:31:07Z, deltic:auto role=fix run=fix-20260913T172137Z-e299aa2e branch=task/bug-MM-BUG-KILN-00272-run-fix-20260913T172137Z-e299aa2e code=8244afb1a90b9eea54500efcce72a67eae2f70a7 gate=manual)
+- **State history:** Open (2026-08-17T08:39:21Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:31:07Z, deltic:auto role=fix run=fix-20260913T172137Z-e299aa2e branch=task/bug-MM-BUG-KILN-00272-run-fix-20260913T172137Z-e299aa2e code=8244afb1a90b9eea54500efcce72a67eae2f70a7 gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: all 54 legacy Steinway .wav keys resolve and removing an alias fails the Rust test; its ALIASES rows break the dedup oracle, split to MM-BUG-CRU-00058)
 
 ## Observation
 
@@ -52,6 +52,16 @@ test, package, decoder, generator, render, or exploratory harness ran.
 WAV keys, keep the canonical FLAC entries, update the accepted-name count and
 published format contract, and add a source-derived regression that enumerates
 all pre-migration logical WAV names.>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fixes `8244afb1`, `96a8c624`; wording later adjusted by `4951e6ed`) by an agent other than the fixer.
+
+**Original observation re-derived.** All 27 former physical `.wav` keys map to their `.flac` payloads (`ALIASES` 54 rows, `LOGICAL_FILE_COUNT = 81`), and README, PROVENANCE and NOTICE no longer call the payloads WAV. `gen_crate_lib.read_aliases` accepts the new rows.
+
+**Fails-before (method B).** Removing the `steinwayb_C2_pp.wav` alias row fails `tests::former_physical_wav_keys_remain_accepted`. Restored; it and `SteinwayPackagedContractTest` pass on HEAD.
+
+**Residual split to MM-BUG-CRU-00058 (Must).** The 27 appended `ALIASES` rows break the KILN-00165 oracle `SteinwayAliasDeduplicationTest.test_declared_aliases_exactly_cover_repeated_logical_sources`, turning the required Python gate red. Reverting only `ALIASES` to `8244afb1^` turns that class green. The two contracts need reconciling.
 
 ## Notes
 

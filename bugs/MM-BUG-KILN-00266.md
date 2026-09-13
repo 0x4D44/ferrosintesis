@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00266 — Concurrent B1 regenerations race host-global decode and slice intermediates
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** B1 sample generation / concurrent intermediate isolation
 - **Raised:** 2026-08-17T05:30:43Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T201931Z-c06cc954
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00266-run-verify-20260913T201931Z-c06cc954
-- **Owner base:** 71b22bd328c8703f0f365b84fc63572e3142c585
-- **Owner fingerprint:** sha256:3a022a303a265d8832830238ab16fa7806cf6f78a8a859ce8c153d826b1468da
-- **Owner since:** 2026-09-13T20:19:31Z
-- **Owner until:** 2026-09-13T22:19:31Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T05:30:43Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T16:56:01Z, deltic:auto role=fix run=fix-20260913T164454Z-969ec757 branch=task/bug-MM-BUG-KILN-00266-run-fix-20260913T164454Z-969ec757 code=f6d5522ba626330ab5455e46d982b8667cb922ad gate=manual)
+- **State history:** Open (2026-08-17T05:30:43Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T16:56:01Z, deltic:auto role=fix run=fix-20260913T164454Z-969ec757 branch=task/bug-MM-BUG-KILN-00266-run-fix-20260913T164454Z-969ec757 code=f6d5522ba626330ab5455e46d982b8667cb922ad gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: restoring the shared b1_upright directory fails the two-process B1 isolation test)
 
 ## Observation
 
@@ -34,5 +34,13 @@ Concrete fix: create a process-unique temporary decode/slice directory for each 
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `f6d5522b`) by an agent other than the fixer.
+
+`B1ConcurrentPreparationTest` runs two `main(--only=b1upright)` processes with a barrier between decode and manifest/WAV reads; on HEAD they get distinct private directories, neither is the old shared `b1_upright`, and both are removed afterwards.
+
+**Fails-before (method B).** Restoring `b1_src = gettempdir()/b1_upright` fails `test_two_b1_selection_processes_isolate_and_clean_intermediates` ("B1 bake used the old shared directory"). Restored; passes on HEAD.
 
 ## Notes

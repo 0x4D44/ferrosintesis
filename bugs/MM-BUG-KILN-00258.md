@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00258 — MuseScore sample package still documents WAV keys after FLAC conversion
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** MuseScore sample crate / public package contract
 - **Raised:** 2026-08-17T03:28:50Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T200300Z-1fe791a9
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00258-run-verify-20260913T200300Z-1fe791a9
-- **Owner base:** db3929de3d1b2b470a9ee229a6eea2e66f4987d1
-- **Owner fingerprint:** sha256:5c6138c88a6b412ce1361e57538150af008bc9935a54f8fb04074c0c87f356f3
-- **Owner since:** 2026-09-13T20:03:00Z
-- **Owner until:** 2026-09-13T22:03:00Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T03:28:50Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T14:16:26Z, deltic:auto role=fix run=fix-20260913T141434Z-52c7ca99 branch=task/bug-MM-BUG-KILN-00258-run-fix-20260913T141434Z-52c7ca99 code=5f4e6083fd0be60d8faa792e989a3878c5e5fb71 gate=manual)
+- **State history:** Open (2026-08-17T03:28:50Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T14:16:26Z, deltic:auto role=fix run=fix-20260913T141434Z-52c7ca99 branch=task/bug-MM-BUG-KILN-00258-run-fix-20260913T141434Z-52c7ca99 code=5f4e6083fd0be60d8faa792e989a3878c5e5fb71 gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: musescore docs and rustdoc describe exact FLAC keys; its valid #lookup-keys link trips the fragment-blind link oracle, split to MM-BUG-CRU-00057)
 
 ## Observation
 
@@ -28,5 +28,15 @@ Static review found that the independently published package still describes WAV
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `5f4e6083`) by an agent other than the fixer.
+
+**Original observation re-derived.** Rustdoc says FLAC with a `.flac` suffix and no WAV aliases; README has a `## Lookup keys` section (line 12) listing all 36 keys, which match disk and `SAMPLES`. `get("sitar_E3.wav")` returns None and `get("sitar_E3.flac")` returns FLAC bytes.
+
+**Fails-before (method A).** With docs and `lib.rs` from `5f4e6083^`, `MuseScoreSampleApiContractTest` fails ("'FLAC' not found"). It passes on HEAD, as do the crate's 3 Rust tests.
+
+**Residual split to MM-BUG-CRU-00057 (Must).** This fix added the valid link `README.md#lookup-keys`. The existing packaged-link oracle treats the fragment as part of the filename, so `cargo test -p ferrosintesis` is red. With PROVENANCE at `5f4e6083^`, or with only the fragment removed, the oracle passes. The right repair is in the oracle.
 
 ## Notes

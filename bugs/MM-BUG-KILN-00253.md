@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00253 — MuseScore-grand package still documents WAV payloads after FLAC conversion
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** MuseScore grand sample crate / published package contract
 - **Raised:** 2026-08-17T02:29:49Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T200159Z-58e22d7f
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00253-run-verify-20260913T200159Z-58e22d7f
-- **Owner base:** 3e9c41f24fd34dac989da3d495c52c8286709ce3
-- **Owner fingerprint:** sha256:26456495670000f0218116e522a9fb112ff8358090483dee49f5129b12f151a0
-- **Owner since:** 2026-09-13T20:01:59Z
-- **Owner until:** 2026-09-13T22:01:59Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T02:29:49Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T08:07:48Z, deltic:auto role=fix run=fix-20260913T080115Z-16968b61 branch=task/bug-MM-BUG-KILN-00253-run-fix-20260913T080115Z-16968b61 code=12b5f29b5e1e2ae473ab3c97048ae5520b7af99e gate=manual)
+- **State history:** Open (2026-08-17T02:29:49Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T08:07:48Z, deltic:auto role=fix run=fix-20260913T080115Z-16968b61 branch=task/bug-MM-BUG-KILN-00253-run-fix-20260913T080115Z-16968b61 code=12b5f29b5e1e2ae473ab3c97048ae5520b7af99e gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: MuseScore-grand docs list 25 FLAC keys and 1,223,383 bytes; pre-fix docs fail the contract test)
 
 ## Observation
 
@@ -28,5 +28,13 @@ Static review found the published package still describes WAV payloads after the
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `12b5f29b`) by an agent other than the fixer.
+
+**Original observation re-derived.** MuseScore-grand README and PROVENANCE say FLAC, list all 25 keys, give 1,223,383 bytes (25 files), and describe the full scoped `--only=musescoregrand` workflow including FLAC publication.
+
+**Fails-before (method A).** With docs from `12b5f29b^`, `MuseScoreGrandSampleApiContractTest` fails. It passes on HEAD; its documented key set equals disk and the embedded table. Both crate tests pass.
 
 ## Notes

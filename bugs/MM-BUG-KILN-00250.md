@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00250 — Honky-tonk package still documents WAV keys and bytes after FLAC conversion
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** honky-tonk sample crate / public package contract
 - **Raised:** 2026-08-17T01:05:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T200003Z-a2caac3e
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00250-run-verify-20260913T200003Z-a2caac3e
-- **Owner base:** 6854afdb9aba4baeeaf4c849e85ee7de013b2755
-- **Owner fingerprint:** sha256:0d6474ac281c2ddff0dee5400f96e1e8acef737475e1dfffd9bcc431d8882b62
-- **Owner since:** 2026-09-13T20:00:03Z
-- **Owner until:** 2026-09-13T22:00:03Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T01:05:10Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:50:30Z, deltic:auto role=fix run=fix-20260913T074113Z-2c204a78 branch=task/bug-MM-BUG-KILN-00250-run-fix-20260913T074113Z-2c204a78 code=3f692a8e729ca4aebdd235397c21ab4cfb315400 gate=manual)
+- **State history:** Open (2026-08-17T01:05:10Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:50:30Z, deltic:auto role=fix run=fix-20260913T074113Z-2c204a78 branch=task/bug-MM-BUG-KILN-00250-run-fix-20260913T074113Z-2c204a78 code=3f692a8e729ca4aebdd235397c21ab4cfb315400 gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: honky-tonk docs list all nine .flac keys and 478,943 bytes; pre-fix docs fail the key-set contract test)
 
 ## Observation
 
@@ -47,6 +47,14 @@ no app, test, build, decoder, generator, package command, or exploratory harness
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `3f692a8e`) by an agent other than the fixer.
+
+**Original observation re-derived.** Honky-tonk README, PROVENANCE and NOTICE say FLAC; the README lists all 9 `.flac` keys; PROVENANCE gives 478,943 bytes (9 files) = `EXPECTED_BYTES`. Remaining WAV wording is the staging step.
+
+**Fails-before (method A).** With docs from `3f692a8e^`, `HonkytonkSampleApiContractTest` fails. It passes on HEAD; it requires the documented key set to equal both the on-disk names and the embedded `SAMPLES` table. Both crate tests pass.
 
 ## Notes
 

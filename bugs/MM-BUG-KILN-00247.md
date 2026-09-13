@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00247 — Headroom sample documentation still describes WAV payloads after FLAC conversion
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** headroom sample crate / public package contract
 - **Raised:** 2026-08-17T00:04:27Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T195910Z-997375c7
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00247-run-verify-20260913T195910Z-997375c7
-- **Owner base:** 389b8db6c1a8a4513ca79d5207edff597ce1bddc
-- **Owner fingerprint:** sha256:98509932921e72927da2dc86f9a3ec1a9584667089f4298530af51b98e6a5949
-- **Owner since:** 2026-09-13T19:59:10Z
-- **Owner until:** 2026-09-13T21:59:10Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T00:04:27Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:30:46Z, deltic:auto role=fix run=fix-20260913T162211Z-c54220b4 branch=task/bug-MM-BUG-KILN-00247-run-fix-20260913T162211Z-c54220b4 code=edb66ef8deea05b93b1efb872863364dada43363 gate=manual)
+- **State history:** Open (2026-08-17T00:04:27Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:30:46Z, deltic:auto role=fix run=fix-20260913T162211Z-c54220b4 branch=task/bug-MM-BUG-KILN-00247-run-fix-20260913T162211Z-c54220b4 code=edb66ef8deea05b93b1efb872863364dada43363 gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: headroom docs separate 45 FLAC payloads from 54 logical names; pre-fix docs fail the contract test)
 
 ## Observation
 
@@ -42,5 +42,15 @@ package command, or exploratory harness ran.
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fixes `edb66ef8`, `a1df1ab7`) by an agent other than the fixer.
+
+**Original observation re-derived.** Headroom holds 45 FLACs, 9 FLAC-to-FLAC aliases and `LOGICAL_FILE_COUNT = 54`; README, PROVENANCE and NOTICE match, and the package list ships ALIASES and NOTICE.
+
+**Fails-before (method A).** With README, PROVENANCE and NOTICE from `edb66ef8^`, `tests::package_docs_match_the_embedded_flac_contract` fails. The crate's 4 tests pass on HEAD.
+
+**Coverage note.** The guard matches literal phrases rather than deriving 45/9/54 from `SAMPLES`/`ALIASES`, as the record suggested; logged in `scratchpad.md`.
 
 ## Notes

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00264 — Orchestral2 package still documents WAV keys and payloads after FLAC migration
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** orchestral2 sample crate / public package contract
 - **Raised:** 2026-08-17T04:26:06Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T200457Z-bfbca244
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00264-run-verify-20260913T200457Z-bfbca244
-- **Owner base:** 69a83f655de9b0539be242608a96e34ef3bb57c9
-- **Owner fingerprint:** sha256:125d7729aafb4b7d771b17a04833e500e59d3b834de09c54a12f971c067a00c7
-- **Owner since:** 2026-09-13T20:04:57Z
-- **Owner until:** 2026-09-13T22:04:57Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T04:26:06Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:43:07Z, deltic:auto role=fix run=fix-20260913T163144Z-09d1c20b branch=task/bug-MM-BUG-KILN-00264-run-fix-20260913T163144Z-09d1c20b code=69cad3278718368bedfc5965e98ea5522ca7ec80 gate=manual)
+- **State history:** Open (2026-08-17T04:26:06Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:43:07Z, deltic:auto role=fix run=fix-20260913T163144Z-09d1c20b branch=task/bug-MM-BUG-KILN-00264-run-fix-20260913T163144Z-09d1c20b code=69cad3278718368bedfc5965e98ea5522ca7ec80 gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: orchestral2 docs state the exact .flac lookup contract; pre-fix PROVENANCE fails the doc contract test)
 
 ## Observation
 
@@ -45,6 +45,14 @@ only; no app, test, decoder, generator, package command, or exploratory harness 
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fixes `69cad327`, `c50bc10c`) by an agent other than the fixer.
+
+**Original observation re-derived.** At raise time `lib.rs`, README and PROVENANCE said WAV; `904cbe94` and `db16a45b` had already removed most of that, and `69cad327` added explicit FLAC-payload and `.flac`-key statements with guards. HEAD has no stale WAV claims; remaining WAV rows are labelled source inputs. 132 FLACs on disk; `get("banjo_A#3.flac")` resolves and `.wav` returns None.
+
+**Fails-before (method A).** Against `69cad327^` PROVENANCE and lib, `test_packaged_docs_and_lookup_rustdoc_describe_flac_contract` fails. It passes on HEAD. The Rust lookup test is behavioural and already held before the fix.
 
 ## Notes
 

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00260 — MuseScore onset regeneration can publish a partial mixed bank after a late failure
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** MuseScore onset sample generation / failure atomicity
 - **Raised:** 2026-08-17T03:29:18Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T201703Z-ee3ab9fd
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00260-run-verify-20260913T201703Z-ee3ab9fd
-- **Owner base:** cc84b5c647ea16c57390fd62b6cbb8e340787717
-- **Owner fingerprint:** sha256:4371e96ff9bff92c8caa58fa5d6a9f3ddba83155f43e7b2a88f1fde7ff6ada99
-- **Owner since:** 2026-09-13T20:17:03Z
-- **Owner until:** 2026-09-13T22:17:03Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T03:29:18Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T14:32:25Z, deltic:auto role=fix run=fix-20260913T142332Z-e86c6e05 branch=task/bug-MM-BUG-KILN-00260-run-fix-20260913T142332Z-e86c6e05 code=9170b41b574b6a85e05227b38e61060fe6dbf8e6 gate=manual)
+- **State history:** Open (2026-08-17T03:29:18Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T14:32:25Z, deltic:auto role=fix run=fix-20260913T142332Z-e86c6e05 branch=task/bug-MM-BUG-KILN-00260-run-fix-20260913T142332Z-e86c6e05 code=9170b41b574b6a85e05227b38e61060fe6dbf8e6 gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: staging and rollback reversals each redden the soundfont-onset old-bank tests)
 
 ## Observation
 
@@ -28,5 +28,13 @@
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `9170b41b`) by an agent other than the fixer.
+
+`SoundfontOnsetWholeBankPublicationTest` runs a fake 3-zone sitar SF3 through `_bake_sf_onset`, which serves all six onset selectors; a failure on the 3rd transform and a late replacement failure both preserve the old bank on HEAD.
+
+**Fails-before (method B).** The staging redirect fails the late-transform test (`sitar_C3.wav` published into the live bank); the rollback reversal fails the replacement test on the snapshot. Restored; both pass on HEAD.
 
 ## Notes

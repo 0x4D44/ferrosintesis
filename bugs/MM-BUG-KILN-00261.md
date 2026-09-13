@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00261 — Concurrent MuseScore onset regenerations race fixed shared intermediates
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** MuseScore onset sample generation / concurrent cache isolation
 - **Raised:** 2026-08-17T03:29:31Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T201825Z-ee9b43ef
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00261-run-verify-20260913T201825Z-ee9b43ef
-- **Owner base:** 75c63677e34bcfba06773df49f9b742c20dd5fca
-- **Owner fingerprint:** sha256:c2f53fe47810357b7197f8dfa3ffe134eb15a63a4d661c8a2da1bd9f2224ca59
-- **Owner since:** 2026-09-13T20:18:25Z
-- **Owner until:** 2026-09-13T22:18:25Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T03:29:31Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T14:43:31Z, deltic:auto role=fix run=fix-20260913T143351Z-24075ba4 branch=task/bug-MM-BUG-KILN-00261-run-fix-20260913T143351Z-24075ba4 code=9170b41b574b6a85e05227b38e61060fe6dbf8e6 gate=manual)
+- **State history:** Open (2026-08-17T03:29:31Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T14:43:31Z, deltic:auto role=fix run=fix-20260913T143351Z-24075ba4 branch=task/bug-MM-BUG-KILN-00261-run-fix-20260913T143351Z-24075ba4 code=9170b41b574b6a85e05227b38e61060fe6dbf8e6 gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: shared-cache onset intermediates make a worker read the peer's WAV; honky-tonk keeps fixed shared intermediates, split to MM-BUG-CRU-00069)
 
 ## Observation
 
@@ -28,5 +28,15 @@ Every MuseScore onset selector uses the same system-temp revision directory at `
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `9170b41b`) by an agent other than the fixer.
+
+`MuseScoreOnsetConcurrentExtractionTest` runs two processes overlapping ffmpeg output and WAV reads; on HEAD each reads its own private intermediate.
+
+**Fails-before (method B).** Pointing the Ogg/WAV intermediates back at the shared cache fails `test_two_processes_use_isolated_onset_decode_intermediates` ("B: read another process's decoded WAV ...\shared-cache\sitar_40.wav"). Restored; passes on HEAD.
+
+**Residual split to MM-BUG-CRU-00069.** `_bake_honkytonk` still decodes to fixed `htsrc_<note>.wav` in the shared `honkytonk_fb` temp directory (found by reading the code). The MuseScore-grand sibling is MM-BUG-KILN-00256.
 
 ## Notes

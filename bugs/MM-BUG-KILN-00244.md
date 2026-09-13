@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00244 — Grand regeneration command leaves the embedded FLAC bank stale
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** grand sample crate / deterministic regeneration
 - **Raised:** 2026-08-16T22:56:39Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T202121Z-658142c4
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00244-run-verify-20260913T202121Z-658142c4
-- **Owner base:** 0521df2a293bac504d030af6575e76739e13d1f8
-- **Owner fingerprint:** sha256:64b943e802e75e1efd5a51617db550d20ce9d6a1b9dff2a0bcb2eb34536404fd
-- **Owner since:** 2026-09-13T20:21:21Z
-- **Owner until:** 2026-09-13T22:21:21Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T22:56:39Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:10:46Z, deltic:auto role=fix run=fix-20260913T070407Z-86a459d0 branch=task/bug-MM-BUG-KILN-00244-run-fix-20260913T070407Z-86a459d0 code=ccc86aad gate=manual)
+- **State history:** Open (2026-08-16T22:56:39Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:10:46Z, deltic:auto role=fix run=fix-20260913T070407Z-86a459d0 branch=task/bug-MM-BUG-KILN-00244-run-fix-20260913T070407Z-86a459d0 code=ccc86aad gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: --only=grand leaves a FLAC-only bank; a WAV-copying staged publisher reddens the scoped regeneration test)
 
 ## Observation
 
@@ -46,6 +46,14 @@ review only; the generator was not run.
 <unfixed — raised only. Make the grand recipe produce verified final FLAC files and
 refresh the inventory as one scoped workflow, reject mixed extensions before the
 first write, and add a negative control starting from the current FLAC-only tree.>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (test `ccc86aad`; root cause `55298fb1` + `d7283e3d`) by an agent other than the fixer.
+
+`GrandFlacRegenerationWorkflowTest` runs the real `main` with `--only=grand` on a FLAC-only bank; only FLACs remain and every payload is replaced.
+
+**Fails-before (method B).** Making `_publish_staged_flac_bank` copy the staged WAVs into the output fails the test (`grand_C4_f.wav`, `grand_C4_mf.wav` beside the FLACs). Restored; passes on HEAD.
 
 ## Notes
 

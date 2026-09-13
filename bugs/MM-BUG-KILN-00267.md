@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00267 — B1 crate Rustdoc lost its ferrosintesis object after the legal-header split
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** B1 sample crate / published documentation
 - **Raised:** 2026-08-17T05:30:56Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T200535Z-42bb0262
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00267-run-verify-20260913T200535Z-42bb0262
-- **Owner base:** 2b83dc6ff33e7ec8c9f2982e75efeeb4371ef09b
-- **Owner fingerprint:** sha256:be33693210dbf00280f507fd4a1a70768091c9468b31ead0a0a51d8cefae2a8f
-- **Owner since:** 2026-09-13T20:05:35Z
-- **Owner until:** 2026-09-13T22:05:35Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T05:30:56Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T17:01:34Z, deltic:auto role=fix run=fix-20260913T165457Z-c62699f5 branch=task/bug-MM-BUG-KILN-00267-run-fix-20260913T165457Z-c62699f5 code=9f14d0752300779e33f71a6b1616d4e5a7d419fd gate=manual)
+- **State history:** Open (2026-08-17T05:30:56Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T17:01:34Z, deltic:auto role=fix run=fix-20260913T165457Z-c62699f5 branch=task/bug-MM-BUG-KILN-00267-run-fix-20260913T165457Z-c62699f5 code=9f14d0752300779e33f71a6b1616d4e5a7d419fd gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: B1 rustdoc header is a complete sentence before the licence pointer; the header test rejects the raise-time text by inspection)
 
 ## Observation
 
@@ -34,5 +34,13 @@ Concrete fix: complete line 5 as “Consumers normally reach this crate through 
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `9f14d075`; the sentence itself was first repaired by `904cbe94`) by an agent other than the fixer.
+
+**Original observation re-derived.** At raise time `lib.rs:5-6` read "Consumers normally reach this crate through" followed directly by the licence line. On HEAD, lines 5-6 read "...through `ferrosintesis`." followed by the standalone legal line.
+
+**Regression.** `B1RustdocHeaderTest.test_consumer_pointer_is_complete_before_the_licence_pointer` passes on HEAD. Fails-before was not executed: by reading, the raise-time text normalises to "...through Licence/provenance", which fails both its assertIn and assertNotIn.
 
 ## Notes

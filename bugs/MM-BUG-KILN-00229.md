@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00229 — Fret-noise regeneration can publish a partial mixed bank after a late write failure
 
-- **State:** Fixed
+- **State:** Open
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** fret-noise sample generation / failure atomicity
 - **Raised:** 2026-08-16T16:53:19Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T201408Z-cc8087f7
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00229-run-verify-20260913T201408Z-cc8087f7
-- **Owner base:** 1e2cb58f021415c90361c5d63dbedcfaa5efaf38
-- **Owner fingerprint:** sha256:bc08266337b8c274dc8131fe0925cc4ceffa4ad3576de285c5176915f1be9775
-- **Owner since:** 2026-09-13T20:14:08Z
-- **Owner until:** 2026-09-13T22:14:08Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T16:53:19Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T05:41:55Z, deltic:auto role=fix run=fix-20260913T053018Z-56ab7513 branch=task/bug-MM-BUG-KILN-00229-run-fix-20260913T053018Z-56ab7513 code=b30f9fc89a0488fcd825b7ad71312de48789700a gate=manual)
+- **State history:** Open (2026-08-16T16:53:19Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T05:41:55Z, deltic:auto role=fix run=fix-20260913T053018Z-56ab7513 branch=task/bug-MM-BUG-KILN-00229-run-fix-20260913T053018Z-56ab7513 code=b30f9fc89a0488fcd825b7ad71312de48789700a gate=manual) -> Open (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: the code fix works, but reverting main() to its direct-to-out_dir loop leaves all seven committed tests green, so the regression does not cover the fix)
 
 ## Observation
 
@@ -53,3 +53,13 @@ every pre-existing destination byte-identical.
 Closed `MM-BUG-KILN-00063` fixed direct WAV writes in the shared
 `prepare.py::write_wav_mono` helper. This custom NumPy bake does not use that
 helper and retained its own direct-write path, so the defect is not a duplicate.
+
+### Verification (reopen) (2026-09-13, Claude Opus 5, independent)
+
+Checked on trunk `8b6a6f86` (fix `b30f9fc8`) by an agent other than the fixer.
+
+**The code fix works.** A scratch scenario ran `fretnoise_bake.main()` in a temp repo against the real cuts and pins with a fake old bank: a late encode failure (7th file) and a late replacement failure (7th swap) both leave the old bank byte-identical on HEAD, and the same scenario on reversed `main()` changes 7 files.
+
+**Why reopened (stop rule).** Reverting the root-cause hunk, `main()` encoding straight into `out_dir` instead of staging and publishing, leaves all 7 `FretNoiseBakeTests` green. No committed test drives `main()` in write mode, and `test_late_staged_write_failure_leaves_published_bank_unchanged` writes to a staging directory separate from `out_dir`, so it passes by construction. Only removing rollback from `publish_fretnoise_bank` reddens a test.
+
+**Needed to close.** A regression that drives `main()` (or its publish path) with a late encode or replacement failure and asserts the previous bank is byte-identical.

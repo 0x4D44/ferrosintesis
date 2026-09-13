@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00054 — Concurrent YDP regenerations race one shared manifest staging file
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** YDP sample generation / shared cache concurrency
 - **Raised:** 2026-08-20T15:51:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T201046Z-d3556cab
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00054-run-verify-20260913T201046Z-d3556cab
-- **Owner base:** d480a6a2ab0d45dd29405136d711a54485e5e9d1
-- **Owner fingerprint:** sha256:c331bb0b9d4f50779abe4c38c7d49dae5fd0e6e19b01791dc29bb4b27eb2ada4
-- **Owner since:** 2026-09-13T20:10:46Z
-- **Owner until:** 2026-09-13T22:10:46Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T15:51:10Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:35:22Z, deltic:auto role=fix run=fix-20260913T152903Z-774f5e0c branch=task/bug-MM-BUG-CRU-00054-run-fix-20260913T152903Z-774f5e0c code=e60b130b978b1a553f033ea50f7b1a8eca11ad5d gate=manual)
+- **State history:** Open (2026-08-20T15:51:10Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:35:22Z, deltic:auto role=fix run=fix-20260913T152903Z-774f5e0c branch=task/bug-MM-BUG-CRU-00054-run-fix-20260913T152903Z-774f5e0c code=e60b130b978b1a553f033ea50f7b1a8eca11ad5d gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: forced-overlap manifest writers raise PermissionError on reversed code and publish cleanly on HEAD)
 
 ## Observation
 
@@ -38,5 +38,13 @@ Static review only. No generator, test, build, app, render, network, or explorat
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `e60b130b`) by an agent other than the fixer.
+
+**Original observation re-run.** A scratch scenario held writer A's manifest staging file open for 0.5 s while writer B started. On HEAD: no errors, a valid final manifest, no `.part` leftovers. On reversed code: B fails with PermissionError 13.
+
+**Fails-before (method B).** Restoring the fixed `<manifest>.part` name and removing the lock fails `test_two_manifest_writers_publish_without_colliding_staging_files` (1 != 2 distinct staging names). Restored; passes on HEAD. The committed test detects the reversal through staging names rather than an observed collision; the forced-overlap scenario shows the real symptom.
 
 ## Notes

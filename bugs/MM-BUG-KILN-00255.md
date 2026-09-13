@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00255 — MuseScore-grand regeneration can publish a partial mixed bank after a late failure
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** MuseScore grand sample generation / failure atomicity
 - **Raised:** 2026-08-17T02:30:15Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T201625Z-607732c4
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00255-run-verify-20260913T201625Z-607732c4
-- **Owner base:** c6c413c6af26b659bc056ccc161ea554b077e187
-- **Owner fingerprint:** sha256:3d9d239c94eda72494d08a258d56d4c720e29f834d3c85fa3fdba1c969fea097
-- **Owner since:** 2026-09-13T20:16:25Z
-- **Owner until:** 2026-09-13T22:16:25Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T02:30:15Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T08:24:14Z, deltic:auto role=fix run=fix-20260913T081457Z-35db8830 branch=task/bug-MM-BUG-KILN-00255-run-fix-20260913T081457Z-35db8830 code=6cd7e62e3db5b6dc83396510dcb665371068b58f gate=manual)
+- **State history:** Open (2026-08-17T02:30:15Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T08:24:14Z, deltic:auto role=fix run=fix-20260913T081457Z-35db8830 branch=task/bug-MM-BUG-KILN-00255-run-fix-20260913T081457Z-35db8830 code=6cd7e62e3db5b6dc83396510dcb665371068b58f gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: staging and rollback reversals each redden the MuseScore-grand old-bank tests)
 
 ## Observation
 
@@ -28,5 +28,13 @@
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `6cd7e62e`) by an agent other than the fixer.
+
+`MuseScoreGrandWholeBankPublicationTest` runs a fake SF3 through `_bake_musescore_grand`; a failure on the 3rd `measure_f0` and a late replacement failure both leave the exact old bank on HEAD.
+
+**Fails-before (method B).** The staging redirect fails the late-transform test (`musescoregrand_E2.wav` published into the live bank); the rollback reversal fails the replacement test on the snapshot. Restored; both pass on HEAD. The concurrent-intermediate race in the same function remains open as MM-BUG-KILN-00256.
 
 ## Notes

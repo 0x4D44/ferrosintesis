@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00209 — Bass regeneration can publish a mixed bank after a late failure
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** electric-bass sample generation / failure atomicity
 - **Raised:** 2026-08-16T09:39:44Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T201215Z-541f5ba6
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00209-run-verify-20260913T201215Z-541f5ba6
-- **Owner base:** 79b9d5404f0212fe20ea3635b7b89fbbf1841c48
-- **Owner fingerprint:** sha256:730b899522c4af6726be7287c41fb62ac5fc0c1738167a35c981ce13a0909227
-- **Owner since:** 2026-09-13T20:12:15Z
-- **Owner until:** 2026-09-13T22:12:15Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T09:39:44Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T05:10:23Z, deltic:auto role=fix run=fix-20260913T044533Z-298b1291 branch=task/bug-MM-BUG-KILN-00209-run-fix-20260913T044533Z-298b1291 code=fd8cead81ec76a070a9300ce13a5e097003177fb gate=manual)
+- **State history:** Open (2026-08-16T09:39:44Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T05:10:23Z, deltic:auto role=fix run=fix-20260913T044533Z-298b1291 branch=task/bug-MM-BUG-KILN-00209-run-fix-20260913T044533Z-298b1291 code=fd8cead81ec76a070a9300ce13a5e097003177fb gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: staging and rollback reversals each redden the bass old-bank snapshot tests; main routing pinned)
 
 ## Observation
 
@@ -42,6 +42,14 @@ bank is coherent; this is the live failure path, not a claim of current corrupti
 ## Fix
 
 Unfixed. Raised for the fix-open-bugs loop; this review did not change code.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `fd8cead8`, later consolidated into `_publish_staged_flac_bank`) by an agent other than the fixer.
+
+`BassWholeBankPublicationTest` injects failures on the 5th transform and a late replacement; on HEAD the old bank is preserved, and `test_main_routes_selected_bass_through_the_whole_bank_baker` pins the routing.
+
+**Fails-before (method B).** The staging redirect fails the late-transform test (`fingerbass_A#1.wav` published into the live bank); the rollback reversal fails the publication test on the snapshot. Restored; all three pass on HEAD.
 
 ## Notes
 

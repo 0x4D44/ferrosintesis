@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00205 — YDP regeneration can publish a mixed bank after a late failure
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** YDP sample generation / failure atomicity
 - **Raised:** 2026-08-16T08:40:59Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T201135Z-88babc3a
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00205-run-verify-20260913T201135Z-88babc3a
-- **Owner base:** 677d3d6aff41c8bc74f329d460113eb99826307b
-- **Owner fingerprint:** sha256:af85f1473d8adf9cb1b93ad7873d2118f8cecb1c97a5fb7c6906fc6e41ddece0
-- **Owner since:** 2026-09-13T20:11:35Z
-- **Owner until:** 2026-09-13T22:11:35Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T08:40:59Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T04:40:51Z, deltic:auto role=fix run=fix-20260913T042703Z-f85fec24 branch=task/bug-MM-BUG-KILN-00205-run-fix-20260913T042703Z-f85fec24 code=76901f85db7f73b396957d099553e489166bb6dd gate=manual)
+- **State history:** Open (2026-08-16T08:40:59Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T04:40:51Z, deltic:auto role=fix run=fix-20260913T042703Z-f85fec24 branch=task/bug-MM-BUG-KILN-00205-run-fix-20260913T042703Z-f85fec24 code=76901f85db7f73b396957d099553e489166bb6dd gate=manual) -> Closed (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: staging and rollback reversals each redden their YDP old-bank snapshot test; missing-root test pins the new preflight)
 
 ## Observation
 
@@ -65,6 +65,14 @@ exploratory harness ran. Estimated effort: Small–Medium.
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `76901f85`) by an agent other than the fixer.
+
+`YdpWholeBankPublicationTest` feeds a synthetic SF2 through `_bake_ydp_grand`: a missing late root, a failure on the 5th staged write, and a replacement failure all leave the old bank byte-identical on HEAD.
+
+**Fails-before (method B).** Writing straight to `out_dir` fails the staged-write test (`ydpgrand_C2.wav` published beside old FLACs); a bare `raise` in `_publish_ydp_bank`'s rollback fails the publication test. The missing-root test stays green under staging reversal alone because the separate root preflight catches it; with that preflight also disabled it errors `KeyError: 84`. Restored; all three pass on HEAD.
 
 ## Notes
 

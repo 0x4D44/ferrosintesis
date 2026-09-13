@@ -6,15 +6,15 @@
 - **Area:** MuseScore onset sample generation / concurrent cache isolation
 - **Raised:** 2026-08-17T03:29:31Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T201825Z-ee9b43ef
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00261-run-verify-20260913T201825Z-ee9b43ef
+- **Owner base:** 75c63677e34bcfba06773df49f9b742c20dd5fca
+- **Owner fingerprint:** sha256:c2f53fe47810357b7197f8dfa3ffe134eb15a63a4d661c8a2da1bd9f2224ca59
+- **Owner since:** 2026-09-13T20:18:25Z
+- **Owner until:** 2026-09-13T22:18:25Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -4997,42 +4997,63 @@ def _bake_sf_onset(
     wind/pluck LA banks — the modeled voice carries the sustain/decay. Used for the GM
     104 sitar and the GM 75/76/77 pipes. Ogg decode shells out to ffmpeg (same path as
     `_bake_clavinet`); a zone whose SF3 sample rate differs from 44.1 kHz is resampled.
-    Writes `<prefix>_<sounding-pitch>.wav` into `dest_crate`/samples; returns print rows.
+    Stages the logical `<prefix>_<sounding-pitch>.wav` files privately, then
+    publishes the complete bank as FLAC into `dest_crate`/samples; returns print rows.
     Roots are re-measured in a tight window around the SF3 `originalPitch` (`h[40]`,
     trustworthy), so a 2f-dominant zone can't fool the measurement (window < 2×).
     """
-    sf3 = open(ensure_musescore_sf3(src), "rb").read()
+    with open(ensure_musescore_sf3(src), "rb") as source:
+        sf3 = source.read()
     smpl_off, zones = _sf_preset_zones(sf3, preset)
     if expected_roots is not None:
         _validate_sf_onset_zones(zones, expected_roots)
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     out_dir = os.path.join(REPO_ROOT, "crates", dest_crate, "samples")
-    os.makedirs(out_dir, exist_ok=True)
+    logical_names = tuple(
+        f"{prefix}_{_midi_name(root)}.wav" for root, *_ in sorted(zones)
+    )
     _validate_generated_output_families(
-        {prefix},
-        {f"{prefix}_{_midi_name(root)}.wav" for root, *_ in zones},
+        {prefix}, logical_names,
         output_dir=out_dir)
     rows = []
-    for root, start, end, _sl, _el, _sr, _sample_type in sorted(zones):
-        ogg = os.path.join(src, f"{prefix}_{root}.ogg")
-        wav = os.path.join(src, f"{prefix}_{root}.wav")
-        with open(ogg, "wb") as f:
-            f.write(sf3[smpl_off + start:smpl_off + end])
-        subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-                        "-i", ogg, "-acodec", "pcm_s16le", wav], check=True)
-        x, wsr = read_wav(wav)
-        if wsr != OUT_SR:
-            x = resample(x, wsr, OUT_SR)
-            wsr = OUT_SR
-        seg = trim_to_onset(x, wsr, keep_s, fade_s)
-        nominal = _midi_hz(root)
-        # measure near the known originalPitch; the window is < 2× so a 2f-dominant
-        # zone (some SF3 pipe presets) cannot pull the estimate to the 2nd harmonic
-        f0, conf = measure_f0(seg, wsr, nominal * 0.8, nominal * 1.4)
-        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
-        out_name = f"{prefix}_{_midi_name(root)}.wav"
-        write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
-        rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+    with tempfile.TemporaryDirectory(prefix=f".{prefix}-bank-") as staging:
+        decode_dir = os.path.join(staging, "decode")
+        os.makedirs(decode_dir)
+        for root, start, end, _sl, _el, _sr, _sample_type in sorted(zones):
+            # The authenticated SF3 is safe to share; extracted Ogg/WAV files are
+            # not. Keep both under this invocation's private staging tree so
+            # concurrent regenerations cannot overwrite one another.
+            ogg = os.path.join(decode_dir, f"{prefix}_{root}.ogg")
+            wav = os.path.join(decode_dir, f"{prefix}_{root}.wav")
+            with open(ogg, "wb") as f:
+                f.write(sf3[smpl_off + start:smpl_off + end])
+            subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                            "-i", ogg, "-acodec", "pcm_s16le", wav], check=True)
+            x, wsr = read_wav(wav)
+            if wsr != OUT_SR:
+                x = resample(x, wsr, OUT_SR)
+                wsr = OUT_SR
+            seg = trim_to_onset(x, wsr, keep_s, fade_s)
+            nominal = _midi_hz(root)
+            # measure near the known originalPitch; the window is < 2× so a 2f-dominant
+            # zone (some SF3 pipe presets) cannot pull the estimate to the 2nd harmonic
+            f0, conf = measure_f0(seg, wsr, nominal * 0.8, nominal * 1.4)
+            cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+            out_name = f"{prefix}_{_midi_name(root)}.wav"
+            write_wav_mono(os.path.join(staging, out_name), seg, wsr)
+            rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+        staged = {
+            name for name in os.listdir(staging)
+            if name.endswith((".wav", PACKAGED_EXT))
+        }
+        if staged != set(logical_names):
+            raise ValueError(
+                f"{prefix} staging output is incomplete: expected "
+                f"{len(logical_names)} WAVs, found {len(staged)}"
+            )
+        _validate_generated_output_inventory(
+            None, logical_names, output_dir=staging)
+        _publish_staged_flac_bank(staging, out_dir, logical_names, prefix)
     return rows
 
 

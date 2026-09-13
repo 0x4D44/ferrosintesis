@@ -5,8 +5,8 @@ by `crates/ferrosintesis/src/inventory.rs`: a family that ships without a row he
 the build (MM-BUG-KILN-00069).
 
 The physical payloads shipped in this package are FLAC files under
-`samples/*.flac`. WAV files mentioned in the checksum tables below are legitimate
-source or bake inputs, not packaged payloads.
+`samples/*.flac`. WAV source or bake inputs mentioned in the checksum tables below
+are legitimate. They are source or bake inputs, not packaged payloads.
 
 Regenerate non-banjo families with `python3 tools/ferrosintesis-samples/prepare.py
 --only=<non-banjo-family>` from the repository root.

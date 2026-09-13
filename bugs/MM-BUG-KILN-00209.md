@@ -6,15 +6,15 @@
 - **Area:** electric-bass sample generation / failure atomicity
 - **Raised:** 2026-08-16T09:39:44Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T044533Z-298b1291
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00209-run-fix-20260913T044533Z-298b1291
+- **Owner base:** db44e30fe029d2b7fe3e7b2d0e1ccb46b4ce3d44
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T04:45:33Z
+- **Owner until:** 2026-09-13T06:45:33Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -3349,6 +3349,7 @@ class MtgSaxCacheTest(unittest.TestCase):
         self.repo_root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.src, True)
         self.addCleanup(shutil.rmtree, self.repo_root, True)
+        self.addCleanup(prepare._PENDING_BANK_DIRS.clear)
         os.makedirs(os.path.join(
             self.repo_root, "crates", "ferrosintesis-samples-sax", "samples"))
         self.served_flac = b"PINNED-SAX-FLAC"
@@ -3356,6 +3357,10 @@ class MtgSaxCacheTest(unittest.TestCase):
         self.fetches = []
         self.decodes = 0
         self.run_error = None
+        self.expected = (
+            "sax_sop_C4_f.flac",
+            "sax_sop_C4_p.flac",
+        )
 
     @property
     def flac(self):
@@ -3408,7 +3413,17 @@ class MtgSaxCacheTest(unittest.TestCase):
     def fake_trim(self, x, _sr, _keep_s, _fade_s):
         return x[:16]
 
-    def bake(self, recipe="mtg-sax-pcm24-v1"):
+    @staticmethod
+    def fake_encode(_wav, flac):
+        with open(flac, "wb") as output:
+            output.write(b"synthetic-sax-flac")
+
+    def bake(self, recipe="mtg-sax-pcm24-v1", publish=False):
+        publication = (
+            contextlib.nullcontext()
+            if publish
+            else mock.patch.object(prepare, "_publish_staged_flac_bank")
+        )
         with mock.patch.object(prepare, "MTG_SAX_INSTR", [("sop", "sop")]), \
              mock.patch.object(prepare, "MTG_SAX_ZONE_STEP", 99), \
              mock.patch.object(prepare, "MTG_SAX_DECODE_RECIPE_REV", recipe,
@@ -3420,11 +3435,64 @@ class MtgSaxCacheTest(unittest.TestCase):
              mock.patch.object(prepare, "measure_f0_robust",
                                side_effect=self.fake_measure), \
              mock.patch.object(prepare, "trim_to_onset",
-                               side_effect=self.fake_trim):
+                               side_effect=self.fake_trim), \
+             publication, \
+             mock.patch.object(prepare, "_encode_flac",
+                               side_effect=self.fake_encode), \
+             mock.patch.object(prepare, "_decode_flac_pcm", return_value=b"pcm"), \
+             mock.patch.object(prepare, "_read_wav_pcm", return_value=b"pcm"):
             return prepare._bake_mtg_sax(self.src)
 
     def fetch_count(self, suffix):
         return sum(1 for name in self.fetches if name.endswith(suffix))
+
+    def snapshot_bank(self):
+        sample_dir = os.path.join(
+            self.repo_root, "crates", "ferrosintesis-samples-sax", "samples")
+        return {
+            name: pathlib.Path(sample_dir, name).read_bytes()
+            for name in sorted(os.listdir(sample_dir))
+        }
+
+    def test_complete_bake_publishes_the_flac_bank_without_wav_duplicates(self):
+        rows = self.bake(publish=True)
+        sample_dir = os.path.join(
+            self.repo_root, "crates", "ferrosintesis-samples-sax", "samples")
+        self.assertEqual(sorted(os.listdir(sample_dir)), list(self.expected))
+        self.assertEqual(len(rows), len(self.expected))
+
+    def test_publication_failure_preserves_the_previous_flac_bank(self):
+        sample_dir = os.path.join(
+            self.repo_root, "crates", "ferrosintesis-samples-sax", "samples")
+        for name in self.expected:
+            pathlib.Path(sample_dir, name).write_bytes(
+                f"old-sax-bank:{name}".encode("ascii"))
+        before = self.snapshot_bank()
+        replace_calls = 0
+        real_replace = prepare.atomic_replace
+
+        def fail_during_publication(source, destination):
+            nonlocal replace_calls
+            if not destination.startswith(sample_dir + os.sep):
+                return real_replace(source, destination)
+            replace_calls += 1
+            if replace_calls == len(self.expected) + 2:
+                raise OSError("injected sax publication failure")
+            return real_replace(source, destination)
+
+        with mock.patch.object(
+                prepare, "atomic_replace", side_effect=fail_during_publication):
+            with self.assertRaisesRegex(OSError, "injected sax publication failure"):
+                self.bake(publish=True)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assertEqual(
+            [name for name in os.listdir(sample_dir) if name.endswith(".wav")],
+            [],
+        )
+        self.assertEqual(
+            [name for name in os.listdir(sample_dir) if name.endswith(".part")],
+            [],
+        )
 
     def test_legacy_unmanifested_warm_cache_is_not_trusted(self):
         for dyn in ("f", "p"):

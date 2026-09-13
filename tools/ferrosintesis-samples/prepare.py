@@ -5917,13 +5917,13 @@ def bake_bottle_loop(src_dir=None, repo_root=None, verify_source=True):
 def _bake_mtg_sax(src):
     """Fetch + decode + bake the MTG.SoloSax recorded sax bank for GM 64-67.
 
-    Writes `sax_<inst>_<midiname>_<p|f>.wav` (16-bit mono 44.1 kHz) into the CC-BY
-    `ferrosintesis-samples-sax` crate; returns print-table rows. FLAC decode shells
-    out to ffmpeg (mono 24-bit, source rate), matching the clavinet/drumkit path.
-    Zones are selected by index across each dynamic's available notes, so gaps in the
-    source do not break selection; the ROOT stored is the measured f0. The default
-    synth voice plays the recorded attack and loops the recorded sustain, with the
-    modeled reed only as fallback.
+    Stages logical `sax_<inst>_<midiname>_<p|f>.wav` outputs, then publishes a complete
+    FLAC bank into the CC-BY `ferrosintesis-samples-sax` crate; returns print-table rows.
+    FLAC decode shells out to ffmpeg (mono 24-bit, source rate), matching the
+    clavinet/drumkit path. Zones are selected by index across each dynamic's available
+    notes, so gaps in the source do not break selection; the ROOT stored is the
+    measured f0. The default synth voice plays the recorded attack and loops the
+    recorded sustain, with the modeled reed only as fallback.
     """
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     out_dir = os.path.join(REPO_ROOT, "crates", "ferrosintesis-samples-sax", "samples")
@@ -5959,10 +5959,26 @@ def _bake_mtg_sax(src):
         {"sax"},
         {out_name for out_name, _seg, _wsr, _row in pending},
         output_dir=out_dir)
+    logical_names = tuple(sorted(out_name for out_name, *_ in pending))
     rows = []
-    for out_name, seg, wsr, row in pending:
-        write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
-        rows.append(row)
+    with tempfile.TemporaryDirectory(prefix=".sax-bank-") as staging:
+        for out_name, seg, wsr, row in pending:
+            write_wav_mono(os.path.join(staging, out_name), seg, wsr)
+            rows.append(row)
+        staged = {
+            name
+            for name in os.listdir(staging)
+            if name.endswith((".wav", PACKAGED_EXT))
+        }
+        if staged != set(logical_names):
+            raise ValueError(
+                "sax staging output is incomplete: expected "
+                f"{len(logical_names)} WAVs, found {len(staged)}"
+            )
+        _validate_generated_output_inventory(
+            None, logical_names, output_dir=staging
+        )
+        _publish_staged_flac_bank(staging, out_dir, logical_names, "sax")
     return rows
 
 
@@ -6149,9 +6165,9 @@ def _print_sample_rows(rows):
 def _finish(rows, published=0):
     """Publish the banks this run wrote, then print the recipe table.
 
-    Generic family banks, plus the bass, mandolin, and clavinet paths, publish their
-    own all-or-nothing transactions before this final step. Keeping the pending-bank
-    pass is what stops direct local recipes and `--sax-only` from leaving a bank as WAV.
+    Generic family banks, plus the bass, mandolin, clavinet, and sax paths, publish
+    their own all-or-nothing transactions before this final step. The pending-bank
+    pass remains for direct local writers that still register a completed bank.
     """
     published += publish_pending_banks()
     _print_sample_rows(rows)

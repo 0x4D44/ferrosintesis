@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00034 — Catalog overlap oracle ignores GM System On voice resets
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/render-catalog / MIDI overlap oracle
 - **Raised:** 2026-08-14T12:51:04Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T191933Z-7be56430
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00034-run-verify-20260913T191933Z-7be56430
-- **Owner base:** 15b480ab543f48432736c1a349c0de467b9c45ec
-- **Owner fingerprint:** sha256:d31ef08c9a9bbc5940f0f7e8c5407f7aa2e9fb10bc75aa285b6794caf23c68d4
-- **Owner since:** 2026-09-13T19:19:33Z
-- **Owner until:** 2026-09-13T21:19:33Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T12:51:04Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T11:11:28Z, deltic:auto role=fix run=fix-20260815T110711Z-p34000-n736568800-c1 branch=task/bug-MM-BUG-CRUCIBLE-00034-run-fix-20260815T110711Z-p34000-n736568800-c1 code=fe1fb49 gate=manual)
+- **State history:** Open (2026-08-14T12:51:04Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T11:11:28Z, deltic:auto role=fix run=fix-20260815T110711Z-p34000-n736568800-c1 branch=task/bug-MM-BUG-CRUCIBLE-00034-run-fix-20260815T110711Z-p34000-n736568800-c1 code=fe1fb49 gate=manual) -> Closed (2026-09-13, independently verified by Codex: reset-control tests, catalog audit, and root-cause mutant all passed as described below; no residual gap)
 
 ## Observation
 
@@ -56,6 +56,19 @@ note-offs in the new epoch.
 Add controls for a held note cleared by GM System On, a same-tick reset plus replacement
 note, and a stale post-reset note-off. Demonstrate each new control red against the
 current audit before landing the fix.
+
+### Verification summary (2026-09-13 — Codex)
+
+Independent verification used the current trunk implementation and the exact production
+reset shape. The `gm_system_on` filter selected 3 tests, and the stale-note-off,
+non-forgiveness, other-SysEx, and committed-catalog filters selected 1 test each; all
+7 tests passed. The root-cause mutant changed the SysEx branch back to `skip(...)` so
+GM System On was invisible; `gm_system_on_clears_a_held_note` then ran 1 test and failed
+on its assertion (`unmatched_note_ons: 1` versus the expected clean audit). Restoring
+the parser branch made that test pass and left no source diff. Focused cargo builds
+reported two pre-existing `sampler.rs` dead-code warnings; the commands themselves
+were green. The repository-wide sample-tooling sweep separately had one unrelated
+Steinway alias-manifest failure, so no broader suite is claimed green here.
 
 ## Notes
 

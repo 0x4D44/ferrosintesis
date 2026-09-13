@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00207 — Selective bass rebakes no longer validate the complete shared crate
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** electric-bass sample generation / shared-crate inventory
 - **Raised:** 2026-08-16T09:39:30Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T044356Z-c69e05a7
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00207-run-fix-20260913T044356Z-c69e05a7
-- **Owner base:** 7df7e3fcd365d07626888708152c7acc885c1589
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T04:43:56Z
-- **Owner until:** 2026-09-13T06:43:56Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T09:39:30Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T09:39:30Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:51:49Z, deltic:auto role=fix run=fix-20260913T044356Z-c69e05a7 branch=task/bug-MM-BUG-KILN-00207-run-fix-20260913T044356Z-c69e05a7 code=2c65490ffa7114931842ecd19b06b765c9de0491 gate=manual)
 
 ## Observation
 

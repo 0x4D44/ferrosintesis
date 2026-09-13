@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00212 — Bottle provenance publishes an unusable regeneration command
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample package / bottle regeneration documentation
 - **Raised:** 2026-08-16T11:38:32Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T152407Z-60202476
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00212-run-fix-20260913T152407Z-60202476
-- **Owner base:** fa8d2a975bb6d8a8c8871943407b9a13fd436099
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:24:07Z
-- **Owner until:** 2026-09-13T17:24:07Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T11:38:32Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T11:38:32Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:33:12Z, deltic:auto role=fix run=fix-20260913T152407Z-60202476 branch=task/bug-MM-BUG-KILN-00212-run-fix-20260913T152407Z-60202476 code=6a425c224a99e05c355968c972449db879eb5976 gate=manual)
 
 ## Observation
 

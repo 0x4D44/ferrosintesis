@@ -54,6 +54,10 @@ type Result<T> = core::result::Result<T, &'static str>;
 const EXPECTED_CHANNELS: u8 = 1;
 const EXPECTED_BITS_PER_SAMPLE: u8 = 16;
 const EXPECTED_SAMPLE_RATE: u32 = 44_100;
+/// The committed banks are all below one million samples; this leaves generous
+/// room for a supported bank without allowing a tiny input to request unbounded
+/// output storage.
+const MAX_DECODED_SAMPLES: u64 = 4_000_000;
 
 /// FLAC allows LPC orders up to 32; the coefficient precision is at most 15
 /// bits. Both bounds are checked rather than trusted, so a corrupt header
@@ -237,35 +241,65 @@ mod md5 {
     ];
 
     /// MD5 of `data`.
+    #[cfg(test)]
     pub(super) fn digest(data: &[u8]) -> [u8; 16] {
-        let mut state: [u32; 4] = [0x6745_2301, 0xefcd_ab89, 0x98ba_dcfe, 0x1032_5476];
+        let mut context = Context::new();
+        context.update(data);
+        context.finalize()
+    }
 
-        let bit_len = (data.len() as u64).wrapping_mul(8);
-        // Message + 0x80 + zero padding to 56 mod 64 + 8-byte little-endian length.
-        let mut tail = Vec::with_capacity(128);
-        tail.push(0x80u8);
-        while (data.len() + tail.len()) % 64 != 56 {
-            tail.push(0);
-        }
-        tail.extend_from_slice(&bit_len.to_le_bytes());
+    /// Incremental MD5 state, so callers do not need a second full PCM allocation.
+    pub(super) struct Context {
+        state: [u32; 4],
+        byte_len: u64,
+        block: [u8; 64],
+        filled: usize,
+    }
 
-        let mut block = [0u8; 64];
-        let mut filled = 0usize;
-        for &byte in data.iter().chain(tail.iter()) {
-            block[filled] = byte;
-            filled += 1;
-            if filled == 64 {
-                compress(&mut state, &block);
-                filled = 0;
+    impl Context {
+        pub(super) fn new() -> Self {
+            Self {
+                state: [0x6745_2301, 0xefcd_ab89, 0x98ba_dcfe, 0x1032_5476],
+                byte_len: 0,
+                block: [0; 64],
+                filled: 0,
             }
         }
-        debug_assert_eq!(filled, 0, "padding must land on a block boundary");
 
-        let mut out = [0u8; 16];
-        for (i, word) in state.iter().enumerate() {
-            out[i * 4..i * 4 + 4].copy_from_slice(&word.to_le_bytes());
+        pub(super) fn update(&mut self, mut data: &[u8]) {
+            self.byte_len = self.byte_len.wrapping_add(data.len() as u64);
+            while !data.is_empty() {
+                let take = (self.block.len() - self.filled).min(data.len());
+                self.block[self.filled..self.filled + take].copy_from_slice(&data[..take]);
+                self.filled += take;
+                data = &data[take..];
+                if self.filled == self.block.len() {
+                    compress(&mut self.state, &self.block);
+                    self.filled = 0;
+                }
+            }
         }
-        out
+
+        pub(super) fn finalize(mut self) -> [u8; 16] {
+            let bit_len = self.byte_len.wrapping_mul(8);
+            self.block[self.filled] = 0x80;
+            self.filled += 1;
+            if self.filled > 56 {
+                self.block[self.filled..].fill(0);
+                compress(&mut self.state, &self.block);
+                self.block = [0; 64];
+                self.filled = 0;
+            }
+            self.block[self.filled..56].fill(0);
+            self.block[56..].copy_from_slice(&bit_len.to_le_bytes());
+            compress(&mut self.state, &self.block);
+
+            let mut out = [0u8; 16];
+            for (i, word) in self.state.iter().enumerate() {
+                out[i * 4..i * 4 + 4].copy_from_slice(&word.to_le_bytes());
+            }
+            out
+        }
     }
 
     fn compress(state: &mut [u32; 4], block: &[u8; 64]) {
@@ -332,28 +366,36 @@ pub fn decode_mono16(bytes: &[u8]) -> Result<Vec<i16>> {
     }
 
     // `total_samples` of 0 means "unknown" in FLAC. Our encoder always writes
-    // it, and a known length lets us pre-size and cross-check, so require it.
+    // it, and a known length lets us bound, reserve, and cross-check, so require it.
     if info.total_samples == 0 {
         return Err("FLAC: STREAMINFO declares no total sample count");
+    }
+    if info.total_samples > MAX_DECODED_SAMPLES {
+        return Err("FLAC: decoded sample count exceeds supported limit");
     }
     let total = usize::try_from(info.total_samples)
         .map_err(|_| "FLAC: total sample count exceeds this platform's usize")?;
 
-    let mut out: Vec<i16> = Vec::with_capacity(total);
-    let mut block: Vec<i64> = Vec::with_capacity(info.max_block_size as usize);
+    let mut out: Vec<i16> = Vec::new();
+    out.try_reserve_exact(total)
+        .map_err(|_| "FLAC: decoded sample count cannot be allocated")?;
+    let mut block: Vec<i64> = Vec::new();
+    block
+        .try_reserve_exact(info.max_block_size as usize)
+        .map_err(|_| "FLAC: frame block cannot be allocated")?;
 
     while out.len() < total {
         if reader.bits_remaining() < 8 {
             return Err("FLAC: stream ended before the declared sample count");
         }
         decode_frame(&mut reader, &info, &mut block)?;
+        if block.len() > total - out.len() {
+            return Err("FLAC: decoded more samples than STREAMINFO declares");
+        }
         for &sample in &block {
             let narrowed =
                 i16::try_from(sample).map_err(|_| "FLAC: decoded sample outside 16-bit range")?;
             out.push(narrowed);
-            if out.len() > total {
-                return Err("FLAC: decoded more samples than STREAMINFO declares");
-            }
         }
     }
 
@@ -372,11 +414,11 @@ pub fn decode_mono16(bytes: &[u8]) -> Result<Vec<i16>> {
     // and a check that only runs in debug builds is not the one that protects a
     // release render.
     if info.md5 != [0u8; 16] {
-        let mut pcm_bytes = Vec::with_capacity(out.len() * 2);
+        let mut digest = md5::Context::new();
         for sample in &out {
-            pcm_bytes.extend_from_slice(&sample.to_le_bytes());
+            digest.update(&sample.to_le_bytes());
         }
-        if md5::digest(&pcm_bytes) != info.md5 {
+        if digest.finalize() != info.md5 {
             return Err("FLAC: decoded audio does not match the STREAMINFO MD5");
         }
     }
@@ -738,6 +780,21 @@ fn decode_residual(reader: &mut BitReader, out: &mut [i64], predictor_order: usi
 mod tests {
     use super::*;
 
+    fn streaminfo_only(total_samples: u64) -> Vec<u8> {
+        assert!(total_samples < (1u64 << 36));
+        let mut bytes = b"fLaC".to_vec();
+        bytes.extend_from_slice(&[0x80, 0x00, 0x00, 0x22]);
+        let mut streaminfo = [0u8; 34];
+        streaminfo[0..2].copy_from_slice(&1u16.to_be_bytes());
+        streaminfo[2..4].copy_from_slice(&4096u16.to_be_bytes());
+        let packed = (u64::from(EXPECTED_SAMPLE_RATE) << 44)
+            | (u64::from(EXPECTED_BITS_PER_SAMPLE - 1) << 36)
+            | total_samples;
+        streaminfo[10..18].copy_from_slice(&packed.to_be_bytes());
+        bytes.extend_from_slice(&streaminfo);
+        bytes
+    }
+
     // NOTE: the truncation oracle that matters — "every strict prefix of a
     // real bank is rejected without panicking" — lands with the commit that
     // converts the banks to FLAC, because it needs real encoder output to feed
@@ -758,6 +815,16 @@ mod tests {
     #[test]
     fn a_marker_with_no_metadata_is_rejected_not_panicking() {
         assert!(decode_mono16(b"fLaC").is_err());
+    }
+
+    #[test]
+    fn an_enormous_declared_length_is_rejected_before_allocation() {
+        let bytes = streaminfo_only((1u64 << 36) - 1);
+        assert_eq!(bytes.len(), 42);
+        assert_eq!(
+            decode_mono16(&bytes),
+            Err("FLAC: decoded sample count exceeds supported limit")
+        );
     }
 
     #[test]
@@ -816,6 +883,12 @@ mod tests {
             .map(|b| format!("{b:02x}"))
             .collect();
         assert_eq!(hex, "57edf4a22be3c955ac49da2e2107b67a");
+
+        let mut incremental = md5::Context::new();
+        for chunk in long.as_bytes().chunks(2) {
+            incremental.update(chunk);
+        }
+        assert_eq!(incremental.finalize(), md5::digest(long.as_bytes()));
     }
 
     #[test]

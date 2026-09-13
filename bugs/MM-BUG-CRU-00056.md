@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00056 — RealtimeSynth NoteOn-burst regression never exceeds the pending-command budget, so it passes with an unbounded queue
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** ferrosintesis / realtime MIDI queue tests
 - **Raised:** 2026-09-13T19:19:58Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T193612Z-67a263c9
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00056-run-fix-20260913T193612Z-67a263c9
-- **Owner base:** c890ee3d4bb08fe6bd014496bcc8794ca9fb6584
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T19:36:12Z
-- **Owner until:** 2026-09-13T21:36:12Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:19:58Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:19:58Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T19:47:03Z, deltic:auto role=fix run=fix-20260913T193612Z-67a263c9 branch=task/bug-MM-BUG-CRU-00056-run-fix-20260913T193612Z-67a263c9 code=e4df90580b0d8ec8d71157d162cd20ff26fd064f gate=manual)
 
 ## Observation
 

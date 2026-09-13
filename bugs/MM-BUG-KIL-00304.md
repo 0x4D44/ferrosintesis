@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00304 — Drum-kit PROVENANCE files still describe pre-FLAC WAV payloads and byte totals
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample assets / provenance documentation
 - **Raised:** 2026-08-19T09:33:14Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T232519Z-3bbcd0b2
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00304-run-fix-20260913T232519Z-3bbcd0b2
-- **Owner base:** 8a8767ac9eb81bc8409cb1801e7be0aea24d2eb1
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T23:25:19Z
-- **Owner until:** 2026-09-14T01:25:19Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:14Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-19T09:33:14Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T23:34:55Z, deltic:auto role=fix run=fix-20260913T232519Z-3bbcd0b2 branch=task/bug-MM-BUG-KIL-00304-run-fix-20260913T232519Z-3bbcd0b2 code=de257e3d309d56f7c58eb8684ce7264467b04437 gate=manual)
 
 ## Observation
 

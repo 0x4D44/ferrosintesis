@@ -196,15 +196,13 @@ mod tests {
     #[test]
     fn embedded_bytes_match_the_committed_files() {
         let dir = samples_dir();
-        for (name, bytes) in SAMPLES {
-            let on_disk = fs::metadata(dir.join(name))
-                .unwrap_or_else(|e| panic!("{name} must exist under samples/: {e}"))
-                .len();
+        for &(name, bytes) in SAMPLES {
+            let on_disk = fs::read(dir.join(name))
+                .unwrap_or_else(|e| panic!("{name} must exist under samples/: {e}"));
             assert_eq!(
-                bytes.len() as u64,
-                on_disk,
-                "{name}: embedded {} bytes but the committed file is {on_disk}",
-                bytes.len()
+                bytes,
+                on_disk.as_slice(),
+                "{name}: embedded payload differs from the committed file"
             );
         }
     }
@@ -221,7 +219,6 @@ mod tests {
             let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
             let flac = &bytes[..4] == b"fLaC";
             assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
-            assert_eq!(get(name), Some(*bytes));
         }
         assert_eq!(get("missing.wav"), None);
     }

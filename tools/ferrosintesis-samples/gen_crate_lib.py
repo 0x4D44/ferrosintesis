@@ -177,7 +177,7 @@ def main():
     lines.append("    #[test]")
     lines.append("    fn inventory_matches_packaged_samples() {")
     lines.append('        let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");')
-    lines.append("        let mut packaged: Vec<String> = fs::read_dir(samples_dir)")
+    lines.append("        let mut packaged: Vec<String> = fs::read_dir(&samples_dir)")
     lines.append('            .expect("sample directory must exist")')
     lines.append('            .map(|e| e.expect("readable entry").path())')
     lines.append(
@@ -194,6 +194,16 @@ def main():
     lines.append("        embedded.sort();")
     lines.append("        assert_eq!(packaged.len(), FILE_COUNT);")
     lines.append("        assert_eq!(embedded, packaged);")
+    lines.append("        for (name, bytes) in SAMPLES {")
+    lines.append("            assert_eq!(")
+    lines.append(
+        '                fs::read(samples_dir.join(name))'
+        '.expect("packaged sample must be readable"),'
+    )
+    lines.append("                bytes,")
+    lines.append('                "{name}",')
+    lines.append("            );")
+    lines.append("        }")
     lines.append("    }")
     lines.append("")
     lines.append("    #[test]")
@@ -212,7 +222,6 @@ def main():
     lines.append('            let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";')
     lines.append('            let flac = &bytes[..4] == b"fLaC";')
     lines.append('            assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");')
-    lines.append("            assert_eq!(get(name), Some(bytes));")
     lines.append("        }")
     lines.append('        assert_eq!(get("missing.wav"), None);')
     lines.append("    }")

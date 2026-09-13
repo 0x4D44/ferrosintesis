@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn inventory_matches_packaged_samples() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
-        let mut packaged: Vec<String> = fs::read_dir(samples_dir)
+        let mut packaged: Vec<String> = fs::read_dir(&samples_dir)
             .expect("sample directory must exist")
             .map(|entry| {
                 entry
@@ -108,6 +108,13 @@ mod tests {
 
         assert_eq!(packaged.len(), FILE_COUNT);
         assert_eq!(embedded, packaged);
+        for (name, bytes) in SAMPLES {
+            assert_eq!(
+                fs::read(samples_dir.join(name)).expect("packaged sample must be readable"),
+                bytes,
+                "{name}",
+            );
+        }
     }
 
     #[test]
@@ -122,7 +129,6 @@ mod tests {
             let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
             let flac = &bytes[..4] == b"fLaC";
             assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
-            assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(get("missing.wav"), None);
     }

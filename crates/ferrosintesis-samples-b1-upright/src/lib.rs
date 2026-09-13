@@ -564,7 +564,7 @@ mod tests {
     #[test]
     fn inventory_matches_packaged_wavs() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
-        let mut packaged: Vec<String> = fs::read_dir(samples_dir)
+        let mut packaged: Vec<String> = fs::read_dir(&samples_dir)
             .expect("sample directory must exist")
             .map(|e| e.expect("readable entry").path())
             .filter(|p| p.extension() == Some(OsStr::new("wav")))
@@ -575,6 +575,13 @@ mod tests {
         embedded.sort();
         assert_eq!(packaged.len(), FILE_COUNT);
         assert_eq!(embedded, packaged);
+        for (name, bytes) in SAMPLES {
+            assert_eq!(
+                fs::read(samples_dir.join(name)).expect("packaged sample must be readable"),
+                bytes,
+                "{name}",
+            );
+        }
     }
 
     #[test]
@@ -592,7 +599,6 @@ mod tests {
                 !b1_tail(bytes).is_empty(),
                 "{name} has an empty natural tail"
             );
-            assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(
             SAMPLES

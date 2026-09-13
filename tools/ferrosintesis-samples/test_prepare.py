@@ -4154,7 +4154,8 @@ class GrandSampleApiContractTest(unittest.TestCase):
         self.assertIn("Names include the `.flac` suffix", lib)
         self.assertIn(f'"{documented_key}"', lib)
         self.assertIn("for (name, bytes) in SAMPLES", lib)
-        self.assertIn("assert_eq!(get(name), Some(bytes));", lib)
+        self.assertIn("fs::read(samples_dir.join(name))", lib)
+        self.assertNotIn("assert_eq!(get(name), Some(bytes));", lib)
         self.assertIn("inventory_matches_packaged_samples", provenance)
         self.assertNotIn("inventory_matches_packaged_wavs", provenance)
 
@@ -4588,6 +4589,8 @@ class GenCrateLibMixedContainerTest(unittest.TestCase):
             f"const EXPECTED_BYTES: usize = {len(flac) + len(wav)};", generated
         )
         self.assertIn("ffmpeg libavformat Lavf62.12.101", generated)
+        self.assertIn("fs::read(samples_dir.join(name))", generated)
+        self.assertNotIn("assert_eq!(get(name), Some(bytes));", generated)
         self.assertIn(
             "//! committed `samples/*.wav` / `samples/*.flac`; consumers normally reach it through",
             generated,
@@ -4603,6 +4606,62 @@ class GenCrateLibMixedContainerTest(unittest.TestCase):
         self.assertIn('&bytes[..4] == b"RIFF"', generated)
         self.assertIn('&bytes[..4] == b"fLaC"', generated)
         self.assertNotIn("ignored.txt", generated)
+
+    def test_swapped_embedded_payload_fails_the_packaged_file_oracle(self):
+        with tempfile.TemporaryDirectory() as crate:
+            crate_path = pathlib.Path(crate)
+            samples = crate_path / "samples"
+            samples.mkdir()
+            (crate_path / "src").mkdir()
+            (crate_path / "Cargo.toml").write_text(
+                '[package]\nname = "generated-sample-fixture"\n'
+                'version = "0.1.0"\nedition = "2021"\n'
+                'include = ["src", "samples", "LICENSE-MIT"]\n',
+                encoding="utf-8",
+            )
+            (crate_path / "LICENSE-MIT").write_text("fixture license\n", encoding="utf-8")
+            (samples / "a.flac").write_bytes(b"fLaC" + b"a" * 8)
+            (samples / "b.flac").write_bytes(b"fLaC" + b"b" * 8)
+
+            with mock.patch.object(
+                gen_crate_lib.sys,
+                "argv",
+                ["gen_crate_lib.py", crate, "--doc", "Swap fixture."],
+            ):
+                gen_crate_lib.main()
+
+            lib = crate_path / "src" / "lib.rs"
+            generated = lib.read_text(encoding="utf-8")
+            first = 'include_bytes!("../samples/a.flac")'
+            second = 'include_bytes!("../samples/b.flac")'
+            self.assertIn(first, generated)
+            self.assertIn(second, generated)
+            placeholder = 'include_bytes!("../samples/__swap_placeholder__.flac")'
+            generated = generated.replace(first, placeholder, 1)
+            generated = generated.replace(second, first, 1)
+            generated = generated.replace(placeholder, second, 1)
+            lib.write_text(generated, encoding="utf-8", newline="\n")
+
+            result = subprocess.run(
+                [
+                    "cargo",
+                    "test",
+                    "--manifest-path",
+                    str(crate_path / "Cargo.toml"),
+                    "--quiet",
+                ],
+                cwd=crate,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                check=False,
+                timeout=60,
+            )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("inventory_matches_packaged_samples", result.stdout)
+        self.assertIn("FAILED", result.stdout)
 
 
 class B1InventoryRegenerationTest(unittest.TestCase):

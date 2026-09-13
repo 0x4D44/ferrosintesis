@@ -74,7 +74,7 @@ mod tests {
     #[test]
     fn inventory_matches_packaged_flac_samples() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
-        let mut packaged: Vec<String> = fs::read_dir(samples_dir)
+        let mut packaged: Vec<String> = fs::read_dir(&samples_dir)
             .expect("sample directory must exist")
             .map(|entry| {
                 entry
@@ -103,6 +103,13 @@ mod tests {
         assert_eq!(packaged.len(), FILE_COUNT);
         assert!(packaged.iter().all(|name| name.ends_with(".flac")));
         assert_eq!(embedded, packaged);
+        for (name, bytes) in SAMPLES {
+            assert_eq!(
+                fs::read(samples_dir.join(name)).expect("packaged sample must be readable"),
+                bytes,
+                "{name}",
+            );
+        }
     }
 
     #[test]
@@ -115,7 +122,6 @@ mod tests {
         for (name, bytes) in SAMPLES {
             assert!(bytes.len() >= 12, "{name} is too short to be a sample");
             assert_eq!(&bytes[..4], b"fLaC", "{name} is not a FLAC file");
-            assert_eq!(get(name), Some(bytes));
         }
         assert_eq!(get("missing.flac"), None);
         assert_eq!(get("gong_ageng_soft.wav"), None);

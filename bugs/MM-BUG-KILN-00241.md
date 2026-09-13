@@ -6,15 +6,15 @@
 - **Area:** sample tooling / generated crate inventories
 - **Raised:** 2026-08-16T21:54:56Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T064440Z-fe335cba
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00241-run-fix-20260913T064440Z-fe335cba
+- **Owner base:** f9ca251a9a814d81a16546ee3351463107c1d16f
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T06:44:40Z
+- **Owner until:** 2026-09-13T08:44:40Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

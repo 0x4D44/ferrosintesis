@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00049 — Concurrent mandolin regenerations race the shared source staging directory
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** mandolin sample generation / concurrent source isolation
 - **Raised:** 2026-08-20T12:21:19Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T145951Z-e4d049c6
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00049-run-fix-20260913T145951Z-e4d049c6
-- **Owner base:** ba9b3ff224b19c6c786f705d52678b9d4eff2a7a
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T14:59:51Z
-- **Owner until:** 2026-09-13T16:59:51Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T12:21:19Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-20T12:21:19Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:06:45Z, deltic:auto role=fix run=fix-20260913T145951Z-e4d049c6 branch=task/bug-MM-BUG-CRU-00049-run-fix-20260913T145951Z-e4d049c6 code=0179cee76f348d6e4e84096a2891082b7687a05f gate=manual)
 
 ## Observation
 

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00227 — Mandatory gate can accept fret-noise WAVs that violate BAKE-SHA256
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** fret-noise sample integrity gate
 - **Raised:** 2026-08-16T16:53:04Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T155945Z-fcf1412b
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00227-run-fix-20260913T155945Z-fcf1412b
-- **Owner base:** 47a2639dc58e8ca515c281f8096b3e532e9d56e3
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:59:45Z
-- **Owner until:** 2026-09-13T17:59:45Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T16:53:04Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-16T16:53:04Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T16:15:47Z, deltic:auto role=fix run=fix-20260913T155945Z-fcf1412b branch=task/bug-MM-BUG-KILN-00227-run-fix-20260913T155945Z-fcf1412b code=a2f0f9dc38151ac172bc006a712a500f0ac27599 gate=manual)
 
 ## Observation
 

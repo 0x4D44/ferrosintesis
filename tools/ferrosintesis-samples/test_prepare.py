@@ -3534,6 +3534,62 @@ class PackagedRecipeRoutingTest(unittest.TestCase):
             if os.path.isfile(os.path.join(crates_dir, crate, "samples", packaged))
         }
 
+    EXECUTABLE_PREPARE = re.compile(
+        r"\bpython[0-9.]*\s+(?P<script>(?:[^\s`]+/)?prepare\.py)\s+"
+        r"(?P<selector>--only=[A-Za-z0-9,]+)"
+    )
+
+    @classmethod
+    def executable_prepare_commands(cls, text):
+        """Return actual interpreter commands, excluding prose mentions of prepare.py."""
+        return [
+            (match.group("script"), match.group("selector"))
+            for match in cls.EXECUTABLE_PREPARE.finditer(text)
+        ]
+
+    def test_packaged_recipe_commands_use_root_relative_scripts_and_supported_selectors(self):
+        supported = prepare._prepare_only_families()
+        crates_dir = os.path.join(prepare.REPO_ROOT, "crates")
+        checked = 0
+        for crate in sorted(os.listdir(crates_dir)):
+            for doc in ("PROVENANCE.md", "README.md"):
+                path = os.path.join(crates_dir, crate, doc)
+                if not os.path.isfile(path):
+                    continue
+                with open(path, encoding="utf-8") as handle:
+                    commands = self.executable_prepare_commands(handle.read())
+                for script, selector in commands:
+                    checked += 1
+                    with self.subTest(crate=crate, doc=doc, command=(script, selector)):
+                        self.assertEqual(
+                            script,
+                            "tools/ferrosintesis-samples/prepare.py",
+                            f"{crate}/{doc} must invoke prepare.py from the repository root",
+                        )
+                        self.assertTrue(
+                            os.path.isfile(os.path.join(prepare.REPO_ROOT, script)),
+                            f"{crate}/{doc} command script is not resolvable from the repository root",
+                        )
+                        for family in selector.removeprefix("--only=").split(","):
+                            self.assertIn(
+                                family,
+                                supported,
+                                f"{crate}/{doc} documents unsupported --only={family}",
+                            )
+        self.assertGreater(checked, 5, "no executable documented recipes were found to check")
+
+    def test_bare_prepare_script_is_rejected_even_with_a_supported_selector(self):
+        commands = self.executable_prepare_commands(
+            "Run `python3 prepare.py --only=bottleloop` from the repository root."
+        )
+        self.assertEqual(commands, [("prepare.py", "--only=bottleloop")])
+        with self.assertRaises(AssertionError):
+            self.assertEqual(
+                commands[0][0],
+                "tools/ferrosintesis-samples/prepare.py",
+                "a bare prepare.py path is not resolvable from the repository root",
+            )
+
     def test_the_two_bottle_banks_ship_in_different_crates(self):
         """Asserted against the committed tree, not against `sample_output_path`.
 

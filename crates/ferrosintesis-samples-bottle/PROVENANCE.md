@@ -26,7 +26,8 @@ offline reproducibility):
 
 Baked to `samples/bottleloop_G3.flac` (mono 16-bit 44.1 kHz, 1.6500 s, measured root
 **205.0 Hz**) by `tools/ferrosintesis-samples/prepare.py:bake_bottle_loop`
-(`python3 prepare.py --only=bottleloop`), leaving a recorded attack that swells into a looped
+(`python3 tools/ferrosintesis-samples/prepare.py --only=bottleloop`, run from the repository
+root), leaving a recorded attack that swells into a looped
 plateau body (`ferrosintesis` finds the pitch-synchronous loop at construction). Voices
 the GM 76 blown bottle.
 

@@ -6,15 +6,15 @@
 - **Area:** electric-bass sample generation / selective fetch
 - **Raised:** 2026-08-16T09:39:37Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T151318Z-eb397982
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00208-run-fix-20260913T151318Z-eb397982
+- **Owner base:** 2cab4d0075b774949b89fe65e3b2c91470984e5a
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T15:13:18Z
+- **Owner until:** 2026-09-13T17:13:18Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

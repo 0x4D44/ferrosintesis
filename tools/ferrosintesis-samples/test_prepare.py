@@ -2325,6 +2325,147 @@ class MuseScoreOnsetConcurrentExtractionTest(unittest.TestCase):
                 self.assertEqual(source.read(), prior_bytes)
 
 
+class MandolinConcurrentSourceTest(unittest.TestCase):
+    """MM-BUG-CRU-00049: concurrent mandolin bakes use isolated source bytes."""
+
+    def test_two_processes_keep_mandolin_sources_isolated(self):
+        worker = textwrap.dedent(
+            """
+            import os
+            import sys
+            import time
+            from unittest import mock
+
+            import prepare
+
+            source_dir, shared_src, repo_root, sync, token = sys.argv[1:]
+            other = "B" if token == "A" else "A"
+            filename = "mandolin_C4_rr1.wav"
+            token_bytes = token.encode("ascii") * 4096
+
+            def wait_for(prefix):
+                open(os.path.join(sync, f"{prefix}-{token}"), "wb").close()
+                deadline = time.monotonic() + 10
+                while not os.path.exists(os.path.join(sync, f"{prefix}-{other}")):
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(f"mandolin {prefix} barrier timed out")
+                    time.sleep(0.01)
+
+            def overlapping_copy(source, destination):
+                with open(destination, "wb") as output:
+                    wait_for("mandolin-copy-open")
+                    output.write(token_bytes)
+                    output.flush()
+                    wait_for("mandolin-copy-complete")
+                return destination
+
+            def fake_prepare(fn, family_src):
+                with open(os.path.join(family_src, fn), "rb") as source:
+                    payload = source.read()
+                if payload != token_bytes:
+                    raise RuntimeError(
+                        f"{token}: consumed another process's mandolin source"
+                    )
+                open(os.path.join(sync, f"mandolin-consumed-{token}"), "wb").close()
+                segment = [0.0, 0.25, -0.25, 0.0]
+                row = (fn, 440.0, 440.0, 440.0, 0.0, 1.0, len(segment) / prepare.OUT_SR)
+                return segment, prepare.OUT_SR, row
+
+            with (
+                mock.patch.object(prepare, "REPO_ROOT", repo_root),
+                mock.patch.object(prepare, "MANDOLIN_SRC", source_dir),
+                mock.patch.object(
+                    prepare, "MANDOLIN_SOURCES", {filename: filename}
+                ),
+                mock.patch.object(
+                    prepare.shutil, "copyfile", side_effect=overlapping_copy
+                ),
+                mock.patch.object(
+                    prepare, "_prepare_generic_source_sample", side_effect=fake_prepare
+                ),
+                mock.patch.object(prepare, "_publish_mandolin_bank"),
+            ):
+                mandolin_src = prepare.ensure_mandolin_sources(shared_src) or shared_src
+                prepare._bake_mandolin(mandolin_src)
+            """
+        )
+        with tempfile.TemporaryDirectory() as temp_root:
+            shared_src = os.path.join(temp_root, "shared-src")
+            repo_root = os.path.join(temp_root, "repo")
+            sync = os.path.join(temp_root, "sync")
+            os.makedirs(shared_src)
+            os.makedirs(sync)
+            sample_dir = os.path.join(
+                repo_root,
+                "crates",
+                "ferrosintesis-samples-mandolin",
+                "samples",
+            )
+            os.makedirs(sample_dir)
+            with open(os.path.join(sample_dir, "mandolin_C4_rr1.flac"), "wb") as old:
+                old.write(b"prior mandolin bank")
+
+            source_dirs = []
+            for token in ("A", "B"):
+                source_dir = os.path.join(temp_root, f"source-{token}")
+                os.makedirs(source_dir)
+                with open(os.path.join(source_dir, "mandolin_C4_rr1.wav"), "wb") as source:
+                    source.write(token.encode("ascii") * 4096)
+                source_dirs.append(source_dir)
+
+            script = os.path.join(temp_root, "concurrent_mandolin_worker.py")
+            with open(script, "w", encoding="utf-8") as output:
+                output.write(worker)
+
+            module_dir = os.path.abspath(os.path.dirname(prepare.__file__))
+            child_env = os.environ.copy()
+            child_env["PYTHONPATH"] = (
+                module_dir + os.pathsep + child_env.get("PYTHONPATH", "")
+            )
+            processes = [
+                subprocess.Popen(
+                    [
+                        sys.executable,
+                        script,
+                        source_dir,
+                        shared_src,
+                        repo_root,
+                        sync,
+                        token,
+                    ],
+                    cwd=module_dir,
+                    env=child_env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                for source_dir, token in zip(source_dirs, ("A", "B"))
+            ]
+            results = []
+            try:
+                for process in processes:
+                    stdout, stderr = process.communicate(timeout=15)
+                    results.append((process.returncode, stdout, stderr))
+            except subprocess.TimeoutExpired:
+                for process in processes:
+                    if process.poll() is None:
+                        process.kill()
+                for process in processes:
+                    process.communicate()
+                self.fail("concurrent mandolin worker timed out")
+
+            for token, (returncode, stdout, stderr) in zip(("A", "B"), results):
+                self.assertEqual(
+                    returncode,
+                    0,
+                    f"worker {token} failed:\nstdout={stdout}\nstderr={stderr}",
+                )
+                self.assertTrue(
+                    os.path.exists(os.path.join(sync, f"mandolin-consumed-{token}")),
+                    f"worker {token} did not consume its own source",
+                )
+
+
 class YdpArchiveCacheTest(unittest.TestCase):
     """MM-BUG-KILN-00141: YDP warm caches remain bound to the archive pin."""
 

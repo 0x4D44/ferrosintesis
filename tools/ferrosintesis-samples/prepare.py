@@ -1120,9 +1120,9 @@ FREESOUND_SOURCES = {
 # Owner-recorded mandolin onsets (GM 25 steel guitar + bank LSB 96 — the XG Mandolin
 # cell; GM itself has no mandolin program). Like gong-src/freesound-src these are not
 # fetchable, so the per-note source cuts are committed here already downmixed to mono
-# 16-bit 44.1 kHz — exactly what the bake consumes — and ensure_mandolin_sources copies
-# them into the temp `src` for the main loop to trim and measure. Ten zones (open + 5th
-# fret on all four courses, plus 10th and 12th on the E course) x four ordered
+# 16-bit 44.1 kHz — exactly what the bake consumes — and ensure_mandolin_sources returns
+# this committed directory for the bake to trim and measure directly. Ten zones (open +
+# 5th fret on all four courses, plus 10th and 12th on the E course) x four ordered
 # round-robin takes at one dynamic. Provenance, measured roots, take order and source
 # checksums are in
 # crates/ferrosintesis-samples-mandolin/PROVENANCE.md.
@@ -1678,12 +1678,13 @@ def ensure_freesound_sources(src):
         shutil.copyfile(os.path.join(FREESOUND_SRC, fn), os.path.join(src, fn))
 
 
-def ensure_mandolin_sources(src):
-    """Copy the committed owner-recorded mandolin cuts (mandolin-src/*.wav) into `src`
-    for the main bake loop (owner-held recording, nothing to fetch — same intake shape
-    as gong-src and freesound-src)."""
-    for fn in MANDOLIN_SOURCES:
-        shutil.copyfile(os.path.join(MANDOLIN_SRC, fn), os.path.join(src, fn))
+def ensure_mandolin_sources(_src):
+    """Return the committed mandolin source directory without copying into shared temp."""
+    if not os.path.isdir(MANDOLIN_SRC):
+        raise FileNotFoundError(f"mandolin source directory is missing: {MANDOLIN_SRC}")
+    return MANDOLIN_SRC
+
+
 def ensure_eastman_sources(src, source_map):
     """Copy the committed Eastman E1D zone WAVs into `src` under their DEST names.
 
@@ -6435,8 +6436,8 @@ def main():
         if want("rhodes") or want("dulcimer") or want("musicbox") or want("bottle"):
             ensure_freesound_sources(src)
         if want("mandolin"):
-            ensure_mandolin_sources(src)
-            rows += _bake_mandolin(src)
+            mandolin_src = ensure_mandolin_sources(src)
+            rows += _bake_mandolin(mandolin_src)
         if want("eastpick"):
             ensure_eastman_sources(src, EASTPICK_SOURCES)
         if want("eastpluck"):

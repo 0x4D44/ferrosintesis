@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00296 — CLI prints and silently accepts option values the render did not use
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:49:17Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T223726Z-cb762c16
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00296-run-fix-20260913T223726Z-cb762c16
-- **Owner base:** 681891a90b4124188b69d7836cf347d645a30059
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:37:26Z
-- **Owner until:** 2026-09-14T00:37:26Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:49:17Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-17T22:49:17Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:47:30Z, deltic:auto role=fix run=fix-20260913T223726Z-cb762c16 branch=task/bug-MM-BUG-KILN-00296-run-fix-20260913T223726Z-cb762c16 code=da4e3b87c5f8f65fc2792894bf43e9ad97b9229a gate=manual)
 
 ## Observation
 

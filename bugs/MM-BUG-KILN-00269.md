@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00269 — Sax regeneration command leaves the embedded FLAC bank stale
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sax sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T06:31:31Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T170255Z-304e895d
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00269-run-fix-20260913T170255Z-304e895d
-- **Owner base:** 94cb93747c41954afd18c92bc9e1f11ad096e520
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T17:02:55Z
-- **Owner until:** 2026-09-13T19:02:55Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T06:31:31Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T06:31:31Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:10:36Z, deltic:auto role=fix run=fix-20260913T170255Z-304e895d branch=task/bug-MM-BUG-KILN-00269-run-fix-20260913T170255Z-304e895d code=c5282f988d2120272e0767369b8109e145470f3c gate=manual)
 
 ## Observation
 

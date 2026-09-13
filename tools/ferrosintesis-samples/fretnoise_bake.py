@@ -59,6 +59,7 @@ CANONICAL_PYTHON = (3, 14, 3)
 CANONICAL_NUMPY = "2.4.4"
 CANONICAL_PLATFORM = "win32"
 CANONICAL_MACHINE = "AMD64"
+OUTPUT_RE = re.compile(r"^fretnoise_rr\d{2}\.flac$")
 PIN_RE = re.compile(r"^([0-9a-f]{64})  (fretnoise_rr\d{2}\.flac)$")
 
 
@@ -364,7 +365,7 @@ def publish_fretnoise_bank(
     expected_names: set[str],
     replace_file=os.replace,
 ) -> None:
-    """Publish a validated bank and restore the old bank if replacement fails."""
+    """Publish a validated bank and restore the old bank if publication fails."""
     expected = set(expected_names)
     actual = {path.name for path in staging.iterdir()}
     if actual != expected:
@@ -391,20 +392,30 @@ def publish_fretnoise_bank(
                 raise RuntimeError(f"{destination}: existing output is not a file")
             originals.add(name)
 
+    obsolete = set()
+    for path in out_dir.glob("fretnoise_rr*.flac"):
+        if not OUTPUT_RE.fullmatch(path.name) or path.name in expected:
+            continue
+        if not path.is_file():
+            raise RuntimeError(f"{path}: obsolete output is not a file")
+        obsolete.add(path.name)
+
     with tempfile.TemporaryDirectory(
         prefix=".fretnoise-backup-", dir=out_dir.parent
     ) as backup_dir:
         backup = Path(backup_dir)
-        for name in sorted(originals):
+        for name in sorted(originals | obsolete):
             shutil.copy2(out_dir / name, backup / name)
         try:
             for name in sorted(expected):
                 replace_file(staging / name, out_dir / name)
+            for name in sorted(obsolete):
+                (out_dir / name).unlink()
         except BaseException as publish_error:
             rollback_errors = []
-            for name in sorted(expected):
+            for name in sorted(expected | obsolete):
                 destination = out_dir / name
-                if name in originals:
+                if name in originals or name in obsolete:
                     try:
                         os.replace(backup / name, destination)
                     except OSError as error:

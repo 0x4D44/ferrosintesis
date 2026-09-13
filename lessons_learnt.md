@@ -24,6 +24,9 @@ belong in `CLAUDE.md`, not here.
 - 2026.09.13 — **External bake tools need an early PATH preflight** (`fretnoise_bake.py:require_ffmpeg`).
   - A Python requirements file cannot install ffmpeg; check the executable before source work and document the shell PATH requirement.
 
+- 2026.09.13 — **Successful bank publishes must remove only generator-owned stale outputs** (`fretnoise_bake.py:publish_fretnoise_bank`).
+  - Reconcile exact generated `.flac` names during atomic publication, while preserving unrelated files and restoring the old set on failure.
+
 - 2026.09.13 — **Bake atomicity tests must drive the write-mode entry point** (`test_fretnoise_bake.py:FretNoiseBakeTests.test_main_late_encode_failure_preserves_published_bank`).
   - Testing staging or publication alone can leave a reverted direct-write `main()` green; inject the late failure through `main()` and compare the old bank byte-for-byte.
 

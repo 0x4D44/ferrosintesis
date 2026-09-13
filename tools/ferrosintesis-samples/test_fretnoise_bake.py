@@ -185,6 +185,33 @@ class FretNoiseBakeTests(unittest.TestCase):
                 {path.name: path.read_bytes() for path in out_dir.iterdir()}, old
             )
 
+    def test_successful_publish_removes_obsolete_generated_files(self) -> None:
+        payloads = self._synthetic_payloads()
+        expected = {name for name, *_ in payloads}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out_dir = root / "published"
+            staging = root / "staging"
+            out_dir.mkdir()
+            staging.mkdir()
+            for name, payload, *_ in payloads:
+                (out_dir / name).write_bytes(f"old bank: {name}".encode())
+                (staging / name).write_bytes(payload)
+            (out_dir / "fretnoise_rr99.flac").write_bytes(b"retired take")
+            (out_dir / "fretnoise_rr99.wav").write_bytes(b"unrelated wav")
+            (out_dir / "keep.txt").write_bytes(b"unrelated file")
+
+            BAKE.publish_fretnoise_bank(staging, out_dir, expected)
+
+            self.assertEqual(
+                {path.name for path in out_dir.iterdir()},
+                expected | {"fretnoise_rr99.wav", "keep.txt"},
+            )
+            self.assertEqual(
+                {name: (out_dir / name).read_bytes() for name in expected},
+                {name: payload for name, payload, *_ in payloads},
+            )
+
     def test_environment_contract_names_every_byte_identity_input(self) -> None:
         self.assertEqual(
             BAKE.canonical_environment_errors(

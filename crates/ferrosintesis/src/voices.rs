@@ -14357,6 +14357,22 @@ struct UncorrectedVoice {
     vel_exp_override: Option<f32>,
 }
 
+#[cfg(test)]
+thread_local! {
+    static GM76_MODEL_CONSTRUCTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn make_gm76_model(key: u8, vel: u8, sr: f32, seed: u32) -> Box<dyn Voice> {
+    #[cfg(test)]
+    GM76_MODEL_CONSTRUCTIONS.with(|count| count.set(count.get() + 1));
+    Box::new(ScaledVoice {
+        inner: Box::new(Wind::from_preset(wind(76), key, vel, sr, seed)),
+        exp: 1.512,
+        g: ScaledVoice::gain(vel, 1.512),
+        scratch: Vec::new(),
+    })
+}
+
 fn make_uncorrected(
     program: u8,
     key: u8,
@@ -15013,16 +15029,11 @@ fn make_uncorrected(
             // not the loop" (the loop's taper is intrinsic; so is this). Pinned by
             // velocity_law::modeled_gm76_follows_the_square_law_in_no_samples_builds
             // and looped_recording_voices_keep_their_documented_velocity_behaviour.
-            let model: Box<dyn Voice> = Box::new(ScaledVoice {
-                inner: Box::new(Wind::from_preset(wind(76), key, vel, sr, seed)),
-                exp: 1.512,
-                g: ScaledVoice::gain(vel, 1.512),
-                scratch: Vec::new(),
-            });
             if samples {
-                crate::sampler::bottle_loop_voice(key, vel, sr, seed).unwrap_or(model)
+                crate::sampler::bottle_loop_voice(key, vel, sr, seed)
+                    .unwrap_or_else(|| make_gm76_model(key, vel, sr, seed))
             } else {
-                model
+                make_gm76_model(key, vel, sr, seed)
             }
         }
         72..=79 => {
@@ -15173,6 +15184,33 @@ fn make_uncorrected(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gm76_model_fallback_is_constructed_only_when_selected() {
+        let constructions = || GM76_MODEL_CONSTRUCTIONS.with(|count| count.get());
+        let reset = || GM76_MODEL_CONSTRUCTIONS.with(|count| count.set(0));
+
+        reset();
+        let _sampled = make_uncorrected_for_test(76, 60, 100, 44_100.0, 5, true);
+        assert_eq!(
+            constructions(),
+            0,
+            "sampled GM76 must not build its fallback"
+        );
+
+        reset();
+        let _fallback = make_uncorrected_for_test(76, 36, 100, 44_100.0, 5, true);
+        assert_eq!(
+            constructions(),
+            1,
+            "out-of-range GM76 must build one fallback"
+        );
+
+        reset();
+        let _modeled = make_uncorrected_for_test(76, 60, 100, 44_100.0, 5, false);
+        assert_eq!(constructions(), 1, "no-samples GM76 must build one model");
+    }
+
     // Audio oracle helpers used by the v0.9 reed/brass oracles (bare names).
     use crate::testutil::{
         assert_render_signature, band_rms, centroid, env_autocorr_peak, env_autocorr_peak_detrend,

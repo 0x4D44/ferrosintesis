@@ -6,15 +6,15 @@
 - **Area:** MuseScore grand sample generation / failure atomicity
 - **Raised:** 2026-08-17T02:30:15Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T081457Z-35db8830
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00255-run-fix-20260913T081457Z-35db8830
+- **Owner base:** 83820057ba83fd0e72da35f2069beb2c4be78454
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T08:14:57Z
+- **Owner until:** 2026-09-13T10:14:57Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

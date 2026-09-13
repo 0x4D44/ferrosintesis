@@ -6,15 +6,15 @@
 - **Area:** samples crates / published rustdoc
 - **Raised:** 2026-08-14T08:07:50Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T195421Z-aff8fab5
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00197-run-verify-20260913T195421Z-aff8fab5
+- **Owner base:** b1e009d4aea03d87da81c0e38ae35528b66fecfa
+- **Owner fingerprint:** sha256:58c1749807e7537b88ea51399fb697712ee9017b0cb8759773809d5030cff765
+- **Owner since:** 2026-09-13T19:54:21Z
+- **Owner until:** 2026-09-13T21:54:21Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

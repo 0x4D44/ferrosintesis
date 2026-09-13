@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00213 — Sampled GM76 notes eagerly construct and discard the modeled fallback
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** ferrosintesis / GM76 voice construction
 - **Raised:** 2026-08-16T11:38:34Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T153429Z-3c547ddf
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00213-run-fix-20260913T153429Z-3c547ddf
-- **Owner base:** 1b01c1b289b4036d1d6b2d7ec2365ef9d057464c
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:34:29Z
-- **Owner until:** 2026-09-13T17:34:29Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T11:38:34Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T11:38:34Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:42:25Z, deltic:auto role=fix run=fix-20260913T153429Z-3c547ddf branch=task/bug-MM-BUG-KILN-00213-run-fix-20260913T153429Z-3c547ddf code=97c2083ef6d904f714eee673c8557e1e461bfba3 gate=manual)
 
 ## Observation
 

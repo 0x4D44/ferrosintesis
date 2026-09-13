@@ -9,11 +9,11 @@
 
 use crate::dsp::{key_freq, vel_amp, vel_amp_sensed, Rng};
 use crate::voices::Voice;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 pub struct Zone {
     root: f32,
-    data: Vec<f32>,
+    data: Arc<[f32]>,
     #[cfg(feature = "embedded-samples")]
     b1_tail: Option<B1Tail>,
     /// Memoized pitch-synchronous sustain-loop bounds — see [`Zone::sustain_loop`].
@@ -356,7 +356,7 @@ macro_rules! bank {
         crate::sampler::BANK_INITS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         vec![$(Zone {
             root: $root,
-            data: parse_wav(embedded_wav($file)),
+            data: parse_wav(embedded_wav($file)).into(),
             #[cfg(feature = "embedded-samples")]
             b1_tail: None,
             sustain_loop: OnceLock::new(),
@@ -370,7 +370,7 @@ macro_rules! b1_bank {
         crate::sampler::BANK_INITS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         vec![$({
             let bytes = embedded_wav($file);
-            let data = parse_wav(bytes);
+            let data: Arc<[f32]> = parse_wav(bytes).into();
             #[cfg(feature = "embedded-samples")]
             let b1_tail = parse_b1_tail(bytes, data.len())
                 .unwrap_or_else(|error| panic!("{}: {error}", $file));
@@ -433,18 +433,82 @@ fn flute() -> &'static [Zone] {
 fn piano_pp() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
-        bank!(
-            "piano_C2_pp.flac" => 65.05,
-            "piano_G2_pp.flac" => 97.77,
-            "piano_C3_pp.flac" => 130.68,
-            "piano_G3_pp.flac" => 195.31,
-            "piano_C4_pp.flac" => 261.04,
-            "piano_G4_pp.flac" => 393.15,
-            "piano_C5_pp.flac" => 523.65,
-            "piano_G5_pp.flac" => 784.41,
-            "piano_C6_pp.flac" => 1051.84,
-        )
+        vec![
+            Zone {
+                root: 65.05,
+                data: piano_c2_pp_data().clone(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 97.77,
+                data: piano_g2_pp_data().clone(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 130.68,
+                data: parse_wav(embedded_wav("piano_C3_pp.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 195.31,
+                data: parse_wav(embedded_wav("piano_G3_pp.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 261.04,
+                data: parse_wav(embedded_wav("piano_C4_pp.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 393.15,
+                data: parse_wav(embedded_wav("piano_G4_pp.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 523.65,
+                data: parse_wav(embedded_wav("piano_C5_pp.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 784.41,
+                data: parse_wav(embedded_wav("piano_G5_pp.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 1051.84,
+                data: parse_wav(embedded_wav("piano_C6_pp.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+        ]
     })
+}
+
+fn piano_c2_pp_data() -> &'static Arc<[f32]> {
+    static D: OnceLock<Arc<[f32]>> = OnceLock::new();
+    init_once!(D, parse_wav(embedded_wav("piano_C2_pp.flac")).into())
+}
+
+fn piano_g2_pp_data() -> &'static Arc<[f32]> {
+    static D: OnceLock<Arc<[f32]>> = OnceLock::new();
+    init_once!(D, parse_wav(embedded_wav("piano_G2_pp.flac")).into())
 }
 
 fn piano_mf() -> &'static [Zone] {
@@ -484,19 +548,71 @@ fn piano_f() -> &'static [Zone] {
 fn piano_pp_rr2() -> &'static [Zone] {
     static B: OnceLock<Vec<Zone>> = OnceLock::new();
     init_once!(B, {
-        bank!(
-            // The pinned VSCO bank has only one pp take for C2/G2. Alias those
-            // zones honestly; every other cell below contains a real second take.
-            "piano_C2_pp.flac" => 65.05,
-            "piano_G2_pp.flac" => 97.77,
-            "piano_C3_pp_rr2.flac" => 130.60,
-            "piano_G3_pp_rr2.flac" => 194.91,
-            "piano_C4_pp_rr2.flac" => 261.00,
-            "piano_G4_pp_rr2.flac" => 392.77,
-            "piano_C5_pp_rr2.flac" => 523.95,
-            "piano_G5_pp_rr2.flac" => 784.04,
-            "piano_C6_pp_rr2.flac" => 1049.08,
-        )
+        vec![
+            Zone {
+                root: 65.05,
+                data: piano_c2_pp_data().clone(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 97.77,
+                data: piano_g2_pp_data().clone(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 130.60,
+                data: parse_wav(embedded_wav("piano_C3_pp_rr2.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 194.91,
+                data: parse_wav(embedded_wav("piano_G3_pp_rr2.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 261.00,
+                data: parse_wav(embedded_wav("piano_C4_pp_rr2.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 392.77,
+                data: parse_wav(embedded_wav("piano_G4_pp_rr2.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 523.95,
+                data: parse_wav(embedded_wav("piano_C5_pp_rr2.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 784.04,
+                data: parse_wav(embedded_wav("piano_G5_pp_rr2.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+            Zone {
+                root: 1049.08,
+                data: parse_wav(embedded_wav("piano_C6_pp_rr2.flac")).into(),
+                #[cfg(feature = "embedded-samples")]
+                b1_tail: None,
+                sustain_loop: OnceLock::new(),
+            },
+        ]
     })
 }
 
@@ -1796,7 +1912,7 @@ pub fn b1upright_sampled(
         return None;
     }
     Some(Box::new(B1Sampled {
-        data: zone.data.as_slice(),
+        data: zone.data.as_ref(),
         tail: zone
             .b1_tail
             .as_ref()
@@ -2905,7 +3021,7 @@ impl LoopVoice {
         let ratio = (target_hz / zone.root).clamp(0.5, 2.0);
         let step = (ratio * 44100.0 / sr) as f64;
         LoopVoice {
-            data: zone.data.as_slice(),
+            data: zone.data.as_ref(),
             pos: 0.0,
             step,
             gain,
@@ -4223,9 +4339,9 @@ impl SaxLoopVoice {
         let grain_body_start = (SAX_GRAIN_BODY_START_S * 44_100.0) as usize;
         let grain_body_end =
             ((SAX_GRAIN_BODY_END_S * 44_100.0) as usize).min(zone.data.len().saturating_sub(2));
-        let grain_reference_rms = Self::grain_rms(zone.data.as_slice(), loop_start, grain_len);
+        let grain_reference_rms = Self::grain_rms(zone.data.as_ref(), loop_start, grain_len);
         Some(SaxLoopVoice {
-            data: zone.data.as_slice(),
+            data: zone.data.as_ref(),
             loop_start,
             loop_end,
             pos: 0.0,
@@ -4628,7 +4744,7 @@ impl BottleLoopVoice {
         let (loop_start, loop_end) = zone.sustain_loop(find_bottle_loop)?;
         let base_step = ratio * 44100.0 / sr;
         Some(BottleLoopVoice {
-            data: zone.data.as_slice(),
+            data: zone.data.as_ref(),
             loop_start,
             loop_end,
             pos: 0.0,
@@ -5573,7 +5689,7 @@ pub fn clavinet_sampled(key: u8, vel: u8, sr: f32, _seed: u32) -> Box<dyn Voice>
         .sustain_loop(find_clavinet_loop)
         .expect("embedded clavinet zone must contain a sustain loop");
     Box::new(ClavinetSampled {
-        data: zone.data.as_slice(),
+        data: zone.data.as_ref(),
         loop_start,
         loop_end,
         pos: 0.0,
@@ -7068,7 +7184,7 @@ mod tests {
         }
         for (label, zones) in banks {
             for z in zones {
-                let x = z.data.as_slice();
+                let x = z.data.as_ref();
                 let n = x.len();
                 assert!(n > 512, "{label}: zone too short to loop ({n})");
 
@@ -7600,6 +7716,11 @@ mod tests {
             assert_eq!(
                 pp1[zone].data, pp2[zone].data,
                 "quiet C2/G2 are the declared single-take cells"
+            );
+            assert_eq!(
+                pp1[zone].data.as_ptr(),
+                pp2[zone].data.as_ptr(),
+                "quiet C2/G2 aliases must share their decoded PCM buffer"
             );
         }
         for zone in 2..pp1.len() {
@@ -9500,7 +9621,7 @@ mod tests {
         Box::leak(
             vec![Zone {
                 root: key_freq(60),
-                data: vec![1.0; 44100],
+                data: vec![1.0; 44100].into(),
                 #[cfg(feature = "embedded-samples")]
                 b1_tail: None,
                 sustain_loop: OnceLock::new(),

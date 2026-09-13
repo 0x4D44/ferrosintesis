@@ -408,33 +408,67 @@ mod tests {
         errors
     }
 
-    /// Size-of-the-embedded-bank claims: `(file, line, value in MiB)`.
+    /// Size-of-the-embedded-bank claims: `(file, paragraph, value in MiB)`.
     ///
-    /// Scoped to lines that both name a unit and say they are describing what a build
+    /// Scoped to paragraphs that both name a unit and say they are describing what a build
     /// *embeds* or *compiles in* — the per-crate provenance tables also quote MiB, and
-    /// those figures are correct for their own crate.
-    fn size_claims() -> Vec<(&'static str, String, f64)> {
+    /// those figures are correct for their own crate. Prose wraps at arbitrary line
+    /// boundaries, so join each paragraph before looking for the two halves of a claim.
+    fn size_claims_in(file: &'static str, text: &str) -> Vec<(&'static str, String, f64)> {
         let mut out = Vec::new();
-        for file in ["README.md", "NOTICE", "src/lib.rs"] {
-            for line in parent(file).lines() {
-                let lower = line.to_lowercase();
-                let has_unit = lower.contains("mib") || lower.contains(" mb");
-                let about_embedding = lower.contains("embed") || lower.contains("compil");
-                if !has_unit || !about_embedding || lower.trim_start().starts_with('|') {
-                    continue;
-                }
-                for tok in line.split(|c: char| !(c.is_ascii_digit() || c == '.')) {
-                    let Ok(v) = tok.trim_matches('.').parse::<f64>() else {
+        let mut paragraph = String::new();
+        let mut scan = |paragraph: &str| {
+            let lower = paragraph.to_ascii_lowercase();
+            let has_unit = lower.contains("mib") || lower.contains(" mb");
+            let about_embedding = lower.contains("embed") || lower.contains("compil");
+            if !has_unit || !about_embedding || lower.trim_start().starts_with('|') {
+                return;
+            }
+            for unit in ["mib", " mb"] {
+                for (unit_start, _) in lower.match_indices(unit) {
+                    let Some(tok) = paragraph[..unit_start]
+                        .split(|c: char| !(c.is_ascii_digit() || c == '.'))
+                        .filter(|tok| !tok.is_empty())
+                        .next_back()
+                    else {
+                        continue;
+                    };
+                    let Ok(v) = tok.parse::<f64>() else {
                         continue;
                     };
                     // Below 1 is a version fragment or a decimal tail, not a size.
                     if v >= 1.0 {
-                        out.push((file, line.to_string(), v));
+                        out.push((file, paragraph.to_string(), v));
                     }
                 }
             }
+        };
+
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                if !paragraph.is_empty() {
+                    scan(&paragraph);
+                    paragraph.clear();
+                }
+                continue;
+            }
+            if !paragraph.is_empty() {
+                paragraph.push(' ');
+            }
+            paragraph.push_str(trimmed);
+        }
+        if !paragraph.is_empty() {
+            scan(&paragraph);
         }
         out
+    }
+
+    fn size_claims() -> Vec<(&'static str, String, f64)> {
+        ["README.md", "NOTICE", "src/lib.rs"]
+            .into_iter()
+            .flat_map(|file| size_claims_in(file, &parent(file)))
+            .collect()
     }
 
     /// Words in `line` that state a number, as lowercase tokens.
@@ -623,6 +657,26 @@ mod tests {
                 err * 100.0,
             );
         }
+    }
+
+    #[test]
+    fn size_oracle_rejects_a_wrapped_stale_claim() {
+        let real_mib = embedded_payload().2 as f64 / (1024.0 * 1024.0);
+        let wrapped = "The default `embedded-samples` feature compiles\n\
+roughly 111 MiB of recorded audio across 1156 recordings in first-party asset crates.";
+        let claims = size_claims_in("src/lib.rs", wrapped);
+        assert_eq!(
+            claims
+                .iter()
+                .map(|(_, _, value)| *value)
+                .collect::<Vec<_>>(),
+            vec![111.0],
+            "the size oracle extracted numbers unrelated to the MiB unit: {claims:?}"
+        );
+        assert!(
+            (claims[0].2 - real_mib).abs() / real_mib > 0.10,
+            "the size oracle accepted a wrapped stale claim: {claims:?}"
+        );
     }
 
     /// The oracles must actually FAIL on the documents they were written to catch.

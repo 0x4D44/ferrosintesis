@@ -48,8 +48,10 @@
 //! ```
 //!
 //! Rendering is deterministic for a fixed executable, MIDI file, and options.
-//! The default `embedded-samples` feature compiles
-//! roughly 111 MiB of recorded audio across first-party asset crates into the binary;
+//! The default `embedded-samples` feature compiles roughly 54 MiB of recorded audio
+//! across 1080 WAV/FLAC recordings from first-party asset crates into the binary. The
+//! packaged banks use FLAC except for the B1 upright's WAV files, whose custom `b1t`
+//! tail cannot be stored in FLAC.
 //! `default-features = false`
 //! builds the fully modeled synth instead, a far smaller artifact with
 //! synthetic note onsets in place of the recorded ones.

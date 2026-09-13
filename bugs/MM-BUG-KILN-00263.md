@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00263 — Banjo extractor and its required tests cannot consume the migrated FLAC inventory
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** orchestral2 banjo regeneration / required test gate
 - **Raised:** 2026-08-17T04:26:00Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T042001Z-467ac0e7
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00263-run-fix-20260913T042001Z-467ac0e7
-- **Owner base:** fdbc7826f1ff6559c629dd4f36b831191486ce76
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T04:20:01Z
-- **Owner until:** 2026-09-13T06:20:01Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T04:26:00Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T04:26:00Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:42:10Z, deltic:auto role=fix run=fix-20260913T042001Z-467ac0e7 branch=task/bug-MM-BUG-KILN-00263-run-fix-20260913T042001Z-467ac0e7 code=af990a2a59541f223e628e9067c585c7739a3b22 gate=manual)
 
 ## Observation
 

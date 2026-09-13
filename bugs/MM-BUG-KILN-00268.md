@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00268 — Sax sample package still documents WAV keys and payloads after FLAC conversion
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sax sample crate / public package contract
 - **Raised:** 2026-08-17T06:31:16Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T165737Z-8cc00e5a
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00268-run-fix-20260913T165737Z-8cc00e5a
-- **Owner base:** 75625bbe8b78186bec1ec5b3123a1812d98dfc12
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T16:57:37Z
-- **Owner until:** 2026-09-13T18:57:37Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T06:31:16Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T06:31:16Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:14:26Z, deltic:auto role=fix run=fix-20260913T165737Z-8cc00e5a branch=task/bug-MM-BUG-KILN-00268-run-fix-20260913T165737Z-8cc00e5a code=024a4be09358530268ad9293dc9e871bd0a87a65 gate=manual)
 
 ## Observation
 

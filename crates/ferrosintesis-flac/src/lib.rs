@@ -750,7 +750,7 @@ fn decode_lpc(reader: &mut BitReader, out: &mut [i64], bit_depth: u32, order: us
     }
 
     let precision = reader.read(4)? + 1;
-    if precision > MAX_LPC_PRECISION + 1 {
+    if precision > MAX_LPC_PRECISION {
         return Err("FLAC: invalid LPC coefficient precision");
     }
     let shift = reader.read_signed(5)?;
@@ -1138,6 +1138,28 @@ mod tests {
         assert_eq!(
             result.unwrap(),
             Err("FLAC: reconstructed sample exceeds subframe bit depth")
+        );
+    }
+
+    #[test]
+    fn lpc_rejects_the_forbidden_maximum_coefficient_precision() {
+        let mut writer = BitWriter::new();
+        writer.write_signed(0, 32);
+        writer.write(0b1111, 4); // Reserved raw field; precision would become 16.
+        writer.write_signed(0, 5); // Shift zero.
+        writer.write_signed(0, 16); // Coefficient bits if the invalid field is accepted.
+        append_zero_residuals(&mut writer, 0);
+
+        let bytes = writer.finish();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut reader = BitReader::new(&bytes);
+            let mut out = vec![0; 1];
+            decode_lpc(&mut reader, &mut out, 32, 1)
+        }));
+        assert!(result.is_ok(), "forbidden LPC precision must not panic");
+        assert_eq!(
+            result.unwrap(),
+            Err("FLAC: invalid LPC coefficient precision")
         );
     }
 }

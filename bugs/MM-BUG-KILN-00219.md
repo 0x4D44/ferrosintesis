@@ -6,15 +6,15 @@
 - **Area:** clavinet sample assets / binary and runtime footprint
 - **Raised:** 2026-08-16T13:44:22Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T192309Z-e61a1e78
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00219-run-verify-20260913T192309Z-e61a1e78
+- **Owner base:** c77341b5c27d42e1338bb3d7261365a08c83c3cf
+- **Owner fingerprint:** sha256:851c2d15e69853467c52aa4355116ed8acf2113bc5dbe5ed0a8e69eb8e9449b4
+- **Owner since:** 2026-09-13T19:23:09Z
+- **Owner until:** 2026-09-13T21:23:09Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

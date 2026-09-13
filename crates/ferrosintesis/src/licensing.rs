@@ -4,15 +4,16 @@
 //! ## Why this exists
 //!
 //! `ferrosintesis` embeds its PCM in first-party asset crates, and the default
-//! `embedded-samples` feature pulls in twenty-five of them. Most are **CC0-1.0** and need
-//! no credit. The rest are **MIT**, **CC-BY-3.0** or **CC-BY-4.0**, and a downstream
-//! binary distributor must reproduce their notices to ship legally.
+//! `embedded-samples` feature pulls in first-party sample-asset crates. Most are
+//! **CC0-1.0** and need no credit. The rest are **MIT**, **CC-BY-3.0** or
+//! **CC-BY-4.0**, and a downstream binary distributor must reproduce their notices to
+//! ship legally.
 //!
 //! The parent `README.md` is the licensing guide such a distributor is most likely to
 //! read, and it was hand-maintained. That does not scale: by the time this module was
-//! written the guide named five of the ten attribution-bearing banks and silently
-//! omitted the other five (MM-BUG-KILN-00060), because each new sample crate landed in
-//! its own change and nobody re-read the inventory.
+//! written the guide named only some of the attribution-bearing banks and silently
+//! omitted the rest (MM-BUG-KILN-00060), because each new sample crate landed in its own
+//! change and nobody re-read the inventory.
 //!
 //! These oracles remove the hand-maintenance. They derive the default bank set from the
 //! manifest, derive each bank's attribution obligation independently from `PROVENANCE.md`,
@@ -185,6 +186,16 @@ mod tests {
             format_licenses(&provenance_licenses)
         );
         !provenance_licenses.is_empty()
+    }
+
+    fn attribution_bearing_sample_crates() -> Vec<String> {
+        default_sample_crates()
+            .into_iter()
+            .filter(|krate| {
+                let license = declared_license(krate);
+                crate_requires_attribution(krate, &license)
+            })
+            .collect()
     }
 
     /// Spellings of one licence id that count as naming it.
@@ -607,6 +618,115 @@ mod tests {
         false
     }
 
+    /// Parse a decimal or simple English number token used in the NOTICE's obligation
+    /// paragraph. The parser stays deliberately small: it is not a general number parser,
+    /// only an oracle for a document phrase whose count must track the derived set.
+    fn number_value(token: &str) -> Option<usize> {
+        let normalized = token
+            .trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+            .to_ascii_lowercase();
+        if normalized.chars().all(|c| c.is_ascii_digit()) {
+            if let Ok(value) = normalized.parse() {
+                return Some(value);
+            }
+        }
+        match normalized.as_str() {
+            "zero" => Some(0),
+            "one" => Some(1),
+            "two" => Some(2),
+            "three" => Some(3),
+            "four" => Some(4),
+            "five" => Some(5),
+            "six" => Some(6),
+            "seven" => Some(7),
+            "eight" => Some(8),
+            "nine" => Some(9),
+            "ten" => Some(10),
+            "eleven" => Some(11),
+            "twelve" => Some(12),
+            "thirteen" => Some(13),
+            "fourteen" => Some(14),
+            "fifteen" => Some(15),
+            "sixteen" => Some(16),
+            "seventeen" => Some(17),
+            "eighteen" => Some(18),
+            "nineteen" => Some(19),
+            "twenty" => Some(20),
+            "twenty-one" => Some(21),
+            "twenty-two" => Some(22),
+            "twenty-three" => Some(23),
+            "twenty-four" => Some(24),
+            "twenty-five" => Some(25),
+            "twenty-six" => Some(26),
+            "twenty-seven" => Some(27),
+            "twenty-eight" => Some(28),
+            "twenty-nine" => Some(29),
+            _ => None,
+        }
+    }
+
+    fn first_number(text: &str) -> Option<usize> {
+        text.split_whitespace().next().and_then(number_value)
+    }
+
+    fn last_number(text: &str) -> Option<usize> {
+        text.split_whitespace().rev().find_map(number_value)
+    }
+
+    /// Return count phrases in the NOTICE's legal-instruction paragraph that disagree with
+    /// the attribution set derived from the feature list and each bank's licence evidence.
+    /// A count may be omitted entirely; if prose states one, it must be correct.
+    fn notice_attribution_count_mismatches(notice: &str, expected: usize) -> Vec<String> {
+        let normalized = notice.split_whitespace().collect::<Vec<_>>().join(" ");
+        let lower = normalized.to_ascii_lowercase();
+        let mut mismatches = Vec::new();
+        if let Some((before, _)) = lower.split_once("below are not") {
+            if let Some(value) = last_number(before) {
+                if value != expected {
+                    mismatches.push(format!(
+                        "{value} before `below are not` (expected {expected})"
+                    ));
+                }
+            }
+        }
+        if let Some((before, _)) = lower.split_once("notices listed here") {
+            if let Some(value) = last_number(before) {
+                if value != expected {
+                    mismatches.push(format!(
+                        "{value} before `notices listed here` (expected {expected})"
+                    ));
+                }
+            }
+        }
+        if lower.contains("satisfies every obligation") {
+            if let Some((_, after)) = lower.split_once("those") {
+                if let Some(value) = first_number(after) {
+                    if value != expected {
+                        mismatches.push(format!("{value} after `those` (expected {expected})"));
+                    }
+                }
+            }
+        }
+        mismatches
+    }
+
+    #[test]
+    fn notice_attribution_count_oracle_rejects_stale_count() {
+        let expected = attribution_bearing_sample_crates().len();
+        let stale = expected + 1;
+        let notice = format!(
+            "The {stale} below are not.\n\
+             YOU MUST REPRODUCE THE {stale} NOTICES LISTED HERE.\n\
+             concatenating those {stale} satisfies every obligation below."
+        );
+        let mismatches = notice_attribution_count_mismatches(&notice, expected);
+        assert_eq!(
+            mismatches.len(),
+            3,
+            "the oracle must reject each stale obligation count: {mismatches:?}"
+        );
+    }
+
     /// Every attribution-bearing bank in the default build is CREDITED in the licensing
     /// guide a distributor reads — named, with its licence, and carrying the licensor's
     /// own words.
@@ -713,6 +833,13 @@ mod tests {
         );
 
         let notice = read(&notice_path);
+        let expected_notice_count = attribution_bearing_sample_crates().len();
+        let count_mismatches = notice_attribution_count_mismatches(&notice, expected_notice_count);
+        assert!(
+            count_mismatches.is_empty(),
+            "crates/ferrosintesis/NOTICE states stale attribution count(s):\n  {}",
+            count_mismatches.join("\n  ")
+        );
         let mut missing = Vec::new();
         let mut misfiled = Vec::new();
         let mut uncredited = Vec::new();

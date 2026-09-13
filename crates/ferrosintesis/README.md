@@ -220,8 +220,8 @@ representative material on the target machine. Debug builds are much slower.
 ## Sample provenance and licensing
 
 The code is licensed **MIT OR Apache-2.0**. The embedded PCM is not: it comes from
-twenty-four first-party asset crates, and while most of them are **CC0 1.0** and need
-no credit, ten are not. The asset crates contain nothing but that PCM and
+first-party asset crates, and while most of them are **CC0 1.0** and need no credit,
+the others are not. The asset crates contain nothing but that PCM and
 `include_bytes!`; the per-crate inventory, provenance and regeneration tooling live
 under
 [`tools/ferrosintesis-samples/`](https://github.com/0x4D44/ferrosintesis/tree/main/tools/ferrosintesis-samples),
@@ -229,10 +229,10 @@ which is the authority on what each bank contains.
 
 ### If you distribute a binary
 
-A build with default features embeds all twenty-four banks. **You must reproduce the
-notices of the ten attribution-bearing banks below.** Each ships the exact required
-text in its own crate's `NOTICE` file — concatenating those ten files satisfies
-every licence here. The remaining fifteen banks are CC0 and require nothing.
+A build with default features embeds the sample banks. **You must reproduce the
+notices of the attribution-bearing banks below.** Each ships the exact required
+text in its own crate's `NOTICE` file — concatenating those files satisfies every
+licence here. The remaining banks are CC0 and require nothing.
 
 | Crate | Licence | Supplies | Credit required |
 |---|---|---|---|

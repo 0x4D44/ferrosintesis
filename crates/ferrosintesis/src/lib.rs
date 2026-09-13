@@ -49,17 +49,17 @@
 //!
 //! Rendering is deterministic for a fixed executable, MIDI file, and options.
 //! The default `embedded-samples` feature compiles
-//! roughly 111 MiB of recorded audio — 1156 WAVs across twenty-five
-//! first-party asset crates — into the binary; `default-features = false`
+//! roughly 111 MiB of recorded audio across first-party asset crates into the binary;
+//! `default-features = false`
 //! builds the fully modeled synth instead, a far smaller artifact with
 //! synthetic note onsets in place of the recorded ones.
 //! [`embedded_samples_available`] reports which build this is. No unsafe
 //! code, no build scripts.
 //!
-//! Most of that audio is CC0; ten of the twenty-five crates carry an
-//! attribution obligation that travels with a distributed binary. The
-//! `NOTICE` file at the repository root is the index of what you must
-//! reproduce, and each asset crate packages the exact required text.
+//! Most of that audio is CC0; some asset crates carry an attribution obligation
+//! that travels with a distributed binary. The `NOTICE` file at the repository
+//! root is the index of what you must reproduce, and each asset crate packages
+//! the exact required text.
 //!
 //! All 128 GM melodic program numbers route to a synthesized voice family, but
 //! programs within a family may share an engine and support varies by program.

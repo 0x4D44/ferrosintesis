@@ -919,6 +919,12 @@ HONKYTONK_NOTES = ["C2", "F2", "C3", "F#3", "C4", "F4", "C5", "F#5", "C6"]
 CLAVINET_KEEP_S = 1.6
 CLAVINET_FADE_S = 0.05
 CLAVINET_SEAM_XF = 160  # loop-seam crossfade length (samples)
+# The runtime searches starts through 0.34 s and loop lengths through 0.11 s. Keep
+# four frames beyond that maximum endpoint: two for the search's `n - 2` body bound
+# and its strict `le + 1` check, leaving the 4-point reader's physical guard intact.
+CLAVINET_LOOP_START_HI_S = 0.34
+CLAVINET_LOOP_MAX_LEN_S = 0.11
+CLAVINET_RUNTIME_GUARD_FRAMES = 4
 
 
 def clavinet_t60(root_midi):
@@ -1223,6 +1229,10 @@ FAMILY_PACKAGE = {
     "b1": "ferrosintesis-samples-b1-upright",
 }
 OUT_SR = 44100
+CLAVINET_REACH_FRAMES = (
+    int((CLAVINET_LOOP_START_HI_S + CLAVINET_LOOP_MAX_LEN_S) * OUT_SR)
+    + CLAVINET_RUNTIME_GUARD_FRAMES
+)
 KEEP_S = 0.62      # length kept after the pre-onset pad
 PRE_S = 0.008      # pad kept before the onset
 FADE_S = 0.20      # fade-out applied to the tail
@@ -5017,6 +5027,11 @@ def _bake_clavinet(src):
                 x = resample(x, wsr, OUT_SR)
                 wsr = OUT_SR
             seg = _bake_clavinet_note(x, _midi_hz(root), wsr, clavinet_t60(root))
+            if len(seg) < CLAVINET_REACH_FRAMES:
+                raise ValueError(
+                    f"clavinet root {root} bake is shorter than the runtime reach guard"
+                )
+            seg = seg[:CLAVINET_REACH_FRAMES]
             # measure the baked note's root over its steady body (the zone table uses the
             # MEASURED fundamental, as every other bank does)
             nominal = _midi_hz(root)

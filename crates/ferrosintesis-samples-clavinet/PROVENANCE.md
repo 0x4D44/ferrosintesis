@@ -34,11 +34,13 @@ generator:
    instrument #148 → its 11 sample zones (tiling MIDI key range 0-108).
 2. Slices each zone's Ogg out of `smpl` and decodes it with **ffmpeg** to mono
    44.1 kHz PCM (the same shell-out precedent as the drumkit's FLAC decode).
-3. Bakes each into a ~1.6 s decaying note: because the Ogg decode drops ~80-100
+3. Bakes each into a decaying note, then retains only the 19,849-frame (~0.45 s)
+   runtime-reachable prefix: because the Ogg decode drops ~80-100
    trailing frames (Vorbis padding) — which corrupts the soundfont's short low-note
    loops — the loop is taken **pitch-synchronously** (an exact integer number of
    fundamental periods from the accurate `originalPitch`), crossfaded at the wrap,
-   repeated under a register-scaled exponential decay, then faded and normalized.
+   repeated under a register-scaled exponential decay, then faded, normalized, and
+   bounded four frames beyond the runtime's maximum selected loop endpoint.
 
 The 11 zones sound **G1, C2, G2, C3, G3, C4, G4, C5, G5, C6, G6** (the soundfont's
 sample *name* octave is one higher than the true `originalPitch` — the true pitch is

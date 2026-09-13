@@ -6236,6 +6236,38 @@ class PackagedContainerTest(unittest.TestCase):
             self.assertTrue(os.path.isfile(scratch), "scratch must survive publish")
 
 
+class ClavinetReachabilityTest(unittest.TestCase):
+    """MM-BUG-KILN-00219: package only the PCM prefix the runtime can reach."""
+
+    PREFIX_SHA256 = {
+        "clavinet_C2.flac": "b03eb78b137eb0c94d5b659a712138e3aa207cc1e75f1f26c543741966444a93",
+        "clavinet_C3.flac": "e1ed924cf0425dea87e5f4b778fb18697829d99c96938156cfd08c4f6a83e194",
+        "clavinet_C4.flac": "4c7d9a5e8a2050c818b21e0791c82270db103189d84443e88f2342baafab3898",
+        "clavinet_C5.flac": "ae04aab8f8275f17bbf07aac8201cef7d97a6187a8870ddc56adf79b5516165a",
+        "clavinet_C6.flac": "899a18bb697f09750580321ef0d60c35e68cbd1a52730880310de46b374bd77e",
+        "clavinet_G1.flac": "269f96dde8fe987cc953ac5539bb88c2f31369ced6852e510a1c9d0cd02a43d6",
+        "clavinet_G2.flac": "5c8c49f983e48a895bef9466a2126b63c8b0074ec175ab1f25dcd3147dce08f5",
+        "clavinet_G3.flac": "991dca02f5ae31f6b4e99a2910f1e63f6305514ec654a5229f98ecba3a907f07",
+        "clavinet_G4.flac": "86d393f1495f66b693bd183e397cbc0e4060107b9006381b0dd3498c7b21a73f",
+        "clavinet_G5.flac": "b5f2f7e04fce493b21d6bf737a43f16313a9d764cdf6cd44f70d324ad26e6ace",
+        "clavinet_G6.flac": "b06b6514ee7bb1c247ff17c4c2870f7818c568e18dd91c34d7e142558c7ddb92",
+    }
+
+    def test_assets_stop_at_runtime_reach_and_preserve_the_reachable_pcm(self):
+        sample_dir = pathlib.Path(prepare.REPO_ROOT) / "crates" / "ferrosintesis-samples-clavinet" / "samples"
+        self.assertEqual(prepare.CLAVINET_REACH_FRAMES, 19849)
+        for name, expected_digest in self.PREFIX_SHA256.items():
+            with self.subTest(sample=name):
+                samples, sample_rate = prepare.read_wav(str(sample_dir / name))
+                self.assertEqual(sample_rate, prepare.OUT_SR)
+                self.assertEqual(len(samples), prepare.CLAVINET_REACH_FRAMES)
+                pcm = b"".join(
+                    struct.pack("<h", int(round(value * 32768.0)))
+                    for value in samples
+                )
+                self.assertEqual(hashlib.sha256(pcm).hexdigest(), expected_digest)
+
+
 class GongRegenerationWorkflowTest(unittest.TestCase):
     """MM-BUG-KILN-00239: the documented Gong command must publish the bank it bakes."""
 

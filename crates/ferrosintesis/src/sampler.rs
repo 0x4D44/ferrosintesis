@@ -5530,6 +5530,16 @@ const CLAVINET_LEVEL: f32 = 0.80;
 const CLAVINET_RELEASE_T60: f32 = 0.06;
 #[cfg(feature = "embedded-samples")]
 const CLAVINET_SOURCE_SR: f32 = 44_100.0;
+#[cfg(feature = "embedded-samples")]
+const CLAVINET_LOOP_START_HI_S: f32 = 0.34;
+#[cfg(feature = "embedded-samples")]
+const CLAVINET_LOOP_MAX_LEN_S: f32 = 0.11;
+#[cfg(feature = "embedded-samples")]
+const CLAVINET_RUNTIME_GUARD_FRAMES: usize = 4;
+#[cfg(feature = "embedded-samples")]
+const CLAVINET_REACH_FRAMES: usize = ((CLAVINET_LOOP_START_HI_S + CLAVINET_LOOP_MAX_LEN_S)
+    * CLAVINET_SOURCE_SR) as usize
+    + CLAVINET_RUNTIME_GUARD_FRAMES;
 
 #[cfg(feature = "embedded-samples")]
 fn clavinet_body_t60(key: u8) -> f32 {
@@ -5545,7 +5555,7 @@ fn clavinet_baked_t60(root: f32) -> f32 {
     2.4 - 1.5 * frac
 }
 
-/// Find a pitch-synchronous loop in the baked GM7 asset, before its old 1.6 s tail fade.
+/// Find a pitch-synchronous loop in the retained, runtime-reachable GM7 asset prefix.
 ///
 /// The committed WAV already has a too-fast exponential baked into the repeated body.
 /// The search scores a decay-compensated view of each candidate so the runtime loop can
@@ -5563,9 +5573,7 @@ fn find_clavinet_loop(data: &[f32], root: f32) -> Option<(usize, usize)> {
     }
     let n = data.len();
     const START_LO_S: f32 = 0.16;
-    const START_HI_S: f32 = 0.34;
     const MIN_LEN_S: f32 = 0.035;
-    const MAX_LEN_S: f32 = 0.11;
     const BODY_END_S: f32 = 1.45;
     let start_lo = (START_LO_S * CLAVINET_SOURCE_SR) as usize;
     let min_len = (MIN_LEN_S * CLAVINET_SOURCE_SR) as usize;
@@ -5573,8 +5581,9 @@ fn find_clavinet_loop(data: &[f32], root: f32) -> Option<(usize, usize)> {
     if start_lo == 0 || body_end <= start_lo + min_len {
         return None;
     }
-    let start_hi = ((START_HI_S * CLAVINET_SOURCE_SR) as usize).min(body_end - min_len);
-    let max_len = (MAX_LEN_S * CLAVINET_SOURCE_SR) as usize;
+    let start_hi =
+        ((CLAVINET_LOOP_START_HI_S * CLAVINET_SOURCE_SR) as usize).min(body_end - min_len);
+    let max_len = (CLAVINET_LOOP_MAX_LEN_S * CLAVINET_SOURCE_SR) as usize;
     let stride = (period / 8.0).max(1.0) as usize;
     let baked_t60 = clavinet_baked_t60(root);
     let makeup_step = 10f32.powf(3.0 / (baked_t60 * CLAVINET_SOURCE_SR));
@@ -6017,13 +6026,13 @@ mod tests {
             );
             assert!(
                 alive,
-                "GM7 sampled key {key} died before 3.0 s; this is the baked 1.6 s wall"
+                "GM7 sampled key {key} died before 3.0 s; this is the baked sample wall"
             );
 
             let body = window_rms(&buf, sr, 2.10, 0.12);
             assert!(
                 body > 2.0e-5,
-                "GM7 sampled key {key} is effectively silent after the old tail: rms {body:.8}"
+                "GM7 sampled key {key} is effectively silent after its retained prefix: rms {body:.8}"
             );
 
             let t60 = decay_t60_between(&buf, sr, 0.55, 2.55);
@@ -6059,6 +6068,26 @@ mod tests {
                 wrap <= p99,
                 "GM7 clavinet zone {:.2} Hz loop step {wrap:.6} exceeds its p99 \
                  adjacent step {p99:.6}; the runtime wrap would click",
+                zone.root
+            );
+        }
+    }
+
+    #[test]
+    fn clavinet_assets_end_at_the_runtime_reachable_prefix() {
+        for zone in clavinet_bank() {
+            assert_eq!(
+                zone.data.len(),
+                CLAVINET_REACH_FRAMES,
+                "GM7 zone {:.2} Hz carries unreachable PCM",
+                zone.root
+            );
+            let (_, loop_end) = zone
+                .sustain_loop(find_clavinet_loop)
+                .expect("embedded clavinet zone must contain a sustain loop");
+            assert!(
+                loop_end + CLAVINET_RUNTIME_GUARD_FRAMES <= zone.data.len(),
+                "GM7 zone {:.2} Hz loop end {loop_end} exceeds retained guard",
                 zone.root
             );
         }

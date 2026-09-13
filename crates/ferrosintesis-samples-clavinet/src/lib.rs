@@ -73,7 +73,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    const EXPECTED_BYTES: usize = 529574;
+    const EXPECTED_BYTES: usize = 283310;
 
     #[test]
     fn inventory_matches_packaged_samples() {

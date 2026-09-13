@@ -5,6 +5,9 @@ Embedded **MIT-licensed** clavinet samples for
 voice for GM program 7 (clavinet). Eleven baked, pitch-synchronous decaying notes
 (sounding G1–G6), extracted from the MuseScore "MS Basic" soundfont.
 
+Each asset retains 19,849 mono PCM frames (about 0.45 s): the runtime owns the later
+decay and never reads beyond that loop-reachable prefix.
+
 You normally do not depend on this crate directly; `ferrosintesis` pulls it in under
 its default `embedded-samples` feature. With `--no-samples` (or a channel selecting
 the CC0 alt bank, `CC0 != 0`), GM7 falls back to ferrosintesis's fully-modeled

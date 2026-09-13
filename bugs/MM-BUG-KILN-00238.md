@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00238 — Gong sample API still documents WAV keys and bytes after FLAC conversion
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** gong sample crate / public lookup contract
 - **Raised:** 2026-08-16T21:52:59Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T061026Z-c982e0e7
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00238-run-fix-20260913T061026Z-c982e0e7
-- **Owner base:** 0c510928395cfa0050f0e5074c7c630193d85739
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T06:10:26Z
-- **Owner until:** 2026-09-13T08:10:26Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T21:52:59Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T21:52:59Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:22:54Z, deltic:auto role=fix run=fix-20260913T061026Z-c982e0e7 branch=task/bug-MM-BUG-KILN-00238-run-fix-20260913T061026Z-c982e0e7 code=bf8066cda96af77f7c9e0e13c0046d24733c969a gate=manual)
 
 ## Observation
 

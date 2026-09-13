@@ -11,6 +11,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT = Path(__file__).with_name("fretnoise_bake.py")
@@ -98,6 +99,49 @@ class FretNoiseBakeTests(unittest.TestCase):
                     encode=fail_on_third_write,
                     read_staged=Path.read_bytes,
                 )
+
+            self.assertEqual(writes, 3)
+            self.assertEqual(
+                {path.name: path.read_bytes() for path in out_dir.iterdir()}, old
+            )
+
+    def test_main_late_encode_failure_preserves_published_bank(self) -> None:
+        payloads = self._synthetic_payloads()
+        pins = {
+            name: hashlib.sha256(payload).hexdigest()
+            for name, payload, *_ in payloads
+        }
+        writes = 0
+
+        def fail_on_third_write(payload, destination):
+            nonlocal writes
+            writes += 1
+            destination.write_bytes(payload[:4])
+            if writes == 3:
+                raise OSError("injected main encode failure")
+            destination.write_bytes(payload)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out_dir = root / "crates" / "ferrosintesis-samples-fretnoise" / "samples"
+            out_dir.mkdir(parents=True)
+            old = {}
+            for name, *_ in payloads:
+                old[name] = f"old bank: {name}".encode()
+                (out_dir / name).write_bytes(old[name])
+
+            stage_defaults = BAKE.stage_fretnoise_bank.__defaults__
+            BAKE.stage_fretnoise_bank.__defaults__ = (fail_on_third_write, Path.read_bytes)
+            try:
+                with mock.patch.object(BAKE, "find_repo_root", return_value=root), mock.patch.object(
+                    BAKE, "load_output_pins", return_value=pins
+                ), mock.patch.object(BAKE, "require_canonical_environment"), mock.patch.object(
+                    BAKE, "bake_payloads", return_value=payloads
+                ), mock.patch.object(BAKE, "encode_flac", fail_on_third_write):
+                    with self.assertRaisesRegex(OSError, "injected main encode failure"):
+                        BAKE.main([])
+            finally:
+                BAKE.stage_fretnoise_bank.__defaults__ = stage_defaults
 
             self.assertEqual(writes, 3)
             self.assertEqual(

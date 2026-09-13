@@ -104,7 +104,7 @@ pub trait Voice: Send {
     fn kind(&self) -> &'static str;
 
     /// Test-only probe for sampled wrappers' realtime scratch storage.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "embedded-samples"))]
     fn realtime_scratch_capacity_for_test(&self) -> usize {
         0
     }

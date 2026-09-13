@@ -4109,7 +4109,7 @@ impl Voice for LaVoice {
         self.rr.map(|rr| rr.idx % rr.takes.max(1))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "embedded-samples"))]
     fn realtime_scratch_capacity_for_test(&self) -> usize {
         self.long_buf.capacity()
     }

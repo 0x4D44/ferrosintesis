@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00252 — FLAC migration tool can leave a partial mixed bank after a late failure
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample tooling / FLAC conversion failure atomicity
 - **Raised:** 2026-08-17T01:05:27Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T162556Z-e0d0d513
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00252-run-fix-20260913T162556Z-e0d0d513
-- **Owner base:** 261ae2c3c42079ea8f5eb1cc671f59f7f05fa866
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T16:25:56Z
-- **Owner until:** 2026-09-13T18:25:56Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T01:05:27Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T01:05:27Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:41:15Z, deltic:auto role=fix run=fix-20260913T162556Z-e0d0d513 branch=task/bug-MM-BUG-KILN-00252-run-fix-20260913T162556Z-e0d0d513 code=6723398953435e8e0d86a93113fa9b9ce8f9fc23 gate=manual)
 
 ## Observation
 

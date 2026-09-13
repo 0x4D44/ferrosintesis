@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00052 — Realtime prewarm memory guidance still assumes uncompressed sample payloads after the FLAC migration
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** realtime API / sample prewarm documentation
 - **Raised:** 2026-08-20T15:01:11Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T151752Z-de616c4c
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00052-run-fix-20260913T151752Z-de616c4c
-- **Owner base:** 17bf0c21994c9dd2eca6c3b84fd02f9256bebd4c
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:17:52Z
-- **Owner until:** 2026-09-13T17:17:52Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T15:01:11Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-20T15:01:11Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:20:50Z, deltic:auto role=fix run=fix-20260913T151752Z-de616c4c branch=task/bug-MM-BUG-CRU-00052-run-fix-20260913T151752Z-de616c4c code=dc6aa28a93c3cab614cd6579157bc5ce74bed8c6 gate=manual)
 
 ## Observation
 

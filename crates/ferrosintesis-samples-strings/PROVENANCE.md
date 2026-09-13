@@ -7,6 +7,9 @@ the build (MM-BUG-KILN-00069).
 Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=cellosolo,dbass,pizzbass` from the repository
 root.
 
+The published payloads are mono 16-bit 44.1 kHz FLAC files under `samples/*.flac`.
+The generated Rust inventory is the exact case-sensitive lookup-key list.
+
 | Family | Files | Instrument | Source | Licence |
 |--------|------:|------------|--------|---------|
 | `cellosolo_*` | 16 | Solo cello (GM 42) arco onsets | sfzinstruments/karoryfer-bigcat.cello, REV pinned in `prepare.py` | CC0-1.0 |

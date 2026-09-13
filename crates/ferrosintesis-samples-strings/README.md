@@ -7,6 +7,9 @@ Embedded **CC0 1.0 / public-domain** solo string onset samples for
 onset; the synth plays it as the note's attack and crossfades into the
 appropriate modeled sustain.
 
+The packaged payloads are mono 16-bit 44.1 kHz FLAC files. The public lookup keys
+use their exact `.flac` filenames.
+
 The arco cello and double-bass families replace the previous GM 42/43 onset,
 which repitched the VSCO cello-*section* (`celens`) recording — an ensemble that
 read as a small cello section rather than a soloist, and (for GM 43) as a cello

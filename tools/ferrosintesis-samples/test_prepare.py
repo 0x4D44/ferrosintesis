@@ -5910,6 +5910,44 @@ class SteinwayOutputInventoryTest(unittest.TestCase):
             write_output.assert_not_called()
 
 
+class StringsPackagedDocumentContractTest(unittest.TestCase):
+    """MM-BUG-KILN-00270: Strings docs and exact lookup keys follow the FLAC bank."""
+
+    def test_docs_and_lookup_keys_match_packaged_flac_inventory(self):
+        crate = pathlib.Path(prepare.REPO_ROOT) / "crates" / "ferrosintesis-samples-strings"
+        sample_dir = crate / "samples"
+        packaged = sorted(
+            path.name
+            for path in sample_dir.iterdir()
+            if path.is_file() and path.suffix in {".wav", ".flac"}
+        )
+        self.assertTrue(packaged)
+        self.assertEqual({pathlib.Path(name).suffix for name in packaged}, {".flac"})
+
+        documents = {
+            name: (crate / name).read_text(encoding="utf-8")
+            for name in ("README.md", "PROVENANCE.md")
+        }
+        lib = (crate / "src" / "lib.rs").read_text(encoding="utf-8")
+        public_lib = lib.split("#[cfg(test)]", 1)[0]
+        for name, text in {**documents, "src/lib.rs": public_lib}.items():
+            with self.subTest(document=name):
+                self.assertIn("FLAC", text)
+                self.assertIn(".flac", text)
+                self.assertNotIn("WAV bytes", text)
+
+        self.assertIn("Embedded (file-name, FLAC bytes) pairs.", public_lib)
+        self.assertIn(
+            "Returns the embedded FLAC bytes for an exact (case-sensitive) `.flac` name.",
+            public_lib,
+        )
+        rust_keys = set(re.findall(r'^\s*"([^"]+\.flac)",\s*$', public_lib, re.MULTILINE))
+        self.assertEqual(rust_keys, set(packaged))
+        documented = set(re.findall(r"[A-Za-z0-9_#]+\.flac", "".join(documents.values())))
+        self.assertTrue(documented)
+        self.assertTrue(documented <= set(packaged))
+
+
 class KawaiPackagedDocumentContractTest(unittest.TestCase):
     """MM-BUG-CRU-00051: Kawai docs follow the live packaged bank and publisher."""
 

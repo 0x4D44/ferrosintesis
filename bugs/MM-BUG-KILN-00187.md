@@ -6,15 +6,15 @@
 - **Area:** MuseScore grand sample package / routing documentation
 - **Raised:** 2026-08-13T21:20:10Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T195225Z-2bffa269
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00187-run-verify-20260913T195225Z-2bffa269
+- **Owner base:** 844094d775b886826d44ec4b0fef09bfadbcfdd4
+- **Owner fingerprint:** sha256:44a42f9b4da0d69eadce3018316ae3c9391c2bef6bf7389583888f6e99980557
+- **Owner since:** 2026-09-13T19:52:25Z
+- **Owner until:** 2026-09-13T21:52:25Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

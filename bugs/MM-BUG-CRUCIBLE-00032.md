@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / normalization validation
 - **Raised:** 2026-08-14T11:47:26Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T191213Z-6b1c01e3
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00032-run-verify-20260913T191213Z-6b1c01e3
+- **Owner base:** eaf1e70a799844bd40694c2b276d913cd8c92292
+- **Owner fingerprint:** sha256:5639450d067b8ce5259f687133601f3c1f42450c02199bfd429c7f4fcf5615eb
+- **Owner since:** 2026-09-13T19:12:13Z
+- **Owner until:** 2026-09-13T21:12:13Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

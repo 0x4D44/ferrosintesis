@@ -164,7 +164,7 @@ class FretNoiseBakeTests(unittest.TestCase):
     def test_pin_manifest_is_strict_and_rejects_duplicates(self) -> None:
         digest = hashlib.sha256(b"take").hexdigest()
         with tempfile.TemporaryDirectory() as tmp:
-            manifest = Path(tmp) / "BAKE-SHA256"
+            manifest = Path(tmp) / "BAKE-PCM-SHA256"
             manifest.write_text(
                 f"# pins\n{digest}  fretnoise_rr01.flac\n", encoding="utf-8"
             )

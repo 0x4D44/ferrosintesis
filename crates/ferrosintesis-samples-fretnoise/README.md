@@ -36,8 +36,11 @@ venv\fretnoise-bake\Scripts\python -m pip install -r tools\ferrosintesis-samples
 venv\fretnoise-bake\Scripts\python tools\ferrosintesis-samples\fretnoise_bake.py --verify
 ```
 
-`BAKE-SHA256` pins every output independently. Verification re-bakes all twelve
-files in memory, checks the generated and committed hashes, and writes nothing.
+`BAKE-SHA256` pins every committed FLAC container independently. The mandatory
+standard-library integrity test checks that manifest even when NumPy is absent.
+`BAKE-PCM-SHA256` pins the decoded audio that the canonical re-bake produces.
+Verification re-bakes all twelve files in memory, checks the generated and committed
+PCM hashes, and writes nothing.
 Omit `--verify` only when intentionally restoring the tracked source WAVs from the
 committed source cuts; the script validates every generated hash before its
 first write.

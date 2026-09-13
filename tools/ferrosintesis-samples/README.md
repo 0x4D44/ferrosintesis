@@ -221,13 +221,14 @@ python3 tools/ferrosintesis-samples/prepare.py
 numpy is therefore an **optional dev dependency of this directory only** — it is
 not needed to build the synth, render a catalogue, or rebuild an album. The test
 suite reflects that: `test_banjo_extract.py` and `test_fretnoise_bake.py` raise
-`unittest.SkipTest` at import when numpy is absent, so
+`unittest.SkipTest` at import when numpy is absent. The standard-library-only
+`test_fretnoise_manifest.py` still authenticates every committed FLAC against
+`BAKE-SHA256`, so
 
 ```sh
 python3 -m unittest discover -s tools/ferrosintesis-samples
 ```
 
-exits 0 either way — `OK (skipped=2)` without numpy, 5 more tests and
-`OK (skipped=1)` with it. Install it (`pip install numpy`) only when you are
+exits 0 either way. Install it (`pip install numpy`) only when you are
 working on those two bakes; without it their coverage is skipped, not silently
 dropped.

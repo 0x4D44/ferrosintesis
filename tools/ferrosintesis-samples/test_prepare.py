@@ -1058,6 +1058,7 @@ class PrepareSampleBankTests(unittest.TestCase):
     # entry cannot outlive the defect it documents the way MM-BUG-KILN-00060/59/69's
     # lists did.
     KNOWN_DISCONTINUOUS_ONSETS = set()
+    INTERNAL_LOOP_CRATES = {"ferrosintesis-samples-clavinet"}
 
     @staticmethod
     def _onset_continuity(path):
@@ -1103,6 +1104,11 @@ class PrepareSampleBankTests(unittest.TestCase):
                 continue
             for name in sorted(os.listdir(sample_dir)):
                 if not name.endswith((".wav", prepare.PACKAGED_EXT)):
+                    continue
+                if crate in self.INTERNAL_LOOP_CRATES:
+                    # Clavinet deliberately retains a mid-waveform prefix. The runtime
+                    # loops an internal pitch-synchronous region, not the file edge, and
+                    # `sampler.rs` owns the corresponding seam oracle.
                     continue
                 path = os.path.join(sample_dir, name)
                 one_shot, step, ordinary_step = self._onset_continuity(path)
@@ -1987,7 +1993,9 @@ class ClavinetWholeBankPublicationTest(unittest.TestCase):
 
     @staticmethod
     def staged_note(_x, _root_hz, _sr, _t60):
-        return [0.0, 0.25, -0.25, 0.0]
+        pattern = [0.0, 0.25, -0.25, 0.0]
+        repeats = (prepare.CLAVINET_REACH_FRAMES + len(pattern) - 1) // len(pattern)
+        return (pattern * repeats)[:prepare.CLAVINET_REACH_FRAMES]
 
     def run_bake(self, transform=None):
         sf3 = os.path.join(self.src, "MS_Basic.sf3")
@@ -2127,8 +2135,14 @@ class ClavinetConcurrentExtractionTest(unittest.TestCase):
                 mock.patch.object(prepare, "_sf_preset_zones", return_value=(0, zones)),
                 mock.patch.object(prepare.subprocess, "run", side_effect=fake_run),
                 mock.patch.object(prepare, "read_wav", side_effect=fake_read),
-                mock.patch.object(prepare, "_bake_clavinet_note",
-                                  return_value=[0.0, 0.25, -0.25, 0.0]),
+                mock.patch.object(
+                    prepare,
+                    "_bake_clavinet_note",
+                    return_value=(
+                        [0.0, 0.25, -0.25, 0.0]
+                        * ((prepare.CLAVINET_REACH_FRAMES + 3) // 4)
+                    )[:prepare.CLAVINET_REACH_FRAMES],
+                ),
                 mock.patch.object(prepare, "measure_f0", return_value=(440.0, 1.0)),
                 mock.patch.object(prepare, "_validate_generated_output_families"),
                 mock.patch.object(prepare, "_validate_generated_output_inventory"),

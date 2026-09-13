@@ -47,9 +47,10 @@ version_bump = "release-only"
 # scratchpad.md's 2026-07-25 entry called this exact caveat and named `python3` as the
 # fix. The fleet's Windows boxes carry both names, so this is safe there.
 #
-# Two of the 92 tests need numpy (the banjo and fret-noise bakes). numpy is an optional
-# dev dependency, so those two modules raise `unittest.SkipTest` at import when it is
-# absent: the step stays green and reports `OK (skipped=2)` rather than erroring out.
+# Two optional modules need numpy (the banjo and fret-noise bakes), so they raise
+# `unittest.SkipTest` when it is absent. `test_fretnoise_manifest.py` is standard-library
+# only and always authenticates every committed FLAC against `BAKE-SHA256`; the mandatory
+# gate therefore retains exact-output coverage without the canonical bake environment.
 fallback = [
   { program = "cargo", args = ["fmt", "--all", "--", "--check"] },
   { program = "cargo", args = ["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"] },

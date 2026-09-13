@@ -1,20 +1,18 @@
-# SHA-256 of each take's 16-bit PCM, not of the FLAC container: the bake
-# determines the audio, ffmpeg determines the container, and pinning the
-# container would tie this oracle to one ffmpeg build.
+# SHA-256 of each committed FLAC container. The always-on standard-library
+# manifest test hashes these exact bytes, so a same-length payload mutation cannot
+# pass the mandatory gate when NumPy is unavailable.
 #
-# Updated BY HAND, deliberately: `fretnoise_bake.py` reads this file and never
-# writes it, so re-pinning is always a conscious act rather than a side effect
-# of running the bake. To change a pin, run the bake on the canonical
-# environment it declares and copy the digest column it prints.
-feb74018a43cd8b67a5a7e470ed7f9631ce589b8990f21671fc0c1d25bbba286  fretnoise_rr01.flac
-d9e01cc01c23cafd834ce6f5a6c4a5f4941ef8dcc242499f9ea93f966ca60351  fretnoise_rr02.flac
-c05af2dabbea4fc8c54a5467230e7c306e006344f6f9d8de2e78a1ad91db3cda  fretnoise_rr03.flac
-e5136f9749e157243410c932ddcefa3900ae673ee645d2a9473aa844a0d9bb22  fretnoise_rr04.flac
-29e3264d28c9f801cc59d912d338d1eced2b14512154963f53ca4aa92a1d7323  fretnoise_rr05.flac
-8bd51bad01c6520290385db8ea84bef9168790722ad3ac5592cac31c80e56e19  fretnoise_rr06.flac
-b2adbb3b67a8116b542f9c95943417acc65a0e7e345cbdd9fab6349cf2691939  fretnoise_rr07.flac
-7743e57569a9a608fd03cbea59361f5dd016754120743ce82c92108a432eab1f  fretnoise_rr08.flac
-d09d19a5586a9884063fbf3a166fdc4fc2b2f4a1d3c0dacdda496bec0a2c6b6c  fretnoise_rr09.flac
-6eab7fdacc543223267bb8ab25e9b72d6be3f33a074e12777d53bca46fd7e422  fretnoise_rr10.flac
-c94ee94b51292cf814f31d7e1fe012ae02d75b5afcc6ca53c63dffcaa8202b44  fretnoise_rr11.flac
-ce871dfdf878bb6838780927041072208d5b989bf5a59d0076fb0bf863dbb386  fretnoise_rr12.flac
+# Updated BY HAND, deliberately: this file is an identity pin, not bake output.
+# Recompute it only after reviewing a deliberate bank replacement.
+aed3e13443a05ffed790a8642cbe11826f546982e32b78b7872068aab477c1f9  fretnoise_rr01.flac
+6e9d2090f86a0752ec9fc8f0693a7ccb72ac5dc4d4f5626ccb042fbaff33d562  fretnoise_rr02.flac
+e44c94bd360f80e1aa5fb7beb072fee80014dc4de7cbb63af3caee69157fdbde  fretnoise_rr03.flac
+89cf3da7a31948998bebe5de76c92c363f394187a895dab80db05e57abe5316e  fretnoise_rr04.flac
+adaa7f9f778fddaed549baedc98a8c7b22e999fa6da5221dd733d0d769e6acb8  fretnoise_rr05.flac
+69200048d82c39e4f9a397d4cb2281c3de7be38ca99e69bafff4dd8565108f82  fretnoise_rr06.flac
+de01724038a7ee703a9cc84326f25a7f5ac231b4d54d7e374c4b6d092ab1a337  fretnoise_rr07.flac
+9f84dccf2cbc549546900734302e99f510fd51b8194274bcb61ba288846f25bf  fretnoise_rr08.flac
+c6d8d95bf909254920bb1e1d33cb8bdd39fa7ac151a3c2b4c303e4780e8140cf  fretnoise_rr09.flac
+85a38e037870db0132f12f73618d30d4fa989a47c48dfa6ea1acfd08be945f9a  fretnoise_rr10.flac
+08e68200cf5577872ce6dc8b0b4f490b3c6d9b265c4800aba1733a4161ade652  fretnoise_rr11.flac
+53d4943929491602a09111832df077c1d7c506dbd8408030d1a7082a65428cd7  fretnoise_rr12.flac

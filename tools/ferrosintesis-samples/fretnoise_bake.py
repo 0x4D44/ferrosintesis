@@ -20,10 +20,11 @@ Steps, per file:
   3. TPDF dither to 16-bit (two independent uniforms, +-1 LSB), the repo's dither.
 
 Byte identity is scoped to the canonical Windows x86-64 environment declared by
-CANONICAL_* below and requirements-fretnoise-bake.txt, and the pins are over the
+CANONICAL_* below and requirements-fretnoise-bake.txt. `BAKE-PCM-SHA256` pins the
 16-bit PCM rather than the FLAC container, so an ffmpeg upgrade cannot invalidate
-them (see `bake_payloads`). ``--verify`` bakes entirely in memory, checks every
-generated and committed SHA-256, and never writes an asset.
+the audio oracle (see `bake_payloads`); `BAKE-SHA256` separately pins the committed
+container bytes for the always-on integrity gate. ``--verify`` bakes entirely in
+memory, checks every generated and committed PCM SHA-256, and never writes an asset.
 The committed cuts are authoritative (the Downloads masters live outside the repo).
 
 Run from the repo (worktree) root:
@@ -462,7 +463,7 @@ def main(argv: list[str] | None = None) -> int:
     src_dir = root / "samples" / "fret-noise-eastman-e1d" / "cuts"
     crate_dir = root / "crates" / "ferrosintesis-samples-fretnoise"
     out_dir = crate_dir / "samples"
-    pins = load_output_pins(crate_dir / "BAKE-SHA256")
+    pins = load_output_pins(crate_dir / "BAKE-PCM-SHA256")
     require_canonical_environment()
     payloads = bake_payloads(src_dir)
 

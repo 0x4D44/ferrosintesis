@@ -60,10 +60,11 @@ Byte identity is scoped to the canonical bake environment: 64-bit CPython
 3.14.3 on Windows x86-64 with NumPy 2.4.4, installed from
 `tools/ferrosintesis-samples/requirements-fretnoise-bake.txt`. NumPy does not
 promise cross-version random streams, and this package does not claim
-cross-platform FFT identity. `BAKE-SHA256` pins every output; the bake's
-`--verify` mode regenerates all twelve files in memory and checks both generated
-and committed hashes without writing. The observed canonical re-bake matches all
-twelve pins.
+cross-platform FFT identity. `BAKE-PCM-SHA256` pins the decoded audio, while
+`BAKE-SHA256` pins the committed FLAC containers for the always-on standard-library
+integrity gate. The bake's `--verify` mode regenerates all twelve files in memory and
+checks both generated and committed PCM hashes without writing. The observed canonical
+re-bake matches all twelve PCM pins.
 
 The embedded FLACs are **16-bit mono 44.1 kHz** (the format
 `sampler::parse_wav` requires). Total embedded size ≈ 1.0 MiB. Independent

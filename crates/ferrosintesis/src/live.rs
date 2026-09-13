@@ -658,6 +658,27 @@ mod tests {
         }
     }
 
+    #[test]
+    fn realtime_corrected_melodic_and_drum_voices_render_from_fresh_state() {
+        let mut synth = RealtimeSynth::new(opts());
+        synth.reserve_realtime_storage();
+
+        // GM57 is a corrected melodic family; key 42 uses the corrected modeled
+        // drum table when samples are disabled. Both wrappers are fresh when this
+        // first deadline-bearing block renders them.
+        for byte in [0xC0, 57, 0x90, 60, 100, 0x99, 42, 100] {
+            synth.write_byte(byte);
+        }
+        let mut out = [0.0; LIVE_BLOCK * 2];
+        synth.render_add(LIVE_BLOCK, &mut out).unwrap();
+
+        assert_eq!(synth.active_voice_count(), 2);
+        assert!(
+            out.iter().all(|sample| sample.is_finite()),
+            "fresh corrected voices produced non-finite realtime audio"
+        );
+    }
+
     /// Spawn `n` distinct (channel, key) melodic voices with no note-offs, then
     /// render one block so the pending note-ons are applied. Distinct pairs (and
     /// skipping the drum channel 9) keep every note a fresh voice rather than a

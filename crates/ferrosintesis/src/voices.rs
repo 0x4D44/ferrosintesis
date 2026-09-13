@@ -13873,7 +13873,7 @@ pub fn acoustic_grand_with_bank(
             inner: model,
             exp: 2.0,
             g: layer_gain,
-            scratch: Vec::new(),
+            scratch: [0.0; crate::engine::BLOCK],
         })
     } else {
         model
@@ -14158,7 +14158,24 @@ pub(crate) struct ScaledVoice {
     /// velocity — a stale gain would apply the old note's correction to the new one.
     pub(crate) exp: f32,
     pub(crate) g: f32,
-    pub(crate) scratch: Vec<f32>,
+    pub(crate) scratch: [f32; crate::engine::BLOCK],
+}
+
+#[cfg(test)]
+#[test]
+fn scaled_voice_realtime_scratch_is_inline_and_block_sized() {
+    let mut voice = ScaledVoice {
+        inner: Box::new(SfxNoise::new(120, 100, 44_100.0, 1)),
+        exp: 1.5,
+        g: 1.0,
+        scratch: [0.0; crate::engine::BLOCK],
+    };
+    let mut block = [0.0; crate::engine::BLOCK];
+    assert!(voice.render(&mut block));
+    assert_eq!(
+        std::mem::size_of_val(&voice.scratch),
+        crate::engine::BLOCK * std::mem::size_of::<f32>()
+    );
 }
 
 /// Velocity below which the compensation FREEZES.
@@ -14183,15 +14200,24 @@ impl ScaledVoice {
 impl Voice for ScaledVoice {
     fn render(&mut self, out: &mut [f32]) -> bool {
         // Voices ADD into their output slice, so the inner voice needs a cleared
-        // buffer of its own; reused across blocks to keep the render loop
-        // allocation-free.
-        self.scratch.clear();
-        self.scratch.resize(out.len(), 0.0);
-        let alive = self.inner.render(&mut self.scratch);
-        for (o, t) in out.iter_mut().zip(self.scratch.iter()) {
-            *o += t * self.g;
+        // buffer of its own. Keep it inline and process larger offline slices in
+        // the same fixed-size chunks used by the realtime engine: a fresh corrected
+        // voice must not allocate when the first deadline-bearing block arrives.
+        if out.is_empty() {
+            return self.inner.render(out);
         }
-        alive
+        for chunk in out.chunks_mut(crate::engine::BLOCK) {
+            let scratch = &mut self.scratch[..chunk.len()];
+            scratch.fill(0.0);
+            let alive = self.inner.render(scratch);
+            for (o, t) in chunk.iter_mut().zip(scratch.iter()) {
+                *o += t * self.g;
+            }
+            if !alive {
+                return false;
+            }
+        }
+        true
     }
     fn note_off(&mut self) {
         self.inner.note_off()
@@ -14271,7 +14297,7 @@ fn apply_vel_correction(
         inner: voice,
         exp,
         g: ScaledVoice::gain(vel, exp),
-        scratch: Vec::new(),
+        scratch: [0.0; crate::engine::BLOCK],
     })
 }
 
@@ -14369,7 +14395,7 @@ fn make_gm76_model(key: u8, vel: u8, sr: f32, seed: u32) -> Box<dyn Voice> {
         inner: Box::new(Wind::from_preset(wind(76), key, vel, sr, seed)),
         exp: 1.512,
         g: ScaledVoice::gain(vel, 1.512),
-        scratch: Vec::new(),
+        scratch: [0.0; crate::engine::BLOCK],
     })
 }
 

@@ -1537,7 +1537,7 @@ pub fn make(
         inner: voice,
         exp,
         g: crate::voices::ScaledVoice::gain(vel, exp),
-        scratch: Vec::new(),
+        scratch: [0.0; crate::engine::BLOCK],
     }))
 }
 

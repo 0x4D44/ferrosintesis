@@ -18,7 +18,7 @@ use crate::reverb::{CathedralReverb, Reverb};
 use crate::{drums, voices};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
-const BLOCK: usize = 64;
+pub(crate) const BLOCK: usize = 64;
 
 // CC1 mod wheel. Melodic sustained voices (plucks, bowed, winds) get an
 // engine-level vibrato LFO per channel, multiplied on top of the channel's

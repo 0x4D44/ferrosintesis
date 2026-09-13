@@ -1,5 +1,36 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.09.13 — **Verification pass: regression coverage gaps noted on closed bugs.** All
+  from the independent two-eyes pass on trunk 8b6a6f86 (not defects in shipped behaviour):
+  KILN-00192 and KILN-00268 docs are correct but unguarded (pre-fix text passes every oracle;
+  copy the source-derived doc guards the grand/honkytonk/musescore-grand crates use);
+  KILN-00247's doc test matches literal "45 physical FLAC" phrases instead of deriving
+  45/9/54 from `SAMPLES`/`ALIASES`; KILN-00276's live fresh-state test stays green with the
+  fix reverted (only the type-size pin guards it); KILN-00252's cross-bank publish ordering in
+  `D:\language\ferrosintesis\tools\ferrosintesis-samples\to_flac.py:main` is untested;
+  KILN-00254/00259 have no success-path FLAC-only inventory test; KILN-00202's
+  concurrent-initializer thread runs in the parent process, not beside the child probe it
+  claims to race.
+
+- [ ] 2026.09.13 — **`prepare.py` ignores unknown flags, so `prepare.py --help` starts a real
+  networked bake.** Two verifiers hit this independently; each run downloaded source WAVs into
+  the shared `%TEMP%\vsco2ce_src` cache before a timeout killed it.
+  `D:\language\ferrosintesis\tools\ferrosintesis-samples\prepare.py:main`. Worth an argparse
+  front end that rejects unknown options and supports `--help`.
+
+- [ ] 2026.09.13 — **Pluck excitation reservation assumes a 0.25x minimum pitch.** Since
+  KILN-00277 each Pluck reserves ~21.6k f32 (~86 KB) and caps the burst at that capacity, but
+  bend range can reach 24.99 semitones plus -100 cents fine tune, so at the lowest keys under an
+  extreme down-bend the burst may be silently shortened by up to ~11% (by reading, not
+  measured). `D:\language\ferrosintesis\crates\ferrosintesis\src\voices.rs` Pluck
+  construction. Worth a measurement before deciding.
+
+- [ ] 2026.09.13 — **`-fflags +bitexact` is an input option in the FLAC encode command.** It sits
+  before `-i`, so it does not strip the encoder vendor string from outputs; the Lavf pin checks
+  pass only because of that. Harmless but misleading.
+  `D:\language\ferrosintesis\tools\ferrosintesis-samples\prepare.py` (the pinned ffmpeg FLAC
+  encode). Move it after `-i` or delete it, and re-check the pin assertions.
+
 - [ ] 2026.08.15 — **Packaged docs still point outside the package in prose, not just
   in links.** MM-BUG-KILN-00193 added
   `inventory.rs:packaged_documents_never_link_outside_their_own_package`, which only

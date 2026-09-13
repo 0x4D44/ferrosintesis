@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00233 — Malformed FLAC predictors can overflow decoder arithmetic
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis-flac / malformed predictor handling
 - **Raised:** 2026-08-16T20:59:25Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T054417Z-112a7e87
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00233-run-fix-20260913T054417Z-112a7e87
-- **Owner base:** 4573ba9c3073131dce36427e5b2fec67f72764cb
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T05:44:17Z
-- **Owner until:** 2026-09-13T07:44:17Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T20:59:25Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T20:59:25Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:04:35Z, deltic:auto role=fix run=fix-20260913T054417Z-112a7e87 branch=task/bug-MM-BUG-KILN-00233-run-fix-20260913T054417Z-112a7e87 code=52d6bcb685d795d3fd8e3e3c31102ebbcf47458b gate=manual)
 
 ## Observation
 

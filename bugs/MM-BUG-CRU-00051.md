@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00051 — Kawai package documents WAV output and a pure-stdlib rebake although it ships FLAC and requires ffmpeg
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** Kawai sample crate / packaged regeneration documentation
 - **Raised:** 2026-08-20T15:01:05Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T151224Z-aacaf3e2
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00051-run-fix-20260913T151224Z-aacaf3e2
-- **Owner base:** 6f070c40eed0211e1ab82411cd70acce6948308a
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:12:24Z
-- **Owner until:** 2026-09-13T17:12:24Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T15:01:05Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-20T15:01:05Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:17:15Z, deltic:auto role=fix run=fix-20260913T151224Z-aacaf3e2 branch=task/bug-MM-BUG-CRU-00051-run-fix-20260913T151224Z-aacaf3e2 code=782d661527539a1d1958fb6d2d47b9984461757c gate=manual)
 
 ## Observation
 

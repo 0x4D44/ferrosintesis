@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00297 — CLI argument handling breaks conventions: --help to stderr with exit 2, no --version, unknown flags taken as the input path
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:49:50Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T224834Z-f41a6f70
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00297-run-fix-20260913T224834Z-f41a6f70
-- **Owner base:** 4eb2b9bfa76e752e25168a0d9815d92a5150c1cf
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:48:34Z
-- **Owner until:** 2026-09-14T00:48:34Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:49:50Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-17T22:49:50Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:57:12Z, deltic:auto role=fix run=fix-20260913T224834Z-f41a6f70 branch=task/bug-MM-BUG-KILN-00297-run-fix-20260913T224834Z-f41a6f70 code=03e7af68c7d75415e6d542a22e1e375950309ee4 gate=manual)
 
 ## Observation
 

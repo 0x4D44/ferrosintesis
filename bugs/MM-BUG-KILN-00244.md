@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00244 — Grand regeneration command leaves the embedded FLAC bank stale
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** grand sample crate / deterministic regeneration
 - **Raised:** 2026-08-16T22:56:39Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T070407Z-86a459d0
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00244-run-fix-20260913T070407Z-86a459d0
-- **Owner base:** fbda54cae628b5939ae29f3245e99dc6c809fa96
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T07:04:07Z
-- **Owner until:** 2026-09-13T09:04:07Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T22:56:39Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T22:56:39Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:10:46Z, deltic:auto role=fix run=fix-20260913T070407Z-86a459d0 branch=task/bug-MM-BUG-KILN-00244-run-fix-20260913T070407Z-86a459d0 code=ccc86aad gate=manual)
 
 ## Observation
 

@@ -26,6 +26,51 @@ import prepare
 import regen_samples_table
 
 
+def _ffmpeg_path_prerequisite_is_positive(text):
+    normalized = re.sub(r"\s+", " ", text.lower())
+    positive = re.compile(
+        r"\b(?:require(?:s|d)?|need(?:s|ed)?|must|depend(?:s|ent)?)\b"
+    )
+    negative = re.compile(
+        r"\b(?:no|not|without|never|doesn['’]t|don['’]t|isn['’]t|aren['’]t)\b"
+    )
+    for ffmpeg in re.finditer(r"\bffmpeg\b", normalized):
+        after = normalized[ffmpeg.end():ffmpeg.end() + 101]
+        path = re.search(r"\bpath\b", after)
+        if path is None:
+            continue
+        path_end = ffmpeg.end() + path.end()
+        candidate_start = max(0, ffmpeg.start() - 100)
+        for requirement in positive.finditer(
+            normalized[candidate_start:path_end]
+        ):
+            requirement_start = candidate_start + requirement.start()
+            clause = normalized[max(0, requirement_start - 10):path_end]
+            if not negative.search(clause):
+                return True
+    return False
+
+
+class FfmpegPrerequisiteDocumentationTest(unittest.TestCase):
+    def test_negated_ffmpeg_path_claims_do_not_satisfy_prerequisite(self):
+        for claim in (
+            "The recipe does not need ffmpeg on PATH.",
+            "The recipe needs no ffmpeg on PATH.",
+            "The recipe runs without ffmpeg on PATH.",
+        ):
+            with self.subTest(claim=claim):
+                self.assertFalse(_ffmpeg_path_prerequisite_is_positive(claim))
+
+    def test_positive_ffmpeg_path_claims_satisfy_prerequisite(self):
+        for claim in (
+            "The recipe requires ffmpeg on PATH.",
+            "ffmpeg is required on PATH.",
+            "The recipe must have ffmpeg on PATH.",
+        ):
+            with self.subTest(claim=claim):
+                self.assertTrue(_ffmpeg_path_prerequisite_is_positive(claim))
+
+
 def old_trim(x, sr, keep_s, fade_s):
     """The pre-2026.07.16 trim, kept as a reference implementation.
 
@@ -4942,9 +4987,7 @@ class GrandRegenerationRecipeTest(unittest.TestCase):
             with self.subTest(name=name):
                 with open(os.path.join(crate, name), encoding="utf-8") as f:
                     paragraph = self.first_paragraph_after_scoped_command(f.read())
-                lower = paragraph.lower()
-                self.assertIn("ffmpeg", lower)
-                self.assertRegex(lower, r"ffmpeg.{0,80}path")
+                self.assertTrue(_ffmpeg_path_prerequisite_is_positive(paragraph))
 
     def test_wrong_fenced_command_is_not_redeemed_by_correct_prose(self):
         adversarial = f"""
@@ -6309,7 +6352,7 @@ class KawaiPackagedDocumentContractTest(unittest.TestCase):
             with self.subTest(document=name):
                 self.assertIn(container, text)
                 self.assertIn("--only=kawai", text)
-                self.assertRegex(text.lower(), r"ffmpeg.{0,100}path")
+                self.assertTrue(_ffmpeg_path_prerequisite_is_positive(text))
 
         provenance = documents["PROVENANCE.md"]
         self.assertIn("16-bit mono 44.1 kHz PCM stored losslessly in FLAC", provenance)
@@ -6350,7 +6393,7 @@ class YdpPackagedDocumentContractTest(unittest.TestCase):
             with self.subTest(document=name):
                 self.assertIn(container, text)
                 self.assertIn("--only=ydpgrand", text)
-                self.assertRegex(text.lower(), r"ffmpeg.{0,100}path")
+                self.assertTrue(_ffmpeg_path_prerequisite_is_positive(text))
 
         provenance = documents["PROVENANCE.md"]
         self.assertIn("raw 16-bit PCM", provenance)

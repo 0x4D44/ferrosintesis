@@ -10,6 +10,10 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **ffmpeg/PATH proximity is not a prerequisite; reject local negation** (`test_prepare.py`).
+  - A document can say “does not need ffmpeg on PATH” and satisfy a proximity regex;
+    inspect requirement words and nearby negation, while keeping unrelated “no 7z” text out of scope.
+
 - 2026.09.13 — **Classify container claims by their subject, not nearby source words** (`payload.rs:documented_container_mismatches`).
   - Wrapped source prose and claims such as “WAVs in `samples/` are extracted” need explicit subject markers;
     otherwise source context can hide a stale package claim.

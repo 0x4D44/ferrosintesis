@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / realtime sampled voices
 - **Raised:** 2026-08-16T12:38:59Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T191506Z-40ec050b
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00216-run-verify-20260913T191506Z-40ec050b
+- **Owner base:** e39ccdff01bfb5f8a6e36c9a20d85d946e96a834
+- **Owner fingerprint:** sha256:dfd60c412d9a0aec36f314afc536b2d5374bb7d58a4b4848dca0d5df76ec8129
+- **Owner since:** 2026-09-13T19:15:06Z
+- **Owner until:** 2026-09-13T21:15:06Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

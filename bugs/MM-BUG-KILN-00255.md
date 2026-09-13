@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00255 — MuseScore-grand regeneration can publish a partial mixed bank after a late failure
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** MuseScore grand sample generation / failure atomicity
 - **Raised:** 2026-08-17T02:30:15Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T081457Z-35db8830
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00255-run-fix-20260913T081457Z-35db8830
-- **Owner base:** 83820057ba83fd0e72da35f2069beb2c4be78454
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T08:14:57Z
-- **Owner until:** 2026-09-13T10:14:57Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T02:30:15Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-17T02:30:15Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T08:24:14Z, deltic:auto role=fix run=fix-20260913T081457Z-35db8830 branch=task/bug-MM-BUG-KILN-00255-run-fix-20260913T081457Z-35db8830 code=6cd7e62e3db5b6dc83396510dcb665371068b58f gate=manual)
 
 ## Observation
 

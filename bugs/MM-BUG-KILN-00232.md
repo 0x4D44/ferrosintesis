@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00232 — FLAC total sample count can abort the decoder with an enormous allocation
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis-flac / resource bounds
 - **Raised:** 2026-08-16T20:59:04Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T054211Z-eb7058c3
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00232-run-fix-20260913T054211Z-eb7058c3
-- **Owner base:** b30f9fc89a0488fcd825b7ad71312de48789700a
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T05:42:11Z
-- **Owner until:** 2026-09-13T07:42:11Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T20:59:04Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T20:59:04Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T05:56:31Z, deltic:auto role=fix run=fix-20260913T054211Z-eb7058c3 branch=task/bug-MM-BUG-KILN-00232-run-fix-20260913T054211Z-eb7058c3 code=4d6ec363e4fd3698acf02aa21afed2bb90417ad gate=manual)
 
 ## Observation
 

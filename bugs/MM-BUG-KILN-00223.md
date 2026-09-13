@@ -6,15 +6,15 @@
 - **Area:** core piano sample runtime / memory
 - **Raised:** 2026-08-16T14:46:31Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T154452Z-d6eb07e1
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00223-run-fix-20260913T154452Z-d6eb07e1
+- **Owner base:** 9058e4cc9d87ad37d4bd74dbac62d6fe7837c09d
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T15:44:52Z
+- **Owner until:** 2026-09-13T17:44:52Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

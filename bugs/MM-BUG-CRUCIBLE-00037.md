@@ -6,15 +6,15 @@
 - **Area:** packaging / test boundary
 - **Raised:** 2026-08-17T20:48:42Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T192358Z-3c170568
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00037-run-verify-20260913T192358Z-3c170568
+- **Owner base:** c61621e1305131602b0f9db620d973709b1bd0c6
+- **Owner fingerprint:** sha256:45958f509f8a5320d467cf5babbc09bf4c0deb6d6cabaa7c0d2cf7b1583b1558
+- **Owner since:** 2026-09-13T19:23:58Z
+- **Owner until:** 2026-09-13T21:23:58Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

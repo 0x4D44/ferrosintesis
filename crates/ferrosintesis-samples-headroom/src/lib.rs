@@ -228,9 +228,9 @@ mod tests {
 
     #[test]
     fn package_docs_match_the_embedded_flac_contract() {
-        let readme = include_str!("../README.md");
-        let provenance = include_str!("../PROVENANCE.md");
-        let notice = include_str!("../NOTICE");
+        let readme = include_str!("../README.md").replace("\r\n", "\n");
+        let provenance = include_str!("../PROVENANCE.md").replace("\r\n", "\n");
+        let notice = include_str!("../NOTICE").replace("\r\n", "\n");
 
         assert!(readme.contains("45 physical FLAC\npayloads"));
         assert!(readme.contains("54 logical names through nine aliases"));

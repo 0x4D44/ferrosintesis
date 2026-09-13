@@ -4160,6 +4160,47 @@ class GrandSampleApiContractTest(unittest.TestCase):
         self.assertNotIn("inventory_matches_packaged_wavs", provenance)
 
 
+class MuseScoreGrandSampleApiContractTest(unittest.TestCase):
+    """MM-BUG-KILN-00253: MuseScore-grand docs match its FLAC package."""
+
+    def test_docs_and_lookup_oracle_match_packaged_flac_inventory(self):
+        crate = pathlib.Path(prepare.REPO_ROOT) / "crates" / "ferrosintesis-samples-musescore-grand"
+        samples = sorted(
+            path
+            for path in (crate / "samples").iterdir()
+            if path.is_file() and path.suffix in {".wav", ".flac"}
+        )
+        names = {path.name for path in samples}
+        self.assertEqual(len(samples), 25)
+        self.assertEqual({path.suffix for path in samples}, {".flac"})
+        total = sum(path.stat().st_size for path in samples)
+
+        readme = (crate / "README.md").read_text(encoding="utf-8")
+        provenance = (crate / "PROVENANCE.md").read_text(encoding="utf-8")
+        lib = (crate / "src" / "lib.rs").read_text(encoding="utf-8")
+
+        file_count = re.search(r"pub const FILE_COUNT: usize = (\d+);", lib)
+        expected_bytes = re.search(r"const EXPECTED_BYTES: usize = (\d+);", lib)
+        self.assertIsNotNone(file_count)
+        self.assertIsNotNone(expected_bytes)
+        self.assertEqual(int(file_count.group(1)), len(samples))
+        self.assertEqual(int(expected_bytes.group(1)), total)
+        self.assertIn(f"{total:,} bytes (25 files)", provenance)
+        self.assertIn("raw FLAC bytes", readme)
+        self.assertNotIn("WAVs", readme)
+        self.assertIn("FLACs under `samples/`", provenance)
+        self.assertNotIn("Output: 16-bit mono WAV.", provenance)
+
+        embedded = set(re.findall(r'^\s*"([^"]+\.flac)",\s*$', lib, re.M))
+        included = set(re.findall(r'include_bytes!\("\.\./samples/([^"]+)"\)', lib))
+        documented = set(re.findall(r"musescoregrand_[A-G](?:#)?[1-6]\.flac", readme))
+        self.assertEqual(embedded, names)
+        self.assertEqual(included, names)
+        self.assertEqual(documented, names)
+        self.assertIn("pub fn get(name: &str)", lib)
+        self.assertIn(".find(|(candidate, _)| *candidate == name)", lib)
+
+
 class HonkytonkSampleApiContractTest(unittest.TestCase):
     """MM-BUG-KILN-00250: Honky-tonk docs and lookup keys match the FLAC bank."""
 

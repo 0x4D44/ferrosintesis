@@ -4920,83 +4920,243 @@ def ensure_ydp_sf2(src):
     return sf2
 
 
+def _publish_ydp_bank(staging_dir, output_dir, logical_names):
+    """Encode and publish one complete YDP bank, rolling back on any replacement failure."""
+    logical_names = tuple(sorted(logical_names))
+    packaged_names = tuple(packaged_name(name) for name in logical_names)
+    if len(set(packaged_names)) != len(packaged_names):
+        raise ValueError("YDP logical names collapse to duplicate packaged names")
+
+    os.makedirs(output_dir, exist_ok=True)
+    mixed = sorted(
+        name for name in os.listdir(output_dir)
+        if name.endswith(".wav") and packaged_name(name) in packaged_names
+    )
+    if mixed:
+        raise ValueError(
+            "YDP output contains mixed WAV/FLAC containers: "
+            + ", ".join(mixed)
+        )
+
+    parts = {}
+    backup_dir = None
+    cleanup_backup = True
+    backups = {}
+    published = []
+    try:
+        # Finish and verify every FLAC before moving one old bank entry aside.
+        for logical, packaged in zip(logical_names, packaged_names):
+            wav = os.path.join(staging_dir, logical)
+            validate_pcm16_wav(wav)
+            descriptor, part = tempfile.mkstemp(
+                prefix=f".{packaged}.", suffix=".part", dir=output_dir
+            )
+            os.close(descriptor)
+            parts[packaged] = part
+            try:
+                _encode_flac(wav, part)
+                if _decode_flac_pcm(part) != _read_wav_pcm(wav):
+                    raise ValueError(f"{packaged}: FLAC encode was not bit-exact")
+            except Exception:
+                if os.path.exists(part):
+                    os.remove(part)
+                parts[packaged] = None
+                raise
+
+        backup_dir = tempfile.mkdtemp(prefix=".ydp-backup-", dir=output_dir)
+        try:
+            for packaged in packaged_names:
+                destination = os.path.join(output_dir, packaged)
+                if os.path.exists(destination):
+                    backup = os.path.join(backup_dir, packaged)
+                    atomic_replace(destination, backup)
+                    backups[packaged] = backup
+            for packaged in packaged_names:
+                destination = os.path.join(output_dir, packaged)
+                atomic_replace(parts[packaged], destination)
+                parts[packaged] = None
+                published.append(destination)
+        except Exception as error:
+            rollback_errors = []
+            for destination in reversed(published):
+                try:
+                    if os.path.exists(destination):
+                        os.remove(destination)
+                except OSError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            for packaged, backup in reversed(tuple(backups.items())):
+                if not os.path.exists(backup):
+                    continue
+                try:
+                    atomic_replace(backup, os.path.join(output_dir, packaged))
+                except OSError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            if rollback_errors:
+                cleanup_backup = False
+                raise RuntimeError(
+                    "YDP bank publication failed and rollback was incomplete: "
+                    + "; ".join(rollback_errors)
+                ) from error
+            raise
+    finally:
+        for part in parts.values():
+            if part is not None and os.path.exists(part):
+                os.remove(part)
+        if backup_dir is not None and cleanup_backup:
+            shutil.rmtree(backup_dir, ignore_errors=True)
+
+
 def _bake_ydp_grand(src):
     """Bake the YDP Grand's middle velocity layer as a single-velocity multisample
     (GM 1 CC0=1). SF2 raw-PCM: resolves the "piano layer 3" instrument by name,
     extracts the C/F-sharp roots every six semitones (`YDP_ZONE_MIDI`) from the `smpl`
     chunk (shdr start/end are FRAME offsets — no ffmpeg), keeps 1.5 s of body, and
-    re-measures each root. Writes `ydpgrand_<pitch>.wav`; returns print rows."""
+    re-measures each root, then publishes a complete FLAC bank; returns print rows."""
+    expected = {
+        f"ydpgrand_{_midi_name(midi)}.wav" for midi in YDP_ZONE_MIDI
+    }
     out_dir = os.path.join(REPO_ROOT, "crates",
                            "ferrosintesis-samples-ydp-grand", "samples")
     _validate_generated_output_families(
-        {"ydpgrand"},
-        {f"ydpgrand_{_midi_name(midi)}.wav" for midi in YDP_ZONE_MIDI},
-        output_dir=out_dir)
-    sf2 = open(ensure_ydp_sf2(src), "rb").read()
-    assert sf2[0:4] == b"RIFF" and sf2[8:12] == b"sfbk", "not an SF2 file"
+        {"ydpgrand"}, expected, output_dir=out_dir)
+    if os.path.isdir(out_dir):
+        mixed = sorted(
+            name for name in os.listdir(out_dir)
+            if name.endswith(".wav") and packaged_name(name) in {
+                packaged_name(logical) for logical in expected
+            }
+        )
+        if mixed:
+            raise ValueError(
+                "YDP output contains mixed WAV/FLAC containers: "
+                + ", ".join(mixed)
+            )
+    with open(ensure_ydp_sf2(src), "rb") as source:
+        sf2 = source.read()
+    if len(sf2) < 12 or sf2[0:4] != b"RIFF" or sf2[8:12] != b"sfbk":
+        raise ValueError("not an SF2 file")
 
     def u16(b, o):
+        if o + 2 > len(b):
+            raise ValueError("truncated YDP SF2 record")
         return struct.unpack("<H", b[o:o + 2])[0]
 
+    riff_end = 8 + struct.unpack("<I", sf2[4:8])[0]
+    if riff_end > len(sf2):
+        raise ValueError("truncated YDP RIFF container")
     lists = {}
     pos = 12
-    while pos + 12 <= len(sf2):
+    while pos + 8 <= riff_end:
         cid = sf2[pos:pos + 4]
         sz = struct.unpack("<I", sf2[pos + 4:pos + 8])[0]
+        end = pos + 8 + sz
+        if end > riff_end:
+            raise ValueError("YDP SF2 chunk exceeds its RIFF container")
         if cid == b"LIST":
+            if sz < 4:
+                raise ValueError("YDP SF2 LIST chunk has no type")
             lists[sf2[pos + 8:pos + 12]] = (pos + 12, sz - 4)
-        pos += 8 + sz + (sz & 1)
+        pos = end + (sz & 1)
 
     def walk(off, size):
         end = off + size
+        if end > len(sf2):
+            raise ValueError("YDP SF2 sub-list exceeds its container")
         subs = {}
         p = off
         while p + 8 <= end:
             cid = sf2[p:p + 4]
             sz = struct.unpack("<I", sf2[p + 4:p + 8])[0]
+            if p + 8 + sz > end:
+                raise ValueError("YDP SF2 sub-chunk exceeds its LIST")
             subs[cid] = (p + 8, sz)
             p += 8 + sz + (sz & 1)
+        if p != end:
+            raise ValueError("YDP SF2 LIST has a truncated sub-chunk")
         return subs
 
-    smpl_off = walk(*lists[b"sdta"])[b"smpl"][0]
-    pdta = walk(*lists[b"pdta"])
+    try:
+        sdta = walk(*lists[b"sdta"])
+        smpl_off, smpl_size = sdta[b"smpl"]
+        pdta = walk(*lists[b"pdta"])
+    except KeyError as error:
+        raise ValueError(f"YDP SF2 is missing required chunk {error.args[0]!r}") from error
+    if smpl_size % 2:
+        raise ValueError("YDP SF2 smpl data has an odd byte length")
+    smpl_frames = smpl_size // 2
 
     def recs(name, width):
-        o, s = pdta[name]
+        try:
+            o, s = pdta[name]
+        except KeyError as error:
+            raise ValueError(f"YDP SF2 is missing pdta chunk {name!r}") from error
+        if s % width:
+            raise ValueError(f"YDP SF2 pdta chunk {name!r} has partial records")
         return [sf2[o + i * width:o + (i + 1) * width] for i in range(s // width)]
 
     inst, ibag, igen = recs(b"inst", 22), recs(b"ibag", 4), recs(b"igen", 4)
     shdr = recs(b"shdr", 46)
 
     # one sample zone per distinct root within "piano layer 3".
-    ii = next(i for i, r in enumerate(inst)
-              if r[:20].split(b"\x00")[0] == b"piano layer 3")
+    matches = [
+        i for i, r in enumerate(inst)
+        if r[:20].split(b"\x00")[0] == b"piano layer 3"
+    ]
+    if len(matches) != 1 or matches[0] + 1 >= len(inst):
+        raise ValueError("YDP SF2 must contain one complete 'piano layer 3' instrument")
+    ii = matches[0]
+    first_bag, end_bag = u16(inst[ii], 20), u16(inst[ii + 1], 20)
+    if not (0 <= first_bag < end_bag <= len(ibag) - 1):
+        raise ValueError("YDP piano layer 3 has an invalid bag range")
     by_root = {}
-    for b in range(u16(inst[ii], 20), u16(inst[ii + 1], 20)):
-        sid = None
-        for g in range(u16(ibag[b], 0), u16(ibag[b + 1], 0)):
+    for b in range(first_bag, end_bag):
+        if b + 1 >= len(ibag):
+            raise ValueError("YDP SF2 instrument references a missing bag")
+        first_gen, end_gen = u16(ibag[b], 0), u16(ibag[b + 1], 0)
+        if not (first_gen <= end_gen <= len(igen)):
+            raise ValueError("YDP SF2 instrument references an invalid generator range")
+        sample_ids = []
+        for g in range(first_gen, end_gen):
             if u16(igen[g], 0) == 53:
-                sid = u16(igen[g], 2)
-        if sid is None:
+                sample_ids.append(u16(igen[g], 2))
+        if not sample_ids:
             continue
+        if len(sample_ids) != 1 or sample_ids[0] >= len(shdr):
+            raise ValueError("YDP SF2 instrument has an invalid sample ID")
+        sid = sample_ids[0]
         h = shdr[sid]
         start, end = struct.unpack("<II", h[20:28])  # FRAME offsets (SF2 raw PCM)
+        if not (0 <= start < end <= smpl_frames):
+            raise ValueError(
+                f"YDP SF2 sample {sid} has an invalid frame range {start}:{end}"
+            )
         root = h[40]
-        by_root.setdefault(root, (start, end))
+        if root in by_root:
+            raise ValueError(f"YDP SF2 contains duplicate sample root {root}")
+        by_root[root] = (start, end)
 
-    os.makedirs(out_dir, exist_ok=True)
+    missing = sorted(set(YDP_ZONE_MIDI) - set(by_root))
+    if missing:
+        raise ValueError(f"YDP SF2 is missing required sample roots: {missing}")
+
     rows = []
-    for midi in YDP_ZONE_MIDI:
-        start, end = by_root[midi]
-        pcm = sf2[smpl_off + start * 2:smpl_off + end * 2]
-        x = [v / 32768.0 for v in struct.unpack(f"<{len(pcm) // 2}h", pcm)]
-        seg = trim_to_onset(x, OUT_SR, 1.5, 0.6)
-        nominal = _midi_hz(midi)
-        f0, conf = measure_f0(seg, OUT_SR, nominal * 0.8, nominal * 1.4)
-        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
-        out_name = f"ydpgrand_{_midi_name(midi)}.wav"
-        write_wav_mono(os.path.join(out_dir, out_name), seg, OUT_SR)
-        rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / OUT_SR))
+    with tempfile.TemporaryDirectory(prefix=".ydp-bank-", dir=src) as staging:
+        for midi in YDP_ZONE_MIDI:
+            start, end = by_root[midi]
+            pcm = sf2[smpl_off + start * 2:smpl_off + end * 2]
+            if not pcm or len(pcm) % 2:
+                raise ValueError(f"YDP sample root {midi} has invalid PCM bytes")
+            x = [v / 32768.0 for v in struct.unpack(f"<{len(pcm) // 2}h", pcm)]
+            seg = trim_to_onset(x, OUT_SR, 1.5, 0.6)
+            nominal = _midi_hz(midi)
+            f0, conf = measure_f0(seg, OUT_SR, nominal * 0.8, nominal * 1.4)
+            cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+            out_name = f"ydpgrand_{_midi_name(midi)}.wav"
+            write_wav_mono(os.path.join(staging, out_name), seg, OUT_SR)
+            rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / OUT_SR))
+        _validate_generated_output_inventory(
+            "ydpgrand", expected, output_dir=staging)
+        _publish_ydp_bank(staging, out_dir, expected)
     return rows
 
 

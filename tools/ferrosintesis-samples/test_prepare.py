@@ -1712,6 +1712,171 @@ class YdpZoneProvenanceTest(unittest.TestCase):
             )
 
 
+class YdpWholeBankPublicationTest(unittest.TestCase):
+    """MM-BUG-KILN-00205: YDP replacement is all-or-nothing."""
+
+    @staticmethod
+    def _chunk(tag, payload):
+        padding = b"\0" if len(payload) & 1 else b""
+        return tag + struct.pack("<I", len(payload)) + payload + padding
+
+    @classmethod
+    def _synthetic_sf2(cls, roots):
+        frames = 8
+        pcm = b"".join(
+            struct.pack("<h", 100 * (index + 1) + frame)
+            for index, _root in enumerate(roots)
+            for frame in range(frames)
+        )
+
+        def fixed(text, width):
+            return text.encode("ascii")[:width].ljust(width, b"\0")
+
+        inst = (
+            fixed("piano layer 3", 20) + struct.pack("<H", 0)
+            + fixed("EOI", 20) + struct.pack("<H", len(roots))
+        )
+        ibag = b"".join(
+            struct.pack("<HH", first_gen, 0)
+            for first_gen in range(len(roots) + 1)
+        )
+        igen = b"".join(
+            struct.pack("<HH", 53, sample_id)
+            for sample_id in range(len(roots))
+        )
+        shdr = bytearray()
+        for index, root in enumerate(roots):
+            header = bytearray(46)
+            header[:20] = fixed(f"zone{index}", 20)
+            start = index * frames
+            end = start + frames
+            struct.pack_into("<II", header, 20, start, end)
+            struct.pack_into("<II", header, 28, start, end)
+            struct.pack_into("<I", header, 36, prepare.OUT_SR)
+            header[40] = root
+            shdr.extend(header)
+
+        sdta = cls._chunk(
+            b"LIST", b"sdta" + cls._chunk(b"smpl", pcm)
+        )
+        pdta_payload = (
+            b"pdta"
+            + cls._chunk(b"inst", inst)
+            + cls._chunk(b"ibag", ibag)
+            + cls._chunk(b"igen", igen)
+            + cls._chunk(b"shdr", bytes(shdr))
+        )
+        pdta = cls._chunk(b"LIST", pdta_payload)
+        body = b"sfbk" + sdta + pdta
+        return b"RIFF" + struct.pack("<I", len(body)) + body
+
+    def setUp(self):
+        self.repo_root = tempfile.mkdtemp()
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.repo_root, True)
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.addCleanup(prepare._PENDING_BANK_DIRS.clear)
+        self.roots = tuple(prepare.YDP_ZONE_MIDI)
+        self.sample_dir = os.path.join(
+            self.repo_root,
+            "crates",
+            "ferrosintesis-samples-ydp-grand",
+            "samples",
+        )
+        os.makedirs(self.sample_dir)
+        self.old_bank = {}
+        for midi in self.roots:
+            name = f"ydpgrand_{prepare._midi_name(midi)}.flac"
+            payload = f"old-{name}".encode("ascii")
+            self.old_bank[name] = payload
+            with open(os.path.join(self.sample_dir, name), "wb") as output:
+                output.write(payload)
+        self.sf2 = os.path.join(self.src, "YDP-GrandPiano.sf2")
+
+    def snapshot_bank(self):
+        snapshot = {}
+        for name in sorted(os.listdir(self.sample_dir)):
+            with open(os.path.join(self.sample_dir, name), "rb") as source:
+                snapshot[name] = source.read()
+        return snapshot
+
+    def run_bake(self, roots):
+        with open(self.sf2, "wb") as source:
+            source.write(self._synthetic_sf2(roots))
+        with (
+            mock.patch.object(prepare, "REPO_ROOT", self.repo_root),
+            mock.patch.object(prepare, "ensure_ydp_sf2", return_value=self.sf2),
+            mock.patch.object(prepare, "trim_to_onset", side_effect=lambda x, *_: x),
+            mock.patch.object(prepare, "measure_f0", return_value=(440.0, 1.0)),
+        ):
+            return prepare._bake_ydp_grand(self.src)
+
+    def test_missing_late_root_preserves_the_previous_bank(self):
+        before = self.snapshot_bank()
+        with self.assertRaisesRegex(ValueError, "missing required sample roots"):
+            self.run_bake(self.roots[:-1])
+        self.assertEqual(self.snapshot_bank(), before)
+
+    def test_staged_write_failure_preserves_the_previous_bank(self):
+        before = self.snapshot_bank()
+        real_write = prepare.write_wav_mono
+        calls = 0
+
+        def fail_after_several_staged_outputs(path, *args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 5:
+                raise OSError("late staged write")
+            return real_write(path, *args, **kwargs)
+
+        with mock.patch.object(
+            prepare, "write_wav_mono", side_effect=fail_after_several_staged_outputs
+        ):
+            with self.assertRaisesRegex(OSError, "late staged write"):
+                self.run_bake(self.roots)
+        self.assertEqual(self.snapshot_bank(), before)
+
+    def test_publication_failure_rolls_back_replacements(self):
+        before = self.snapshot_bank()
+        replace_calls = 0
+        real_replace = prepare.atomic_replace
+
+        def fake_encode(_wav, flac):
+            with open(flac, "wb") as output:
+                output.write(b"new-flac")
+
+        def fail_during_publication(source, destination):
+            nonlocal replace_calls
+            replace_calls += 1
+            if replace_calls == len(self.roots) + 3:
+                raise OSError("injected publication failure")
+            return real_replace(source, destination)
+
+        with (
+            mock.patch.object(
+                prepare,
+                "_encode_flac",
+                side_effect=fake_encode,
+            ),
+            mock.patch.object(prepare, "_decode_flac_pcm", return_value=b"pcm"),
+            mock.patch.object(prepare, "_read_wav_pcm", return_value=b"pcm"),
+            mock.patch.object(
+                prepare, "atomic_replace", side_effect=fail_during_publication
+            ),
+        ):
+            with self.assertRaisesRegex(OSError, "injected publication failure"):
+                self.run_bake(self.roots)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assertEqual(
+            [name for name in os.listdir(self.sample_dir) if name.endswith(".wav")],
+            [],
+        )
+        self.assertEqual(
+            [name for name in os.listdir(self.sample_dir) if name.endswith(".part")],
+            [],
+        )
+
+
 class YdpArchiveCacheTest(unittest.TestCase):
     """MM-BUG-KILN-00141: YDP warm caches remain bound to the archive pin."""
 

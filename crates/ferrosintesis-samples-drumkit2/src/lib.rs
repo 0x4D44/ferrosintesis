@@ -515,26 +515,77 @@ mod tests {
         );
     }
 
-    /// Duration bounds per articulation, carried over from the core crate's
-    /// `decoded_banks_are_valid_audio` when these banks moved.
+    fn validate_decoded_take(
+        name: &str,
+        pcm: &[i16],
+        min_s: f64,
+        max_s: f64,
+    ) -> Result<(), String> {
+        if pcm.is_empty() {
+            return Err(format!("{name}: empty PCM"));
+        }
+        let dur = pcm.len() as f64 / SAMPLE_RATE_HZ as f64;
+        if !(min_s..=max_s).contains(&dur) {
+            return Err(format!("{name}: {dur:.3} s outside {min_s}..{max_s}"));
+        }
+        let peak = pcm.iter().map(|&v| (v as i32).abs()).max().unwrap();
+        let peak_f = peak as f64 / 32768.0;
+        if !(0.85..=0.92).contains(&peak_f) {
+            return Err(format!("{name}: peak {peak_f:.3}"));
+        }
+        let rms = (pcm
+            .iter()
+            .map(|&v| (v as f64 / 32768.0).powi(2))
+            .sum::<f64>()
+            / pcm.len() as f64)
+            .sqrt();
+        if rms <= 0.01 {
+            return Err(format!("{name}: rms {rms:.4} is silence"));
+        }
+        Ok(())
+    }
+
+    /// Every routed bank must contain duration-bounded, peak-normalized audio.
+    /// The duration table is per bank because the generator applies different
+    /// tail caps to the long crash and the splash/china articulations.
     #[test]
     fn decoded_banks_are_valid_audio() {
-        for (bank, min_s, max_s) in [(&CRASH, 2.0, 2.85), (&CHINA, 1.5, 2.25)] {
+        for (bank, min_s, max_s) in [
+            (&CRASH, 2.0, 2.85),
+            (&SPLASH, 1.5, 2.25),
+            (&CHINA, 1.5, 2.25),
+        ] {
             for layer in 0..bank.layers() {
                 for rr in 0..bank.round_robins {
+                    let name = bank.file_name(layer, rr);
                     let pcm = bank.pcm(layer, rr);
-                    let dur = pcm.len() as f64 / SAMPLE_RATE_HZ as f64;
-                    assert!(
-                        dur >= min_s && dur <= max_s,
-                        "{}: vl{}/rr{} is {dur:.3} s, outside {min_s}..{max_s}",
-                        bank.name,
-                        layer + 1,
-                        rr + 1,
+                    println!(
+                        "{name}: {:.3} s @ {SAMPLE_RATE_HZ} Hz",
+                        pcm.len() as f64 / SAMPLE_RATE_HZ as f64
                     );
-                    let peak = pcm.iter().map(|&v| (v as i32).abs()).max().unwrap();
-                    assert!(peak > 16_000, "{}: peak {peak} is too quiet", bank.name);
+                    validate_decoded_take(&name, pcm, min_s, max_s).unwrap();
                 }
             }
+        }
+    }
+
+    #[test]
+    fn decoded_audio_oracle_rejects_silent_and_impulse_controls() {
+        let splash_len = SPLASH.pcm(0, 0).len();
+        let silent_splash = vec![0i16; splash_len];
+        assert!(
+            validate_decoded_take("silent_splash", &silent_splash, 1.5, 2.25).is_err(),
+            "same-length silent splash PCM must be rejected"
+        );
+
+        for bank in [&CRASH, &CHINA] {
+            let mut impulse = vec![0i16; bank.pcm(0, 0).len()];
+            impulse[0] = (0.9 * 32768.0) as i16;
+            assert!(
+                validate_decoded_take(bank.name, &impulse, 1.5, 2.85).is_err(),
+                "single-impulse {} PCM must be rejected",
+                bank.name
+            );
         }
     }
 

@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / realtime pluck articulation
 - **Raised:** 2026-08-17T09:41:50Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T181210Z-063c97f3
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00277-run-fix-20260913T181210Z-063c97f3
+- **Owner base:** 155bbd8646cd85c765e6f813025554ebadb843f5
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T18:12:10Z
+- **Owner until:** 2026-09-13T20:12:10Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

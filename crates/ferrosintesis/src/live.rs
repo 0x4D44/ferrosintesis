@@ -1383,14 +1383,48 @@ mod tests {
     #[cfg(feature = "embedded-samples")]
     #[test]
     fn realtime_accent_cymbals_are_prewarmed_before_the_audio_block() {
+        const PROBE: &str = "FERRO_REALTIME_ACCENT_CYMBAL_PROBE";
+        const CHILD_MARKER: &str = "FERRO_REALTIME_ACCENT_CYMBAL_CHILD_RAN";
+        const NAME: &str =
+            "live::tests::realtime_accent_cymbals_are_prewarmed_before_the_audio_block";
+
+        if std::env::var_os(PROBE).is_none() {
+            let output = std::process::Command::new(
+                std::env::current_exe().expect("the test binary's own path"),
+            )
+            .args([NAME, "--exact", "--nocapture", "--test-threads=1"])
+            .env(PROBE, "child")
+            .output()
+            .expect("re-exec this test in a pristine process");
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                output.status.success() && stdout.contains(CHILD_MARKER),
+                "the isolated realtime accent probe did not provide child evidence:\n{stdout}\n{}",
+                String::from_utf8_lossy(&output.stderr),
+            );
+            println!("{CHILD_MARKER}");
+            return;
+        }
+
+        assert_eq!(
+            std::env::var(PROBE).as_deref(),
+            Ok("child"),
+            "only the explicitly configured child may run cold-cache assertions",
+        );
+        assert_eq!(
+            ferrosintesis_samples_drumkit2::pcm_cache_initializations(),
+            0,
+            "the isolated child did not start with a cold companion drum cache"
+        );
+
         let mut synth = RealtimeSynth::new(RealtimeOptions {
             samples: true,
             ..opts()
         });
         synth.prewarm_samples();
-        let before = ferrosintesis_samples_drumkit2::pcm_cache_initializations();
         assert_eq!(
-            before, 1,
+            ferrosintesis_samples_drumkit2::pcm_cache_initializations(),
+            1,
             "prewarm_samples() returned while the companion drum cache was still cold"
         );
 
@@ -1409,8 +1443,9 @@ mod tests {
         );
         assert_eq!(
             ferrosintesis_samples_drumkit2::pcm_cache_initializations(),
-            before,
+            1,
             "the companion drum cache initialized inside the realtime audio block"
         );
+        println!("{CHILD_MARKER}");
     }
 }

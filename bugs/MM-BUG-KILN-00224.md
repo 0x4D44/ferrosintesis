@@ -6,15 +6,15 @@
 - **Area:** core sample crate / regeneration workflow
 - **Raised:** 2026-08-16T14:46:46Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T155527Z-2efca14b
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00224-run-fix-20260913T155527Z-2efca14b
+- **Owner base:** 49e6ad5abf7fc7b79c33357bba2a653b147c4d14
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T15:55:27Z
+- **Owner until:** 2026-09-13T17:55:27Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

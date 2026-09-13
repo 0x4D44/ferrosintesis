@@ -226,6 +226,19 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
+    #[test]
+    fn package_docs_match_the_embedded_flac_contract() {
+        let readme = include_str!("../README.md");
+        let provenance = include_str!("../PROVENANCE.md");
+        let notice = include_str!("../NOTICE");
+
+        assert!(readme.contains("45 physical FLAC\npayloads"));
+        assert!(readme.contains("54 logical names through nine aliases"));
+        assert!(provenance.contains("intermediate WAV"));
+        assert!(provenance.contains("published output is 16-bit mono FLAC"));
+        assert!(notice.contains("embedded FLAC samples"));
+    }
+
     // Aggregate byte size of the embedded samples; regenerate with
     // gen_crate_lib.py and re-pin if the bank changes.
     const EXPECTED_BYTES: usize = 2460740;

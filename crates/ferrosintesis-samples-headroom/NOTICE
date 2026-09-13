@@ -1,7 +1,7 @@
 ferrosintesis-samples-headroom
 ==============================
 
-The embedded WAV samples in this crate are derived from the "Headroom Piano" /
+The embedded FLAC samples in this crate are derived from the "Headroom Piano" /
 "Intimate Piano" (a Yamaha C3 grand) recorded by **Bengt Nilsson**, SFZ conversion
 by kinwie, distributed at https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano.
 

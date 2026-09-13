@@ -58,7 +58,8 @@ current decode recipe. Per file: ffmpeg FLAC → 16-bit PCM; `read_wav` decode
 the onset (3% of peak, 8 ms lead-in pad), keeps **1.5 s** of body with a
 lead-bounded 2 ms fade-in and a 0.6 s squared fade-out, peak-normalized to 0.9;
 `measure_f0` records the autocorrelation root pinned in the `headroom_*` zone tables in
-`crates/ferrosintesis/src/sampler.rs`. Output: 16-bit mono WAV.
+`crates/ferrosintesis/src/sampler.rs`. The bake may use an intermediate WAV, but the
+published output is 16-bit mono FLAC.
 
 ## Regenerating
 

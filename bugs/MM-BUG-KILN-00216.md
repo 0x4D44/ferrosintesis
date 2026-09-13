@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00216 — LaVoice allocates scratch storage inside realtime rendering
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / realtime sampled voices
 - **Raised:** 2026-08-16T12:38:59Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T050202Z-f0606a5c
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00216-run-fix-20260913T050202Z-f0606a5c
-- **Owner base:** b3f3b4bd7a0c91265c77665c29e8e0008d2987c3
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T05:02:02Z
-- **Owner until:** 2026-09-13T07:02:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T12:38:59Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T12:38:59Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T05:26:42Z, deltic:auto role=fix run=fix-20260913T050202Z-f0606a5c branch=task/bug-MM-BUG-KILN-00216-run-fix-20260913T050202Z-f0606a5c code=1bb5b439fc2ddbc346ba3c582876a2d13e06e51b gate=manual)
 
 ## Observation
 

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00298 — Pre-load I/O errors from the alias check drop the file path the library deliberately preserves
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:50:18Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T225802Z-54eaf8ae
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00298-run-fix-20260913T225802Z-54eaf8ae
-- **Owner base:** 4249d2b96690423853f66302b96110062c81893d
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:58:02Z
-- **Owner until:** 2026-09-14T00:58:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:50:18Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-17T22:50:18Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T23:06:18Z, deltic:auto role=fix run=fix-20260913T225802Z-54eaf8ae branch=task/bug-MM-BUG-KILN-00298-run-fix-20260913T225802Z-54eaf8ae code=f77f24488512b6f5296bde611018a8dd3f963c19 gate=manual)
 
 ## Observation
 

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00270 — Strings sample package still documents WAV keys and payloads after FLAC conversion
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** strings sample crate / public package contract
 - **Raised:** 2026-08-17T07:29:00Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T171158Z-2f3c0d9d
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00270-run-fix-20260913T171158Z-2f3c0d9d
-- **Owner base:** 75d9efcc229379297b73dbed74f37b41b181fb41
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T17:11:58Z
-- **Owner until:** 2026-09-13T19:11:58Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T07:29:00Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T07:29:00Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:20:07Z, deltic:auto role=fix run=fix-20260913T171158Z-2f3c0d9d branch=task/bug-MM-BUG-KILN-00270-run-fix-20260913T171158Z-2f3c0d9d code=2c961483aa4cc8575b42b13ae079c8e4302b562b gate=manual)
 
 ## Observation
 

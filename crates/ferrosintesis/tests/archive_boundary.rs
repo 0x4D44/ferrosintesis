@@ -8,6 +8,7 @@ use std::path::{Component, Path, PathBuf};
 enum TokenKind {
     Ident(String),
     String(String),
+    Char,
     Punct(char),
 }
 
@@ -145,6 +146,51 @@ fn raw_string(bytes: &[u8], start: usize) -> Option<(String, usize, usize)> {
     ))
 }
 
+fn char_literal(bytes: &[u8], start: usize) -> Option<(usize, usize)> {
+    let quote = if bytes.get(start) == Some(&b'\'') {
+        start
+    } else if bytes.get(start) == Some(&b'b') && bytes.get(start + 1) == Some(&b'\'') {
+        start + 1
+    } else {
+        return None;
+    };
+
+    let mut index = quote + 1;
+    let mut lines = 0;
+    if bytes.get(index) == Some(&b'\\') {
+        index += 1;
+        match bytes.get(index) {
+            Some(b'x') => {
+                index += 1;
+                index = index.saturating_add(2);
+            }
+            Some(b'u') if bytes.get(index + 1) == Some(&b'{') => {
+                index += 2;
+                while index < bytes.len() && bytes[index] != b'}' {
+                    if bytes[index] == b'\n' {
+                        lines += 1;
+                    }
+                    index += 1;
+                }
+                if bytes.get(index) == Some(&b'}') {
+                    index += 1;
+                }
+            }
+            Some(_) => index += 1,
+            None => return None,
+        }
+        return (bytes.get(index) == Some(&b'\'')).then_some((index + 1, lines));
+    }
+
+    let rest = std::str::from_utf8(bytes.get(index..)?).ok()?;
+    let character = rest.chars().next()?;
+    if character == '\n' || character == '\r' {
+        return None;
+    }
+    index += character.len_utf8();
+    (bytes.get(index) == Some(&b'\'')).then_some((index + 1, lines))
+}
+
 fn is_ident_start(byte: u8) -> bool {
     byte == b'_' || byte.is_ascii_alphabetic()
 }
@@ -199,6 +245,16 @@ fn tokenize(source: &str) -> Vec<Token> {
         if let Some((value, next, newlines)) = raw_string(bytes, index) {
             tokens.push(Token {
                 kind: TokenKind::String(value),
+                line,
+            });
+            line += newlines;
+            index = next;
+            continue;
+        }
+
+        if let Some((next, newlines)) = char_literal(bytes, index) {
+            tokens.push(Token {
+                kind: TokenKind::Char,
                 line,
             });
             line += newlines;
@@ -490,6 +546,23 @@ fn has_filesystem_operation(tokens: &[Token]) -> bool {
     .any(|name| tokens.iter().any(|token| token.ident(name)))
 }
 
+fn has_manifest_dir_marker(tokens: &[Token]) -> bool {
+    tokens.iter().any(|token| token.ident("CARGO_MANIFEST_DIR"))
+        || tokens.windows(5).any(|window| {
+            window[0].ident("env")
+                && window[1].punct('!')
+                && window[2].punct('(')
+                && window[3].string() == Some("CARGO_MANIFEST_DIR")
+                && window[4].punct(')')
+        })
+}
+
+fn has_parent_path_component(value: &str) -> bool {
+    value
+        .split(|character| character == '/' || character == '\\')
+        .any(|component| component == "..")
+}
+
 fn statement_slices(tokens: &[Token]) -> Vec<&[Token]> {
     let mut result = Vec::new();
     let mut start = 0usize;
@@ -550,23 +623,22 @@ fn direct_outside_read(
     }
 
     for statement in statement_slices(tokens) {
-        if !statement
-            .iter()
-            .any(|token| token.ident("CARGO_MANIFEST_DIR"))
-        {
+        if !has_manifest_dir_marker(statement) {
             continue;
         }
         if has_method(statement, "parent") || has_method(statement, "ancestors") {
             return Some("CARGO_MANIFEST_DIR is traversed above the crate root".to_owned());
         }
-        if statement.iter().any(|token| {
-            token.string().is_some_and(|value| {
-                value == ".." || value.starts_with("../") || value.starts_with("..\\")
-            })
-        }) && has_method(statement, "join")
+        if statement
+            .iter()
+            .any(|token| token.string().is_some_and(has_parent_path_component))
         {
-            return Some("CARGO_MANIFEST_DIR is joined to a parent path".to_owned());
+            return Some("CARGO_MANIFEST_DIR is combined with a parent path".to_owned());
         }
+    }
+
+    if tokens.iter().any(|token| token.ident("crates_dir")) && has_filesystem_operation(tokens) {
+        return Some("filesystem access uses the repository-only crates_dir helper".to_owned());
     }
 
     if tokens.iter().any(|token| token.ident("current_dir")) && has_filesystem_operation(tokens) {
@@ -810,6 +882,78 @@ fn guard_detects_compile_time_includes_and_escaping_helpers() {
     assert!(findings
         .iter()
         .any(|name| name == "reads_a_relative_sibling_directly"));
+}
+
+#[test]
+fn guard_rejects_adversarial_manifest_path_escapes() {
+    let source = r#"
+        #[test]
+        fn char_literal_before_escape() {
+            let quote = '"';
+            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap();
+            std::fs::read_to_string(root.join("CLAUDE.md")).unwrap();
+        }
+
+        #[test]
+        fn concat_manifest_escape() {
+            let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../CLAUDE.md");
+            std::fs::read_to_string(path).unwrap();
+        }
+
+        #[test]
+        fn format_manifest_escape() {
+            let path = format!("{}/../../CLAUDE.md", env!("CARGO_MANIFEST_DIR"));
+            std::fs::read_to_string(path).unwrap();
+        }
+
+        #[test]
+        fn chained_parent_escape() {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap();
+            std::fs::read_to_string(path.join("CLAUDE.md")).unwrap();
+        }
+
+        #[test]
+        fn ancestors_escape() {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .ancestors()
+                .nth(2)
+                .unwrap();
+            std::fs::read_to_string(path.join("CLAUDE.md")).unwrap();
+        }
+
+        #[test]
+        fn qualified_crates_dir_escape() {
+            std::fs::read_to_string(
+                crate::licensing::crates_dir()
+                    .join("ferrosintesis")
+                    .join("README.md"),
+            )
+            .unwrap();
+        }
+    "#;
+
+    let findings = outside_reads(source);
+    let expected = [
+        "char_literal_before_escape",
+        "concat_manifest_escape",
+        "format_manifest_escape",
+        "chained_parent_escape",
+        "ancestors_escape",
+        "qualified_crates_dir_escape",
+    ];
+    assert_eq!(findings.len(), expected.len(), "findings: {findings:?}");
+    for name in expected {
+        assert!(
+            findings.iter().any(|finding| finding == name),
+            "missing {name}: {findings:?}"
+        );
+    }
 }
 
 #[test]

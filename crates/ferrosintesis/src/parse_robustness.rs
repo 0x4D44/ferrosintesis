@@ -43,7 +43,9 @@
 #[cfg(test)]
 mod tests {
     use crate::offline::{self, MidiError, MAX_MIDI_EVENTS, MAX_MIDI_TEXT_BYTES, MAX_SONG_SECONDS};
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
+    #[cfg(ferrosintesis_repository_tests)]
+    use std::path::PathBuf;
 
     // ---------------------------------------------------------------------------
     // Fixture builder: a valid file, then one deliberate corruption.
@@ -594,6 +596,7 @@ mod tests {
     // (2) The third-party corpus walker.
     // ---------------------------------------------------------------------------
 
+    #[cfg(ferrosintesis_repository_tests)]
     fn repo_root() -> PathBuf {
         // CARGO_MANIFEST_DIR = <root>/crates/ferrosintesis
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -604,6 +607,7 @@ mod tests {
     }
 
     /// Every `.mid` under `dir`, recursively.
+    #[cfg(ferrosintesis_repository_tests)]
     fn collect_midi(dir: &Path, out: &mut Vec<PathBuf>) {
         let Ok(entries) = std::fs::read_dir(dir) else {
             return; // an unreadable subdirectory is not this oracle's business
@@ -634,6 +638,7 @@ mod tests {
     /// the rest of a track, "usually surfacing as UnexpectedEof") is the likely cure.
     /// The README has not caught up; requiring a rejection here would freeze the stale
     /// claim into a test.
+    #[cfg(ferrosintesis_repository_tests)]
     const KNOWN_REJECTED: [&str; 2] = [
         "05-tubular-bells-ii-early-stages.mid",
         "09-amarok-roses.mid",
@@ -646,6 +651,7 @@ mod tests {
     /// is public and they are not redistributable), so it is gitignored and most
     /// checkouts will not have it. Absence is a SKIP with a note, never a failure —
     /// `test-corpus/README.md` is the tracked index for rebuilding it.
+    #[cfg(ferrosintesis_repository_tests)]
     #[test]
     fn corpus_files_parse_or_fail_with_a_specific_error() {
         let dir = repo_root().join("test-corpus");

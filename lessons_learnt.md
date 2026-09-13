@@ -10,6 +10,11 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **Archive guards must lex char literals and gate optional corpus walks** (`archive_boundary.rs`).
+  - A phantom string from `\"'\"` hid every later function, while `env!("CARGO_MANIFEST_DIR")`
+    left the marker inside a string token. Tokenize chars first, recognize the macro shape, and
+    keep repository-root corpus walks behind `ferrosintesis_repository_tests`.
+
 - 2026.08.16 — **Some asset crates decode their own PCM; check before a container change** (`samples-drumkit:decode_wav`).
   - The banks look like passive `include_bytes!` tables, and 22 of 25 are. But
     `-drumkit` and `-drumkit2` carry `decode_wav` + `PCM_CACHE` in their OWN

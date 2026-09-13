@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00064 — Clavinet reachable-prefix trim leaves dead constants and trips the banks_parse 20000-frame floor
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** ferrosintesis / clavinet sample bank
 - **Raised:** 2026-09-13T19:23:18Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T203820Z-89d5ef45
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00064-run-fix-20260913T203820Z-89d5ef45
-- **Owner base:** bf681a3f105cef44e82b767c99a4fd751b40cc2d
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T20:38:20Z
-- **Owner until:** 2026-09-13T22:38:20Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:23:18Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:23:18Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T20:50:24Z, deltic:auto role=fix run=fix-20260913T203820Z-89d5ef45 branch=task/bug-MM-BUG-CRU-00064-run-fix-20260913T203820Z-89d5ef45 code=1f36e1dedc24d6cb8920435bc042f7c66375181b gate=manual)
 
 ## Observation
 

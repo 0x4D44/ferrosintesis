@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00273 — Steinway regeneration command leaves the embedded FLAC bank stale
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** Steinway sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T08:39:27Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T173029Z-61dd10a6
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00273-run-fix-20260913T173029Z-61dd10a6
-- **Owner base:** f9a871e92e5d8bd721915fa7c0a18e065d36595d
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T17:30:29Z
-- **Owner until:** 2026-09-13T19:30:29Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T08:39:27Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T08:39:27Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:44:12Z, deltic:auto role=fix run=fix-20260913T173029Z-61dd10a6 branch=task/bug-MM-BUG-KILN-00273-run-fix-20260913T173029Z-61dd10a6 code=cd258ca69b488cccb9a077452d399e7bca07939f gate=manual)
 
 ## Observation
 

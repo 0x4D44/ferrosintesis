@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00224 — Core sample crate has no safe complete documented regeneration path
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** core sample crate / regeneration workflow
 - **Raised:** 2026-08-16T14:46:46Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T155527Z-2efca14b
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00224-run-fix-20260913T155527Z-2efca14b
-- **Owner base:** 49e6ad5abf7fc7b79c33357bba2a653b147c4d14
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:55:27Z
-- **Owner until:** 2026-09-13T17:55:27Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T14:46:46Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T14:46:46Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:13:15Z, deltic:auto role=fix run=fix-20260913T155527Z-2efca14b branch=task/bug-MM-BUG-KILN-00224-run-fix-20260913T155527Z-2efca14b code=fcc9d1080d357ab2d8533b5381bd6f0adc52e2ed gate=manual)
 
 ## Observation
 

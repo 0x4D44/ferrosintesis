@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00235 — FLAC decoder accepts forbidden 16-bit LPC coefficient precision
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** ferrosintesis-flac / LPC validation
 - **Raised:** 2026-08-16T20:59:26Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T161644Z-cd762e67
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00235-run-fix-20260913T161644Z-cd762e67
-- **Owner base:** 43b6f008eb9decf34a39ae97dd09649b35eda283
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T16:16:44Z
-- **Owner until:** 2026-09-13T18:16:44Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T20:59:26Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T20:59:26Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:19:25Z, deltic:auto role=fix run=fix-20260913T161644Z-cd762e67 branch=task/bug-MM-BUG-KILN-00235-run-fix-20260913T161644Z-cd762e67 code=2c585a27c51d4e0181419e9a72994e2f229b1f9a gate=manual)
 
 ## Observation
 

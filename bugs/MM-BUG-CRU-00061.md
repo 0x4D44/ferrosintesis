@@ -6,15 +6,15 @@
 - **Area:** sample tooling / regeneration prerequisite oracles
 - **Raised:** 2026-09-13T19:22:43Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T202711Z-3a9994fe
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00061-run-fix-20260913T202711Z-3a9994fe
+- **Owner base:** efb3cfaefc62f5af176f26ef54cbe9b2ec47bfbe
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T20:27:11Z
+- **Owner until:** 2026-09-13T22:27:11Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

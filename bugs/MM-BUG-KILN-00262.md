@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00262 — Orchestral2 required preflight and non-banjo rebakes still target WAV after FLAC migration
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** orchestral2 sample generation / final-format regeneration
 - **Raised:** 2026-08-17T04:25:53Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T041638Z-3cc10e4f
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00262-run-fix-20260913T041638Z-3cc10e4f
-- **Owner base:** 0bd55dd5d0dff6757e602232a748cad1899d4161
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T04:16:38Z
-- **Owner until:** 2026-09-13T06:16:38Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T04:25:53Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T04:25:53Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:19:01Z, deltic:auto role=fix run=fix-20260913T041638Z-3cc10e4f branch=task/bug-MM-BUG-KILN-00262-run-fix-20260913T041638Z-3cc10e4f code=55298fb16c0f370149bafafb7e518685cafa4443 gate=manual)
 
 ## Observation
 

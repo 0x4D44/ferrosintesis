@@ -6,15 +6,15 @@
 - **Area:** samples-b1-upright / oracles
 - **Raised:** 2026-08-14T07:06:13Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T204903Z-ce086c56
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00195-run-verify-20260913T204903Z-ce086c56
+- **Owner base:** e539dbb574a56cf71e41f9e0b39cc2a7c2773c49
+- **Owner fingerprint:** sha256:852e1892e747738c8c2070daeaffcf017eafed91593bff0703cb731d83c3b855
+- **Owner since:** 2026-09-13T20:49:03Z
+- **Owner until:** 2026-09-13T22:49:03Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

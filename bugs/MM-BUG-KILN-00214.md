@@ -6,15 +6,15 @@
 - **Area:** sample package / bottle pitch metadata
 - **Raised:** 2026-08-16T11:38:37Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T153622Z-8d72e8db
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00214-run-fix-20260913T153622Z-8d72e8db
+- **Owner base:** dca5fd1ec1cddb261ec5b7790be40d1b5054da87
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T15:36:22Z
+- **Owner until:** 2026-09-13T17:36:22Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

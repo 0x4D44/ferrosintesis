@@ -250,14 +250,25 @@ mod tests {
 
     #[test]
     fn reports_each_changed_option_against_the_effective_value() {
+        const OUT_OF_RANGE_RATE: u32 = 500_000;
+        const OUT_OF_RANGE_WET: f32 = 5.0;
+        const OUT_OF_RANGE_TAIL: f32 = 99_999.0;
+        const OUT_OF_RANGE_ECHO_SECONDS: f32 = 60.0;
+
         let opt = Options::default()
-            .with_sample_rate(500_000)
-            .with_reverb(5.0)
-            .with_tail(99_999.0)
-            .with_echo(60.0);
+            .with_sample_rate(OUT_OF_RANGE_RATE)
+            .with_reverb(OUT_OF_RANGE_WET)
+            .with_tail(OUT_OF_RANGE_TAIL)
+            .with_echo(OUT_OF_RANGE_ECHO_SECONDS);
 
         assert_eq!(
-            clamp_warnings(500_000, 5.0, 99_999.0, Some(60_000.0), &opt),
+            clamp_warnings(
+                OUT_OF_RANGE_RATE,
+                OUT_OF_RANGE_WET,
+                OUT_OF_RANGE_TAIL,
+                Some(OUT_OF_RANGE_ECHO_SECONDS * 1000.0),
+                &opt,
+            ),
             vec![
                 "--rate 500000 is out of range; using 384000",
                 "--wet 5 is out of range; using 1",

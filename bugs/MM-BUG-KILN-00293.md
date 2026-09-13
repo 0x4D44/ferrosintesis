@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00293 — Successful fret-noise rebake retains obsolete packaged outputs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** fret-noise sample generation / output inventory
 - **Raised:** 2026-08-17T20:46:02Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T222146Z-4ed9d0d2
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00293-run-fix-20260913T222146Z-4ed9d0d2
-- **Owner base:** a3d686e7eb41d4424c45d93b4638407798c3784d
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:21:46Z
-- **Owner until:** 2026-09-14T00:21:46Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T20:46:02Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T20:46:02Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T22:25:43Z, deltic:auto role=fix run=fix-20260913T222146Z-4ed9d0d2 branch=task/bug-MM-BUG-KILN-00293-run-fix-20260913T222146Z-4ed9d0d2 code=9936535ba2d81172b36d869dfa3e500be06f1f84 gate=manual)
 
 ## Observation
 

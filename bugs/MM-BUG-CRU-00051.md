@@ -6,15 +6,15 @@
 - **Area:** Kawai sample crate / packaged regeneration documentation
 - **Raised:** 2026-08-20T15:01:05Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T194846Z-44a38900
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00051-run-verify-20260913T194846Z-44a38900
+- **Owner base:** 7c98a40fd3c7962ae8873395b324d6390e40f60e
+- **Owner fingerprint:** sha256:79806963fbb1d6af5fb18827ef34586fa83d052ee8635b81a5db01b944e29d8a
+- **Owner since:** 2026-09-13T19:48:46Z
+- **Owner until:** 2026-09-13T21:48:46Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

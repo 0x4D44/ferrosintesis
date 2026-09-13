@@ -33,11 +33,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import platform
 import re
+import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -286,6 +289,129 @@ def bake_payloads(src_dir: Path) -> list[tuple[str, bytes, float, float, float, 
     return payloads
 
 
+def validate_staged_bank(
+    payloads: list[tuple[str, bytes, float, float, float, float]],
+    pins: dict[str, str],
+    staging: Path,
+    read_staged=decode_flac_pcm,
+) -> list[str]:
+    """Validate the complete encoded bank before it can replace tracked files."""
+    generated = {name: payload for name, payload, *_ in payloads}
+    expected = set(generated)
+    actual = {path.name for path in staging.iterdir()}
+    errors = []
+    for name in sorted(actual - expected):
+        errors.append(f"{name}: staged output was not generated")
+    for name in sorted(expected - actual):
+        errors.append(f"{name}: staged output is missing")
+    for name in sorted(expected & actual):
+        path = staging / name
+        if not path.is_file():
+            errors.append(f"{name}: staged output is not a file")
+            continue
+        try:
+            pcm = read_staged(path)
+        except Exception as error:
+            errors.append(f"{name}: staged FLAC could not be decoded: {error}")
+            continue
+        if pcm != generated[name]:
+            errors.append(f"{name}: staged PCM differs from generated payload")
+        digest = hashlib.sha256(pcm).hexdigest()
+        if name not in pins:
+            errors.append(f"{name}: staged output has no SHA-256 pin")
+        elif digest != pins[name]:
+            errors.append(f"{name}: staged sha256 {digest} != pinned {pins[name]}")
+    return errors
+
+
+def stage_fretnoise_bank(
+    payloads: list[tuple[str, bytes, float, float, float, float]],
+    pins: dict[str, str],
+    staging: Path,
+    encode=encode_flac,
+    read_staged=decode_flac_pcm,
+) -> None:
+    """Encode and validate a bank in an empty directory beside the output bank."""
+    if not staging.is_dir():
+        raise RuntimeError(f"staging directory does not exist: {staging}")
+    if any(staging.iterdir()):
+        raise RuntimeError(f"staging directory is not empty: {staging}")
+    names = [name for name, *_ in payloads]
+    if len(set(names)) != len(names):
+        raise RuntimeError("generated output names are not unique")
+    for name, payload, *_ in payloads:
+        encode(payload, staging / name)
+
+    errors = validate_staged_bank(payloads, pins, staging, read_staged=read_staged)
+    if errors:
+        details = "\n  ".join(errors)
+        raise RuntimeError(f"staged fret-noise bank failed validation:\n  {details}")
+
+
+def publish_fretnoise_bank(
+    staging: Path,
+    out_dir: Path,
+    expected_names: set[str],
+    replace_file=os.replace,
+) -> None:
+    """Publish a validated bank and restore the old bank if replacement fails."""
+    expected = set(expected_names)
+    actual = {path.name for path in staging.iterdir()}
+    if actual != expected:
+        missing = sorted(expected - actual)
+        unexpected = sorted(actual - expected)
+        details = []
+        if missing:
+            details.append(f"missing: {', '.join(missing)}")
+        if unexpected:
+            details.append(f"unexpected: {', '.join(unexpected)}")
+        raise RuntimeError(
+            "staged output inventory mismatch (" + "; ".join(details) + ")"
+        )
+    for name in sorted(expected):
+        if not (staging / name).is_file():
+            raise RuntimeError(f"{name}: staged output is not a file")
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    originals = set()
+    for name in expected:
+        destination = out_dir / name
+        if destination.exists():
+            if not destination.is_file():
+                raise RuntimeError(f"{destination}: existing output is not a file")
+            originals.add(name)
+
+    with tempfile.TemporaryDirectory(
+        prefix=".fretnoise-backup-", dir=out_dir.parent
+    ) as backup_dir:
+        backup = Path(backup_dir)
+        for name in sorted(originals):
+            shutil.copy2(out_dir / name, backup / name)
+        try:
+            for name in sorted(expected):
+                replace_file(staging / name, out_dir / name)
+        except BaseException as publish_error:
+            rollback_errors = []
+            for name in sorted(expected):
+                destination = out_dir / name
+                if name in originals:
+                    try:
+                        os.replace(backup / name, destination)
+                    except OSError as error:
+                        rollback_errors.append(f"restore {name}: {error}")
+                elif destination.exists():
+                    try:
+                        destination.unlink()
+                    except OSError as error:
+                        rollback_errors.append(f"remove {name}: {error}")
+            if rollback_errors:
+                details = "; ".join(rollback_errors)
+                raise RuntimeError(
+                    f"fret-noise publication failed and rollback was incomplete: {details}"
+                ) from publish_error
+            raise
+
+
 def output_pin_errors(
     payloads: list[tuple[str, bytes, float, float, float, float]],
     pins: dict[str, str],
@@ -363,9 +489,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for name, payload, *_ in payloads:
-        encode_flac(payload, out_dir / name)
+    out_dir.parent.mkdir(parents=True, exist_ok=True)
+    expected_names = {name for name, *_ in payloads}
+    with tempfile.TemporaryDirectory(
+        prefix=".fretnoise-bank-", dir=out_dir.parent
+    ) as stage_dir:
+        staging = Path(stage_dir)
+        stage_fretnoise_bank(payloads, pins, staging)
+        publish_fretnoise_bank(staging, out_dir, expected_names)
     print(f"\nbaked {len(payloads)} files, {total_bytes / 1024:.0f} KiB total, into {out_dir}")
     return 0
 

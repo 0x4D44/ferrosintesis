@@ -7,6 +7,7 @@ import functools
 import hashlib
 import importlib.util
 import io
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -26,6 +27,120 @@ except ImportError as exc:  # pragma: no cover - only on a box without numpy
 
 
 class FretNoiseBakeTests(unittest.TestCase):
+    @staticmethod
+    def _synthetic_payloads():
+        return [
+            (
+                f"fretnoise_rr{i:02d}.flac",
+                f"new payload {i}".encode(),
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+            )
+            for i in range(1, 4)
+        ]
+
+    def test_staged_bank_validates_inventory_and_pinned_pcm(self) -> None:
+        payloads = self._synthetic_payloads()
+        pins = {
+            name: hashlib.sha256(payload).hexdigest()
+            for name, payload, *_ in payloads
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            staging = Path(tmp)
+            for name, payload, *_ in payloads:
+                (staging / name).write_bytes(payload)
+
+            self.assertEqual(
+                BAKE.validate_staged_bank(
+                    payloads, pins, staging, read_staged=Path.read_bytes
+                ),
+                [],
+            )
+            (staging / "fretnoise_rr99.flac").write_bytes(b"unexpected")
+            errors = BAKE.validate_staged_bank(
+                payloads, pins, staging, read_staged=Path.read_bytes
+            )
+            self.assertEqual(
+                errors,
+                ["fretnoise_rr99.flac: staged output was not generated"],
+            )
+
+    def test_late_staged_write_failure_leaves_published_bank_unchanged(self) -> None:
+        payloads = self._synthetic_payloads()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out_dir = root / "published"
+            staging = root / "staging"
+            out_dir.mkdir()
+            staging.mkdir()
+            old = {}
+            for name, *_ in payloads:
+                old[name] = f"old bank: {name}".encode()
+                (out_dir / name).write_bytes(old[name])
+
+            writes = 0
+
+            def fail_on_third_write(payload, destination):
+                nonlocal writes
+                writes += 1
+                destination.write_bytes(payload[:4])
+                if writes == 3:
+                    raise OSError("injected staged write failure")
+                destination.write_bytes(payload)
+
+            with self.assertRaisesRegex(OSError, "injected staged write failure"):
+                BAKE.stage_fretnoise_bank(
+                    payloads,
+                    {},
+                    staging,
+                    encode=fail_on_third_write,
+                    read_staged=Path.read_bytes,
+                )
+
+            self.assertEqual(writes, 3)
+            self.assertEqual(
+                {path.name: path.read_bytes() for path in out_dir.iterdir()}, old
+            )
+
+    def test_late_publish_replacement_failure_rolls_back_every_file(self) -> None:
+        payloads = self._synthetic_payloads()
+        expected = {name for name, *_ in payloads}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out_dir = root / "published"
+            staging = root / "staging"
+            out_dir.mkdir()
+            staging.mkdir()
+            old = {}
+            for name, payload, *_ in payloads:
+                old[name] = f"old bank: {name}".encode()
+                (out_dir / name).write_bytes(old[name])
+                (staging / name).write_bytes(payload)
+
+            replacements = 0
+
+            def fail_on_second_replace(source, destination):
+                nonlocal replacements
+                replacements += 1
+                if replacements == 2:
+                    raise OSError("injected replacement failure")
+                os.replace(source, destination)
+
+            with self.assertRaisesRegex(OSError, "injected replacement failure"):
+                BAKE.publish_fretnoise_bank(
+                    staging,
+                    out_dir,
+                    expected,
+                    replace_file=fail_on_second_replace,
+                )
+
+            self.assertEqual(replacements, 2)
+            self.assertEqual(
+                {path.name: path.read_bytes() for path in out_dir.iterdir()}, old
+            )
+
     def test_environment_contract_names_every_byte_identity_input(self) -> None:
         self.assertEqual(
             BAKE.canonical_environment_errors(

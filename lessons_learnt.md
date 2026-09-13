@@ -10,6 +10,9 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **Clippy's `manual_repeat_n` fix is MSRV-safe here** (`midi.rs`, `parse_robustness.rs`).
+  - `std::iter::repeat_n` is stable before this workspace's Rust 1.87 minimum.
+
 - 2026.09.13 — **Audio oracle tables must cover derived BANKS** (`drumkit2/src/lib.rs`).
   - A hand-maintained duration list can silently omit a registered articulation; derive the sweep and assert exact coverage.
 

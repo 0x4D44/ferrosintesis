@@ -172,7 +172,7 @@ mod tests {
             encoded[index] = ((value & 0x7F) as u8) | 0x80;
         }
         events.extend(&encoded[index..]);
-        events.extend(std::iter::repeat(b'x').take(marker_len));
+        events.extend(std::iter::repeat_n(b'x', marker_len));
         events.extend([0x00, 0xFF, 0x2F, 0x00]);
 
         let mut smf = Smf::valid();

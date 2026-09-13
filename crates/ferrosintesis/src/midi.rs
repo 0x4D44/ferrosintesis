@@ -1065,7 +1065,7 @@ mod tests {
             encoded[index] = ((value & 0x7F) as u8) | 0x80;
         }
         events.extend(&encoded[index..]);
-        events.extend(std::iter::repeat(b'x').take(marker_len));
+        events.extend(std::iter::repeat_n(b'x', marker_len));
 
         match parse(&file_from_track(&events)) {
             Err(MidiError::TooMuchText { bytes }) => assert_eq!(bytes, marker_len),

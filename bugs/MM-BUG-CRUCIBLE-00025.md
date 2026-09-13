@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00025 — RealtimeSynth buffers an unbounded MIDI command burst before one audio block
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** High
 - **Area:** ferrosintesis / realtime MIDI queue
 - **Raised:** 2026-08-14T11:47:06Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T185958Z-92bbd1f2
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00025-run-verify-20260913T185958Z-92bbd1f2
-- **Owner base:** 8b6a6f86cab9d4c5bfd92b7d884521d7b2b11a58
-- **Owner fingerprint:** sha256:98129cef918ca3d4418815a12dcc019f610e72c5121540c810fe19d7072aabf7
-- **Owner since:** 2026-09-13T18:59:58Z
-- **Owner until:** 2026-09-13T20:59:58Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:06Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T04:07:51Z, deltic:auto role=fix run=fix-20260815T035517Z-p44240-n504663000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00025-run-fix-20260815T035517Z-p44240-n504663000-c1 code=9d10dcd gate=manual)
+- **State history:** Open (2026-08-14T11:47:06Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T04:07:51Z, deltic:auto role=fix run=fix-20260815T035517Z-p44240-n504663000-c1 branch=task/bug-MM-BUG-CRUCIBLE-00025-run-fix-20260815T035517Z-p44240-n504663000-c1 code=9d10dcd gate=manual) -> Closed (2026-09-13T19:21:20Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: bounded PendingQueue reverted to an unbounded Vec turns five regressions red; residual weak NoteOn-burst test split to MM-BUG-CRU-00056)
 
 ## Observation
 
@@ -52,5 +52,18 @@ commands are coalesced, rejected, or dropped, and make overflow observable to th
 Bound commands applied per render block. Add a regression that feeds more than the budget
 using non-voice commands and proves both storage and per-block work remain bounded; add a
 NoteOn-burst case that cannot trigger quadratic cap enforcement. Estimated effort: Medium.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `9d10dcdd`) by an agent other than the fixer.
+
+The realtime queue is now a fixed 1024-command drop-newest buffer with a drop counter; each block applies at most that budget and then drains; voice stealing is a single `retain` pass. No `Vec<LiveCommand>` path remains in `live.rs`.
+
+**Fails-before (method B).** With `PendingQueue` reverted to an unbounded `Vec`, five regressions fail, including "queue absorbed the whole flood: 30000 of 30000" and `queued <= LIVE_MAX_PENDING`. Restored; `git diff` empty; all six queue tests pass on HEAD.
+
+**Residual split to MM-BUG-CRU-00056.** `noteon_burst_is_bounded_and_capped` sends only 792 note-ons (< 1024), so it stays green without the fix; nothing covers the quadratic-to-linear `enforce_voice_cap` change.
+
+**Gates.** This fix causes no gate failure. The trunk gate at `8b6a6f86` is NOT green for other reasons (clippy lints; inventory, `banks_parse`, gm76 and Steinway-alias tests), recorded against their own bugs.
+
 
 ## Notes

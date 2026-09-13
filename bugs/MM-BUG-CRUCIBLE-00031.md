@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00031 — Loudness normalization skips the true-peak ceiling when loudness is already on target
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / loudness normalization
 - **Raised:** 2026-08-14T11:47:25Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T191114Z-42ab7cac
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00031-run-verify-20260913T191114Z-42ab7cac
-- **Owner base:** 8cfd384974b3f283bf5e484f5b74f71c66b38f4e
-- **Owner fingerprint:** sha256:16df9d7833cbd97b074f882ac03e04b0535d88655765d4669a6450f49ab3ce40
-- **Owner since:** 2026-09-13T19:11:14Z
-- **Owner until:** 2026-09-13T21:11:14Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:25Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T10:58:37Z, deltic:auto role=fix run=fix-20260815T104337Z-p42868-n011065400-c1 branch=task/bug-MM-BUG-CRUCIBLE-00031-run-fix-20260815T104337Z-p42868-n011065400-c1 code=e58a7bb gate=manual)
+- **State history:** Open (2026-08-14T11:47:25Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T10:58:37Z, deltic:auto role=fix run=fix-20260815T104337Z-p42868-n011065400-c1 branch=task/bug-MM-BUG-CRUCIBLE-00031-run-fix-20260815T104337Z-p42868-n011065400-c1 code=e58a7bb gate=manual) -> Closed (2026-09-13T19:21:20Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: both normalizers fail at -0.92 dBTP against a -6 dBTP ceiling with the early on-target break restored)
 
 ## Observation
 
@@ -46,5 +46,16 @@ the signal, remeasure and apply bounded makeup before limiting again. Add indepe
 buffered and scratch tests whose input is already on target but above a low ceiling; assert
 both loudness and measured true peak, not parity between the two implementations alone.
 Estimated effort: Small/Medium.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `e58a7bbb`) by an agent other than the fixer.
+
+Both new tests are the reproducer: a 997 Hz tone above a -6 dBTP ceiling, with the target set to its own measured loudness so normalization starts on target; they measure true peak and loudness of the output directly.
+
+**Fails-before (method B).** Restoring the early on-target `break` in `engine.rs` and `scratch.rs` fails both ("-0.92 dBTP against a -6.0 dBTP ceiling"). Restored; `git diff` empty; both pass on HEAD.
+
+**Gates.** This fix causes no gate failure; trunk `8b6a6f86` is red for unrelated recorded reasons.
+
 
 ## Notes

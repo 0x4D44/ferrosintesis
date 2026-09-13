@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00027 — offline::load reads unbounded MIDI files before parser limits apply
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / MIDI loading
 - **Raised:** 2026-08-14T11:47:21Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T190742Z-f4ead6a8
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00027-run-verify-20260913T190742Z-f4ead6a8
-- **Owner base:** c4c997788c62809322fbfab45435fda2c24c5579
-- **Owner fingerprint:** sha256:40932716065fa637958d728fec9b481e66738fe79397a9545155e7f884ebc6b6
-- **Owner since:** 2026-09-13T19:07:42Z
-- **Owner until:** 2026-09-13T21:07:42Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:21Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T07:27:34Z, deltic:auto role=fix run=fix-20260815T071503Z-p19272-n598691600-c1 branch=task/bug-MM-BUG-CRUCIBLE-00027-run-fix-20260815T071503Z-p19272-n598691600-c1 code=ccf2cdf gate=manual)
+- **State history:** Open (2026-08-14T11:47:21Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T07:27:34Z, deltic:auto role=fix run=fix-20260815T071503Z-p19272-n598691600-c1 branch=task/bug-MM-BUG-CRUCIBLE-00027-run-fix-20260815T071503Z-p19272-n598691600-c1 code=ccf2cdf gate=manual) -> Closed (2026-09-13T19:21:20Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: 5 GiB file refused instantly as TooLarge; oversized-file test fails with plain fs::read restored)
 
 ## Observation
 
@@ -46,5 +46,16 @@ Preflight `metadata.len()` against a documented maximum and return a dedicated
 entire file. Cover both a sparse oversized file and a declared near-4-GiB track with tests
 that reject before allocation. Estimated effort: Small with an explicit cap; Medium/Large
 for streaming.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `ccf2cdf8`) by an agent other than the fixer.
+
+**Original observation re-run.** A 5 GiB file through the CLI fails immediately with "MIDI file is 5368709120 bytes, which exceeds the 67108864 byte limit"; a track declaring 0xFFFFFF00 bytes fails with `UnexpectedEof` without allocating.
+
+**Fails-before (method B).** Replacing `read_bounded` with `std::fs::read` makes `load_rejects_an_oversized_file` fail ("`load` has no size limit"). The boundary and declared-4-GiB tests stay green, as the fix commit says that case already held. Restored; `git diff` empty; three regressions pass on HEAD.
+
+**Gates.** This fix causes no gate failure; trunk `8b6a6f86` is red for unrelated recorded reasons.
+
 
 ## Notes

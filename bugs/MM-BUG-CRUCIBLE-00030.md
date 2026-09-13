@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00030 — GS drum-mode transitions leave melodic effect state derived from the old routing
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / GS channel routing
 - **Raised:** 2026-08-14T11:47:24Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T191030Z-c2113353
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00030-run-verify-20260913T191030Z-c2113353
-- **Owner base:** a1f427a49a6010e6faf4bb0284023e425afee9cd
-- **Owner fingerprint:** sha256:2546144b82ff13c983b6c93b9689526f56c40fab55edfc2b1584bd1c47a6c593
-- **Owner since:** 2026-09-13T19:10:30Z
-- **Owner until:** 2026-09-13T21:10:30Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T11:47:24Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T10:42:44Z, deltic:auto role=fix run=fix-20260815T102800Z-p13352-n472573600-c1 branch=task/bug-MM-BUG-CRUCIBLE-00030-run-fix-20260815T102800Z-p13352-n472573600-c1 code=ac54258 gate=manual)
+- **State history:** Open (2026-08-14T11:47:24Z, raised via `deltic bugs new` model=gpt-5.6-sol@xhigh) -> Fixed (2026-08-15T10:42:44Z, deltic:auto role=fix run=fix-20260815T102800Z-p13352-n472573600-c1 branch=task/bug-MM-BUG-CRUCIBLE-00030-run-fix-20260815T102800Z-p13352-n472573600-c1 code=ac54258 gate=manual) -> Closed (2026-09-13T19:21:20Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: routing regression fails with re-derivation removed from the DrumMode and GsReset handlers)
 
 ## Observation
 
@@ -49,5 +49,18 @@ program defaults and `Drive` while preserving authored controller values. Centra
 transition so both directions use one invariant. Add no-follow-up-Program-Change tests for
 program 29/30 and for an ordinary program with nonzero default sends. Estimated effort:
 Small/Medium.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `ac54258c`) by an agent other than the fixer.
+
+`gs_routing_changes_rederive_program_state_without_a_program_change` drives the bug's sequence at engine-event level (drum part, program 29 or 52, GS Reset, note, no second Program Change, both directions) against a known-correct reference render. It was not re-run as a SysEx file through the CLI.
+
+**Fails-before (method B).** Removing the `rederive_routing_derived_state` calls from the `DrumMode` and `GsReset` handlers fails it: "prog 29: after GS Reset the channel is melodic again but kept drum-derived sends/drive". Restored; `git diff` empty; passes on HEAD.
+
+One derivation now serves Program Change, DrumMode, GsReset and CC0. GM/System reset rebuild the whole core and XG reset does not touch drum routing, so no other transition keeps the defect.
+
+**Gates.** This fix causes no gate failure; trunk `8b6a6f86` is red for unrelated recorded reasons.
+
 
 ## Notes

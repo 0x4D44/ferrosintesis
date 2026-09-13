@@ -6,15 +6,15 @@
 - **Area:** sample asset crates / generated oracles
 - **Raised:** 2026-08-18T00:08:18Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T192454Z-433399f5
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00040-run-verify-20260913T192454Z-433399f5
+- **Owner base:** 945970d49acb98497078755c12341efac2e7b7c8
+- **Owner fingerprint:** sha256:ca7160079e0de5f8bdf24ea813c31e62b2165eb98076a78739af176be1a7dd6b
+- **Owner since:** 2026-09-13T19:24:54Z
+- **Owner until:** 2026-09-13T21:24:54Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

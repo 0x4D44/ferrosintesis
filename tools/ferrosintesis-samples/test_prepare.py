@@ -6795,6 +6795,34 @@ pub fn get(name: &str) -> Option<&'static [u8]> { match name { \"alias.wav\" => 
 
             self.assertEqual(lib.read_text(encoding="utf-8"), before)
 
+    def test_generic_generator_refuses_a_drumkit_shaped_custom_api(self):
+        with tempfile.TemporaryDirectory() as crate:
+            crate_path = pathlib.Path(crate)
+            (crate_path / "src").mkdir()
+            (crate_path / "samples").mkdir()
+            (crate_path / "samples" / "current.flac").write_bytes(b"fLaC\0")
+            (crate_path / "Cargo.toml").write_text(
+                '[package]\ninclude = ["LICENSE-MIT"]\n', encoding="utf-8"
+            )
+            (crate_path / "LICENSE-MIT").write_text("fixture license\n", encoding="utf-8")
+            lib = crate_path / "src" / "lib.rs"
+            before = (
+                "pub struct Bank;\n"
+                "pub static BANKS: [Bank; 0] = [];\n"
+                "pub fn pcm(_name: &str) -> Option<&'static [i16]> { None }\n"
+                "pub fn prewarm() {}\n"
+            )
+            lib.write_text(before, encoding="utf-8")
+
+            with mock.patch.object(
+                gen_crate_lib.sys,
+                "argv",
+                ["gen_crate_lib.py", crate, "--doc", "Drumkit-shaped fixture."],
+            ), self.assertRaisesRegex(SystemExit, "refusing whole-file generation"):
+                gen_crate_lib.main()
+
+            self.assertEqual(lib.read_text(encoding="utf-8"), before)
+
 
 class B1InventoryRegenerationTest(unittest.TestCase):
     """MM-BUG-KILN-00169: B1 regeneration must preserve its natural-tail oracle."""

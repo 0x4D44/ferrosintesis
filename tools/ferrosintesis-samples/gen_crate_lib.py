@@ -12,12 +12,46 @@ tests are self-consistent by construction.
         --doc "Embedded CC0 VCSL Steinway-B grand samples (GM0 alternate bank 3)."
 """
 import os
+import re
 import subprocess
 import sys
 import tempfile
 
 
 LEGAL_DOC_NAMES = ("LICENSE-CC0", "LICENSE-MIT", "NOTICE", "PROVENANCE.md")
+GENERATED_INVENTORY_MARKERS = (
+    "// BEGIN GENERATED SAMPLE INVENTORY",
+    "// END GENERATED SAMPLE INVENTORY",
+)
+GENERATED_PUBLIC_ITEMS = frozenset(("FILE_COUNT", "LOGICAL_FILE_COUNT", "get"))
+PUBLIC_ITEM_RE = re.compile(
+    r"^\s*pub(?:\([^)]*\))?\s+"
+    r"(?:(?:const|static|fn|struct|enum|type|trait|mod)\s+)?"
+    r"([A-Za-z_][A-Za-z0-9_]*)",
+    re.MULTILINE,
+)
+
+
+def custom_inventory_reason(source):
+    """Explain why a lib.rs is not safe for whole-file generation.
+
+    The generic output owns only the small public surface in
+    ``GENERATED_PUBLIC_ITEMS``. Region-managed crates and crates with any other
+    public item carry API that this tool would erase, so fail closed before the
+    output file is staged.
+    """
+    if any(marker in source for marker in GENERATED_INVENTORY_MARKERS):
+        return "it contains a managed generated-inventory region"
+    custom = sorted(
+        {
+            match.group(1)
+            for match in PUBLIC_ITEM_RE.finditer(source)
+            if match.group(1) not in GENERATED_PUBLIC_ITEMS
+        }
+    )
+    if custom:
+        return "it declares non-generated public items: " + ", ".join(custom)
+    return None
 
 
 def shipped_docs(crate):
@@ -109,10 +143,11 @@ def main():
     if os.path.exists(lib):
         with open(lib, encoding="utf-8") as fh:
             existing = fh.read()
-        if "PIANO_SINGLE_TAKE_CELLS" in existing:
+        reason = custom_inventory_reason(existing)
+        if reason:
             raise SystemExit(
-                f"{lib}: refusing whole-file generation for the custom core inventory; "
-                "use regen_samples_table.py"
+                f"{lib}: refusing whole-file generation: {reason}; "
+                "use the crate-specific inventory updater"
             )
     names = sorted(
         f for f in os.listdir(samples_dir) if f.endswith((".wav", ".flac"))

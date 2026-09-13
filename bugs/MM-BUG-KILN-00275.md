@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / SMF tempo validation
 - **Raised:** 2026-08-17T09:41:26Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T191322Z-0a011843
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00275-run-verify-20260913T191322Z-0a011843
+- **Owner base:** e9df87ba07a46a59c6c5926381672e880debbd63
+- **Owner fingerprint:** sha256:b49544a219f962b86cabb7c239edd19c28bd59e48ebbe40dc581c691dfe52be3
+- **Owner since:** 2026-09-13T19:13:22Z
+- **Owner until:** 2026-09-13T21:13:22Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00040 — Generated sample-crate payload test is self-referential: nothing binds an embedded payload to its packaged file
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample asset crates / generated oracles
 - **Raised:** 2026-08-18T00:08:18Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T072749Z-8da5161c
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00040-run-fix-20260913T072749Z-8da5161c
-- **Owner base:** 5235437aafc3bc5b06d8630e706959864a3ebe4b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T07:27:49Z
-- **Owner until:** 2026-09-13T09:27:49Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T00:08:18Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-18T00:08:18Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T07:41:21Z, deltic:auto role=fix run=fix-20260913T072749Z-8da5161c branch=task/bug-MM-BUG-CRUCIBLE-00040-run-fix-20260913T072749Z-8da5161c code=951514b0 gate=manual)
 
 ## Observation
 

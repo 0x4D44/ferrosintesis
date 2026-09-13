@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis-flac / malformed predictor handling
 - **Raised:** 2026-08-16T20:59:25Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T054417Z-112a7e87
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00233-run-fix-20260913T054417Z-112a7e87
+- **Owner base:** 4573ba9c3073131dce36427e5b2fec67f72764cb
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T05:44:17Z
+- **Owner until:** 2026-09-13T07:44:17Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

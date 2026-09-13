@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00044 — Sample-bank crates' public get() rustdoc still names a .wav suffix the FLAC banks no longer use
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-samples-clavinet
 - **Raised:** 2026-08-18T19:41:02Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T141751Z-c2e5deab
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00044-run-fix-20260913T141751Z-c2e5deab
-- **Owner base:** 0d36728730168e08635a61d0bc80c752812654c8
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T14:17:51Z
-- **Owner until:** 2026-09-13T16:17:51Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T19:41:02Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-18T19:41:02Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T14:18:42Z, deltic:auto role=fix run=fix-20260913T141751Z-c2e5deab branch=task/bug-MM-BUG-CRUCIBLE-00044-run-fix-20260913T141751Z-c2e5deab code=db16a45b32ea1e23a4a55b822011b374b6a632a4 gate=manual)
 
 ## Observation
 

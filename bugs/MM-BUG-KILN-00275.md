@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00275 — Zero Set-Tempo collapses the MIDI timeline and exposes infinite BPM
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** ferrosintesis / SMF tempo validation
 - **Raised:** 2026-08-17T09:41:26Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T174542Z-d74af8a3
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00275-run-fix-20260913T174542Z-d74af8a3
-- **Owner base:** dfdbd903054f27af8fee34277c25017e1c6db941
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T17:45:42Z
-- **Owner until:** 2026-09-13T19:45:42Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T09:41:26Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T09:41:26Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:11:51Z, deltic:auto role=fix run=fix-20260913T174542Z-d74af8a3 branch=task/bug-MM-BUG-KILN-00275-run-fix-20260913T174542Z-d74af8a3 code=43c67469bf9ae856a527ee29f8d2ecdd69828503 gate=manual)
 
 ## Observation
 

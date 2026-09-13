@@ -8,7 +8,7 @@
 //! test had just assembled correctly, and exactly one
 //! (`system_status_never_becomes_the_running_status`) asserted that a `MidiError`
 //! variant is produced at all. `error.rs` only exercised `Display` and `source`. So
-//! seven of the eight variants had no test proving they are still reachable, and a
+//! several original variants had no test proving they are still reachable, and a
 //! parser that regressed to returning one variant for everything would have passed the
 //! whole suite. The crate publishes to crates.io, which makes this the surface a
 //! stranger's bytes reach first.
@@ -42,7 +42,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::offline::{self, MidiError, MAX_SONG_SECONDS};
+    use crate::offline::{self, MidiError, MAX_MIDI_EVENTS, MAX_MIDI_TEXT_BYTES, MAX_SONG_SECONDS};
     use std::path::{Path, PathBuf};
 
     // ---------------------------------------------------------------------------
@@ -141,6 +141,43 @@ mod tests {
         smf.bytes()
     }
 
+    fn zero_delta_event_flood() -> Vec<u8> {
+        let event_count = MAX_MIDI_EVENTS + 1;
+        let mut events = Vec::with_capacity(4 + event_count.saturating_sub(1) * 3 + 4);
+        events.extend([0x00, 0x90, 60, 100]);
+        for _ in 1..event_count {
+            events.extend([0x00, 60, 100]);
+        }
+        events.extend([0x00, 0xFF, 0x2F, 0x00]);
+
+        let mut smf = Smf::valid();
+        smf.tracks[0].events = events;
+        smf.bytes()
+    }
+
+    fn oversized_marker() -> Vec<u8> {
+        let marker_len = MAX_MIDI_TEXT_BYTES + 1;
+        let mut events = vec![0x00, 0xFF, 0x06];
+        let mut value = marker_len;
+        let mut encoded = [0u8; 4];
+        let mut index = 3;
+        encoded[index] = (value & 0x7F) as u8;
+        while {
+            value >>= 7;
+            value != 0
+        } {
+            index -= 1;
+            encoded[index] = ((value & 0x7F) as u8) | 0x80;
+        }
+        events.extend(&encoded[index..]);
+        events.extend(std::iter::repeat(b'x').take(marker_len));
+        events.extend([0x00, 0xFF, 0x2F, 0x00]);
+
+        let mut smf = Smf::valid();
+        smf.tracks[0].events = events;
+        smf.bytes()
+    }
+
     /// The template every fixture corrupts must itself parse. Without this, a fixture
     /// could be "passing" because the *template* is broken, and the corruption under
     /// test would be doing nothing.
@@ -174,6 +211,8 @@ mod tests {
             MidiError::OverlongVlq => "OverlongVlq",
             MidiError::TooLong { .. } => "TooLong",
             MidiError::TooLarge { .. } => "TooLarge",
+            MidiError::TooManyEvents { .. } => "TooManyEvents",
+            MidiError::TooMuchText { .. } => "TooMuchText",
         }
     }
 
@@ -434,6 +473,23 @@ mod tests {
                 expected: "TooLong { seconds: NaN }",
                 is_expected: |e| matches!(e, MidiError::TooLong { seconds, .. } if seconds.is_nan()),
             },
+            Case {
+                what: "TooManyEvents: a format-0 track carries one million and one zero-delta \
+                       running-status note-ons. The input is only about 3 MiB, but retaining \
+                       every decoded record would make sorting and the Song copy needlessly \
+                       large.",
+                bytes: zero_delta_event_flood(),
+                expected: "TooManyEvents { events: MAX_MIDI_EVENTS + 1 }",
+                is_expected: |e| matches!(e, MidiError::TooManyEvents { events } if *events == MAX_MIDI_EVENTS + 1),
+            },
+            Case {
+                what: "TooMuchText: a text-marker payload is one byte over the combined \
+                       retained title/marker budget. The marker is otherwise a valid SMF \
+                       event, so the rejection is the resource bound rather than parsing.",
+                bytes: oversized_marker(),
+                expected: "TooMuchText { bytes: MAX_MIDI_TEXT_BYTES + 1 }",
+                is_expected: |e| matches!(e, MidiError::TooMuchText { bytes } if *bytes == MAX_MIDI_TEXT_BYTES + 1),
+            },
         ]
     }
 
@@ -479,6 +535,8 @@ mod tests {
                 "NotMidi",
                 "OverlongVlq",
                 "TooLong",
+                "TooManyEvents",
+                "TooMuchText",
                 "UnexpectedEof",
                 "UnsupportedFormat",
                 "UnsupportedTimeDivision",

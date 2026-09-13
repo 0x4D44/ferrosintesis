@@ -6084,7 +6084,7 @@ class SteinwayPackagedContractTest(unittest.TestCase):
         provenance = (crate / "PROVENANCE.md").read_text(encoding="utf-8")
         lib = (crate / "src" / "lib.rs").read_text(encoding="utf-8")
         self.assertIn("54 canonical `.flac` names", readme)
-        self.assertIn("27 legacy `.wav` names", readme)
+        self.assertIn("27 legacy `.wav` alias keys", readme)
         self.assertIn("16-bit mono 44.1 kHz PCM stored losslessly in FLAC", provenance)
         self.assertNotIn("Output: 16-bit mono WAV.", provenance)
         self.assertRegex(lib, r"pub const LOGICAL_FILE_COUNT: usize = 81;")

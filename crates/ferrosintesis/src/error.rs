@@ -30,6 +30,19 @@ pub const MAX_SONG_SECONDS: f64 = 24.0 * 3600.0;
 /// call [`parse`](crate::offline::parse), which is unaffected by this limit.
 pub const MAX_MIDI_FILE_BYTES: u64 = 64 * 1024 * 1024;
 
+/// Maximum number of decoded event-like records [`parse`](crate::offline::parse) retains.
+///
+/// This includes channel/system events, tempo changes, and text markers. The byte limit on
+/// the input does not bound their decoded representation tightly enough: running-status
+/// channel events can be only three bytes each, and every retained record is later sorted.
+pub const MAX_MIDI_EVENTS: usize = 1_000_000;
+
+/// Maximum combined UTF-8 bytes retained for the title and text markers in one SMF.
+///
+/// Marker payloads are attacker-controlled strings, so their decoded size needs a bound
+/// independent of the event-count limit.
+pub const MAX_MIDI_TEXT_BYTES: usize = 1024 * 1024;
+
 /// Why a Standard MIDI File could not be read.
 ///
 /// This enum is `#[non_exhaustive]`, and so is every variant that carries data: match
@@ -100,6 +113,18 @@ pub enum MidiError {
         /// bounded read got before giving up.
         bytes: u64,
     },
+    /// Parsing would retain more decoded event-like records than [`MAX_MIDI_EVENTS`].
+    #[non_exhaustive]
+    TooManyEvents {
+        /// The number of records the parser would have retained, including the rejected one.
+        events: usize,
+    },
+    /// Parsing would retain more title and marker text than [`MAX_MIDI_TEXT_BYTES`].
+    #[non_exhaustive]
+    TooMuchText {
+        /// The combined UTF-8 byte count the parser would have retained.
+        bytes: usize,
+    },
 }
 
 impl fmt::Display for MidiError {
@@ -131,6 +156,16 @@ impl fmt::Display for MidiError {
                 f,
                 "MIDI file is {bytes} bytes, which exceeds the {MAX_MIDI_FILE_BYTES} byte \
                  limit (read the bytes yourself and call `parse` if this is genuine)"
+            ),
+            MidiError::TooManyEvents { events } => write!(
+                f,
+                "MIDI input retains {events} decoded event-like records, exceeding the \
+                 {MAX_MIDI_EVENTS} record limit"
+            ),
+            MidiError::TooMuchText { bytes } => write!(
+                f,
+                "MIDI metadata retains {bytes} UTF-8 bytes, exceeding the \
+                 {MAX_MIDI_TEXT_BYTES} byte limit"
             ),
         }
     }

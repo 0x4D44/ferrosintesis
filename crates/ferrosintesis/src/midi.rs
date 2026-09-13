@@ -4,7 +4,9 @@
 //! skips anything it does not model (sysex and metas such as lyrics and
 //! key signatures).
 
-use crate::error::{MidiError, MAX_MIDI_FILE_BYTES, MAX_SONG_SECONDS};
+use crate::error::{
+    MidiError, MAX_MIDI_EVENTS, MAX_MIDI_FILE_BYTES, MAX_MIDI_TEXT_BYTES, MAX_SONG_SECONDS,
+};
 use std::path::Path;
 
 /// Bytes an SMF variable-length quantity may occupy. SMF 1.0 fixes this at four,
@@ -266,6 +268,58 @@ fn read_bounded(path: &Path) -> Result<Vec<u8>, MidiError> {
     Ok(data)
 }
 
+fn reserve_event_budget(retained: &mut usize) -> Result<(), MidiError> {
+    let attempted = retained.saturating_add(1);
+    if *retained >= MAX_MIDI_EVENTS {
+        return Err(MidiError::TooManyEvents { events: attempted });
+    }
+    *retained = attempted;
+    Ok(())
+}
+
+fn reserve_text_budget(retained: &mut usize, additional: usize) -> Result<(), MidiError> {
+    let attempted = retained.saturating_add(additional);
+    if attempted > MAX_MIDI_TEXT_BYTES {
+        return Err(MidiError::TooMuchText { bytes: attempted });
+    }
+    *retained = attempted;
+    Ok(())
+}
+
+fn lossy_utf8_len(bytes: &[u8]) -> usize {
+    let mut remaining = bytes;
+    let mut length = 0usize;
+    while !remaining.is_empty() {
+        match std::str::from_utf8(remaining) {
+            Ok(valid) => {
+                length = length.saturating_add(valid.len());
+                break;
+            }
+            Err(error) => {
+                let valid_len = error.valid_up_to();
+                length = length.saturating_add(valid_len);
+                length = length.saturating_add('\u{FFFD}'.len_utf8());
+                let invalid_len = error.error_len().unwrap_or(remaining.len() - valid_len);
+                remaining = &remaining[valid_len + invalid_len..];
+            }
+        }
+    }
+    length
+}
+
+fn push_raw_event(
+    raw: &mut Vec<(u64, u32, EvKind)>,
+    tick: u64,
+    seq: &mut u32,
+    kind: EvKind,
+    retained: &mut usize,
+) -> Result<(), MidiError> {
+    reserve_event_budget(retained)?;
+    raw.push((tick, *seq, kind));
+    *seq += 1;
+    Ok(())
+}
+
 pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
     let mut c = Cursor { data, pos: 0 };
     if c.bytes(4)? != b"MThd" {
@@ -305,6 +359,8 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
     let mut raw_markers: Vec<(u64, String)> = Vec::new();
     let mut title = String::new();
     let mut seq: u32 = 0;
+    let mut retained_records = 0usize;
+    let mut retained_text_bytes = 0usize;
 
     for track_index in 0..ntracks {
         if c.bytes(4)? != b"MTrk" {
@@ -359,12 +415,18 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                             let us = ((payload[0] as u32) << 16)
                                 | ((payload[1] as u32) << 8)
                                 | payload[2] as u32;
+                            reserve_event_budget(&mut retained_records)?;
                             tempos.push((tick, us));
                         }
                         0x06 => {
-                            raw_markers.push((tick, String::from_utf8_lossy(payload).into_owned()))
+                            let text_len = lossy_utf8_len(payload);
+                            reserve_event_budget(&mut retained_records)?;
+                            reserve_text_budget(&mut retained_text_bytes, text_len)?;
+                            raw_markers.push((tick, String::from_utf8_lossy(payload).into_owned()));
                         }
                         0x03 if track_index == 0 && title.is_empty() => {
+                            let text_len = lossy_utf8_len(payload);
+                            reserve_text_budget(&mut retained_text_bytes, text_len)?;
                             title = String::from_utf8_lossy(payload).into_owned();
                         }
                         _ => {}
@@ -379,8 +441,13 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                     if status == 0xF0 {
                         if let Some(body) = payload.strip_suffix(&[0xF7]) {
                             if let Some(kind) = decode_sysex_payload(body) {
-                                raw.push((tick, seq, kind));
-                                seq += 1;
+                                push_raw_event(
+                                    &mut raw,
+                                    tick,
+                                    &mut seq,
+                                    kind,
+                                    &mut retained_records,
+                                )?;
                             }
                         }
                     }
@@ -392,49 +459,86 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                         0x80 => {
                             let key = track.channel_data()?;
                             let _v = track.channel_data()?;
-                            raw.push((tick, seq, EvKind::NoteOff { ch, key }));
+                            push_raw_event(
+                                &mut raw,
+                                tick,
+                                &mut seq,
+                                EvKind::NoteOff { ch, key },
+                                &mut retained_records,
+                            )?;
                         }
                         0x90 => {
                             let key = track.channel_data()?;
                             let vel = track.channel_data()?;
-                            raw.push((
+                            push_raw_event(
+                                &mut raw,
                                 tick,
-                                seq,
+                                &mut seq,
                                 if vel > 0 {
                                     EvKind::NoteOn { ch, key, vel }
                                 } else {
                                     EvKind::NoteOff { ch, key }
                                 },
-                            ));
+                                &mut retained_records,
+                            )?;
                         }
                         0xB0 => {
                             let num = track.channel_data()?;
                             let val = track.channel_data()?;
-                            raw.push((tick, seq, EvKind::Cc { ch, num, val }));
+                            push_raw_event(
+                                &mut raw,
+                                tick,
+                                &mut seq,
+                                EvKind::Cc { ch, num, val },
+                                &mut retained_records,
+                            )?;
                         }
                         0xC0 => {
                             let prog = track.channel_data()?;
-                            raw.push((tick, seq, EvKind::Prog { ch, prog }));
+                            push_raw_event(
+                                &mut raw,
+                                tick,
+                                &mut seq,
+                                EvKind::Prog { ch, prog },
+                                &mut retained_records,
+                            )?;
                         }
                         0xD0 => {
                             let val = track.channel_data()?;
-                            raw.push((tick, seq, EvKind::Aftertouch { ch, val }));
+                            push_raw_event(
+                                &mut raw,
+                                tick,
+                                &mut seq,
+                                EvKind::Aftertouch { ch, val },
+                                &mut retained_records,
+                            )?;
                         }
                         0xE0 => {
                             let lsb = track.channel_data()? as i32;
                             let msb = track.channel_data()? as i32;
                             let val = (msb << 7) | lsb; // 0..16383, centre 8192
                             let semis = (val - 8192) as f32 / 8192.0 * 2.0;
-                            raw.push((tick, seq, EvKind::Bend { ch, semis }));
+                            push_raw_event(
+                                &mut raw,
+                                tick,
+                                &mut seq,
+                                EvKind::Bend { ch, semis },
+                                &mut retained_records,
+                            )?;
                         }
                         0xA0 => {
                             let key = track.channel_data()?;
                             let val = track.channel_data()?;
-                            raw.push((tick, seq, EvKind::PolyAftertouch { ch, key, val }));
+                            push_raw_event(
+                                &mut raw,
+                                tick,
+                                &mut seq,
+                                EvKind::PolyAftertouch { ch, key, val },
+                                &mut retained_records,
+                            )?;
                         }
                         _ => return Err(MidiError::BadStatusByte { status }),
                     }
-                    seq += 1;
                 }
             }
         }
@@ -882,6 +986,54 @@ mod tests {
         d.extend((tr.len() as u32).to_be_bytes());
         d.extend(&tr);
         d
+    }
+
+    fn zero_delta_note_flood(event_count: usize) -> Vec<u8> {
+        let mut events = Vec::with_capacity(4 + event_count.saturating_sub(1) * 3);
+        events.extend([0x00, 0x90, 60, 100]);
+        for _ in 1..event_count {
+            events.extend([0x00, 60, 100]);
+        }
+        file_from_track(&events)
+    }
+
+    #[test]
+    fn zero_delta_event_flood_is_rejected() {
+        let data = zero_delta_note_flood(MAX_MIDI_EVENTS + 1);
+        match parse(&data) {
+            Err(MidiError::TooManyEvents { events }) => {
+                assert_eq!(events, MAX_MIDI_EVENTS + 1)
+            }
+            Err(error) => {
+                panic!("a bounded MIDI file returned the wrong error for an event flood: {error:?}")
+            }
+            Ok(_) => panic!("a bounded MIDI file accepted an unbounded decoded event flood"),
+        }
+    }
+
+    #[test]
+    fn retained_marker_text_is_bounded() {
+        let marker_len = MAX_MIDI_TEXT_BYTES + 1;
+        let mut events = vec![0x00, 0xFF, 0x06];
+        let mut value = marker_len;
+        let mut encoded = [0u8; 4];
+        let mut index = 3;
+        encoded[index] = (value & 0x7F) as u8;
+        while {
+            value >>= 7;
+            value != 0
+        } {
+            index -= 1;
+            encoded[index] = ((value & 0x7F) as u8) | 0x80;
+        }
+        events.extend(&encoded[index..]);
+        events.extend(std::iter::repeat(b'x').take(marker_len));
+
+        match parse(&file_from_track(&events)) {
+            Err(MidiError::TooMuchText { bytes }) => assert_eq!(bytes, marker_len),
+            Err(error) => panic!("oversized marker text returned the wrong error: {error:?}"),
+            Ok(_) => panic!("oversized marker text was accepted"),
+        }
     }
 
     #[test]

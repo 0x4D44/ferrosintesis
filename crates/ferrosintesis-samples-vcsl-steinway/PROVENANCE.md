@@ -8,7 +8,7 @@
 
 Grand-piano attack/body bank for a **GM 0 Acoustic Grand alternate** (CC0=3):
 27 unique mono 16-bit 44.1 kHz FLACs serving 54 canonical `.flac` names and 27
-legacy `.wav` aliases across 9 pitch zones (C2–C6) × 3 dynamics (pp/mf/f) × 2 round
+legacy `.wav` alias keys across 9 pitch zones (C2–C6) × 3 dynamics (pp/mf/f) × 2 round
 robins. The 27 repeated upstream velocity cells are declared in `ALIASES` rather than packaged twice. Generated
 by `tools/ferrosintesis-samples/prepare.py` (family `steinwayb`) from the VCSL
 "Grand Piano, Steinway B" close-mic samples. The FLACs under `samples/` are

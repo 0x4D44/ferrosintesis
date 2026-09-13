@@ -4265,11 +4265,6 @@ fn drive_render<E>(
         sitar_symp_on,
     ));
 
-    let events: Vec<(usize, EvKind)> = song
-        .events
-        .iter()
-        .map(|e| ((e.sec * sr as f64) as usize, e.kind))
-        .collect();
     let mut ev_i = 0;
 
     let mut next_report = total / 10;
@@ -4278,9 +4273,14 @@ fn drive_render<E>(
     while block_start < total {
         let n = BLOCK.min(total - block_start);
 
-        // apply events that fall inside this block (quantised to block start)
-        while ev_i < events.len() && events[ev_i].0 < block_start + n {
-            let (_, kind) = events[ev_i];
+        // Apply events that fall inside this block (quantised to block start). Convert each
+        // timestamp just before use so rendering does not clone the parsed event vector.
+        while ev_i < song.events.len() {
+            let event_frame = (song.events[ev_i].sec * sr as f64) as usize;
+            if event_frame >= block_start + n {
+                break;
+            }
+            let kind = song.events[ev_i].kind;
             ev_i += 1;
 
             core.handle_event(kind);

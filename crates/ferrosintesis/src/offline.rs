@@ -10,7 +10,9 @@
 use std::path::Path;
 
 pub use crate::engine::{normalize_loudness, normalize_to_i16, Options, Progress, Stats};
-pub use crate::error::{MidiError, MAX_MIDI_FILE_BYTES, MAX_SONG_SECONDS};
+pub use crate::error::{
+    MidiError, MAX_MIDI_EVENTS, MAX_MIDI_FILE_BYTES, MAX_MIDI_TEXT_BYTES, MAX_SONG_SECONDS,
+};
 pub use crate::loudness::{integrated_lufs, limit_true_peak, momentary_lufs, true_peak_dbtp};
 pub use crate::wav::write_wav;
 
@@ -106,7 +108,8 @@ impl Song {
 /// # Errors
 ///
 /// [`MidiError::Io`] if the file cannot be read, [`MidiError::TooLarge`] if it exceeds
-/// [`MAX_MIDI_FILE_BYTES`], or any [`parse`] error if the bytes are not a type-0/1 SMF.
+/// [`MAX_MIDI_FILE_BYTES`], or any [`parse`] error if the bytes are not a type-0/1 SMF or
+/// exceed the decoded event and retained-text budgets.
 pub fn load(path: &Path) -> Result<Song, MidiError> {
     crate::midi::load(path).map(Song)
 }
@@ -141,7 +144,9 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
 /// [`parse`] already refuses a tempo map implying a song longer than 24 hours
 /// ([`MidiError::TooLong`]), so untrusted input cannot turn this into an unbounded
 /// allocation — but a legitimately long song is still a large buffer, and
-/// [`Song::seconds`] lets you check before committing to it.
+/// [`Song::seconds`] lets you check before committing to it. Decoded event-like records
+/// and retained title/marker text are bounded by [`MAX_MIDI_EVENTS`] and
+/// [`MAX_MIDI_TEXT_BYTES`].
 pub fn render(song: &Song, opt: &Options) -> (Vec<f32>, Stats) {
     crate::engine::render(&song.0, opt)
 }

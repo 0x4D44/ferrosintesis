@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00261 — Concurrent MuseScore onset regenerations race fixed shared intermediates
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** MuseScore onset sample generation / concurrent cache isolation
 - **Raised:** 2026-08-17T03:29:31Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T143351Z-24075ba4
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00261-run-fix-20260913T143351Z-24075ba4
-- **Owner base:** 48ffa44d11ca716a4eaa6a62d2216de704d8ce7c
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T14:33:51Z
-- **Owner until:** 2026-09-13T16:33:51Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T03:29:31Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-17T03:29:31Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T14:43:31Z, deltic:auto role=fix run=fix-20260913T143351Z-24075ba4 branch=task/bug-MM-BUG-KILN-00261-run-fix-20260913T143351Z-24075ba4 code=9170b41b574b6a85e05227b38e61060fe6dbf8e6 gate=manual)
 
 ## Observation
 

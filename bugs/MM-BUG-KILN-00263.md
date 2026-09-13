@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00263 — Banjo extractor and its required tests cannot consume the migrated FLAC inventory
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** orchestral2 banjo regeneration / required test gate
 - **Raised:** 2026-08-17T04:26:00Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T203106Z-901af1f0
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00263-run-verify-20260913T203106Z-901af1f0
-- **Owner base:** d61b8dea20fcc953ebc95ed6fda34e54c1c490e1
-- **Owner fingerprint:** sha256:02cff947a3375083fabff00a4a4d4141d7311f63a6bcf81249ece69a9511b13c
-- **Owner since:** 2026-09-13T20:31:06Z
-- **Owner until:** 2026-09-13T22:31:06Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T04:26:00Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:42:10Z, deltic:auto role=fix run=fix-20260913T042001Z-467ac0e7 branch=task/bug-MM-BUG-KILN-00263-run-fix-20260913T042001Z-467ac0e7 code=af990a2a59541f223e628e9067c585c7739a3b22 gate=manual)
+- **State history:** Open (2026-08-17T04:26:00Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:42:10Z, deltic:auto role=fix run=fix-20260913T042001Z-467ac0e7 branch=task/bug-MM-BUG-KILN-00263-run-fix-20260913T042001Z-467ac0e7 code=af990a2a59541f223e628e9067c585c7739a3b22 gate=manual) -> Closed (2026-09-13T20:44:18Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: bug-time banjo extractor reproduces the empty scan and mismatch; pre-fix extractor fails both new regressions)
 
 ## Observation
 
@@ -50,6 +50,14 @@ harness ran.
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `af990a2a` + `55298fb1`) by an agent other than the fixer.
+
+**Original observation re-run.** Loading the bug-time `banjo_extract.py` (`55298fb1^`) against the HEAD tree finds 0 names and raises "banjo inventory mismatch ... only in sampler.rs: banjo_A#3.flac, ...", exactly as reported. At HEAD the inventory loads and all publication tests run (numpy present, nothing skipped).
+
+**Fails-before (method B).** With `banjo_extract.py` from `af990a2a^`, `test_split_sample_table_keeps_only_canonical_flac_entries` and `test_stale_wav_only_output_is_rejected_before_publication` fail. Restored; both and three other publication tests pass on HEAD.
 
 ## Notes
 

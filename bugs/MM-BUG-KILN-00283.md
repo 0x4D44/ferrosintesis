@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00283 — Drum-kit regeneration command leaves the embedded FLAC banks stale
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** split drum-kit sample crates / deterministic regeneration
 - **Raised:** 2026-08-17T11:39:57Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T202909Z-de9d68d7
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00283-run-verify-20260913T202909Z-de9d68d7
-- **Owner base:** 3ca1f7cb0d8a988212fb0adbbf16ccf1fb929422
-- **Owner fingerprint:** sha256:dc0283ad305d43b8352b93e00a168bb4a434e2dd07963a13c3bb053c11903250
-- **Owner since:** 2026-09-13T20:29:09Z
-- **Owner until:** 2026-09-13T22:29:09Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T11:39:57Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:50:57Z, deltic:auto role=fix run=fix-20260913T183742Z-34923c74 branch=task/bug-MM-BUG-KILN-00283-run-fix-20260913T183742Z-34923c74 code=82e6b571cf357b86b8dc480a39e026053146a1f0 gate=manual)
+- **State history:** Open (2026-08-17T11:39:57Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:50:57Z, deltic:auto role=fix run=fix-20260913T183742Z-34923c74 branch=task/bug-MM-BUG-KILN-00283-run-fix-20260913T183742Z-34923c74 code=82e6b571cf357b86b8dc480a39e026053146a1f0 gate=manual) -> Closed (2026-09-13T20:44:18Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: drum-kit regeneration publishes FLAC-only and refreshes both tables; pre-fix publisher fails both regressions; no-rollback swap split to MM-BUG-CRU-00071)
 
 ## Observation
 
@@ -57,5 +57,15 @@ verify decoded PCM and the complete two-package inventory, reject mixed same-ste
 containers, then publish both packages failure-atomically and refresh their Rust
 tables and provenance. Add a negative fixture starting from the current FLAC-only
 tree. Estimated effort: Medium.>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `82e6b571` + `55298fb1`) by an agent other than the fixer.
+
+**Original observation re-derived.** `prepare_drumkit.py regenerate` stages the kit; `publish_staged` rejects legacy or non-FLAC files and encodes and verifies each take to its packaged name; both tables are refreshed via `regen_samples_table.refresh`. The parity oracle compares packaged names and matches the committed 128/36 inventories.
+
+**Fails-before (method B).** With `prepare_drumkit.py` from `82e6b571^`, `test_publish_rejects_mixed_wav_and_flac_outputs` (RuntimeError not raised) and `test_regenerate_refreshes_both_embedded_tables_after_publish` fail. Restored; all four `DrumkitOutputPlanTests` pass on HEAD.
+
+**Residual split to MM-BUG-CRU-00071.** `publish_staged` swaps files one at a time with no rollback (found by reading the code).
 
 ## Notes

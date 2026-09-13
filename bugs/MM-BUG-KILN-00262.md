@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00262 — Orchestral2 required preflight and non-banjo rebakes still target WAV after FLAC migration
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** orchestral2 sample generation / final-format regeneration
 - **Raised:** 2026-08-17T04:25:53Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T203024Z-cd09d866
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00262-run-verify-20260913T203024Z-cd09d866
-- **Owner base:** d80165ff792121cce074ef9bcb0daf4062cb52f9
-- **Owner fingerprint:** sha256:3c9ce21f49d3e8901b39e7bc1ce9e98c9751bdc45d4814572913a33e9274b41d
-- **Owner since:** 2026-09-13T20:30:24Z
-- **Owner until:** 2026-09-13T22:30:24Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T04:25:53Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:19:01Z, deltic:auto role=fix run=fix-20260913T041638Z-3cc10e4f branch=task/bug-MM-BUG-KILN-00262-run-fix-20260913T041638Z-3cc10e4f code=55298fb16c0f370149bafafb7e518685cafa4443 gate=manual)
+- **State history:** Open (2026-08-17T04:25:53Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:19:01Z, deltic:auto role=fix run=fix-20260913T041638Z-3cc10e4f branch=task/bug-MM-BUG-KILN-00262-run-fix-20260913T041638Z-3cc10e4f code=55298fb16c0f370149bafafb7e518685cafa4443 gate=manual) -> Closed (2026-09-13T20:44:18Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: --only=harp replaces 11 orchestral2 FLACs with no WAVs; WAV-copying publisher doubles the inventory)
 
 ## Observation
 
@@ -52,6 +52,14 @@ exploratory harness ran.
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `55298fb1` + `dc135609`) by an agent other than the fixer.
+
+**Original observation re-run.** A scratch harness drove `main` with `--only=harp` on an isolated FLAC-only orchestral2 bank: all 11 FLACs replaced, no WAVs. The cited preflight now normalises both sides to packaged names and passes.
+
+**Fails-before (method B).** Making the shared publisher copy WAVs doubles the harp inventory (22 != 11) and fails the shared Strings and Steinway generic tests. Restored; `SelectedFamilyPreflightTest`, `GenericFamilyWholeBankPublicationTest` and the shared tests pass on HEAD.
 
 ## Notes
 

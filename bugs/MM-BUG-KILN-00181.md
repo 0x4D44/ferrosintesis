@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00181 — Wrong-shaped archive cache manifests abort sample regeneration
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample generation / archive cache reliability
 - **Raised:** 2026-08-13T17:58:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T204009Z-2ee71f4f
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00181-run-verify-20260913T204009Z-2ee71f4f
-- **Owner base:** 8ceb7049324f06a08b8535f7887379ca0e11e06a
-- **Owner fingerprint:** sha256:1ee9a401aa5afa058c03ef1538be1aa9f2579ea8d8de8d9948b81d83462cef4a
-- **Owner since:** 2026-09-13T20:40:09Z
-- **Owner until:** 2026-09-13T22:40:09Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T17:58:10Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T12:07:42Z, deltic:auto role=fix run=fix-20260815T120422Z-p20252-n181203500-c1 branch=task/bug-MM-BUG-KILN-00181-run-fix-20260815T120422Z-p20252-n181203500-c1 code=2cf3840 gate=manual)
+- **State history:** Open (2026-08-13T17:58:10Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T12:07:42Z, deltic:auto role=fix run=fix-20260815T120422Z-p20252-n181203500-c1 branch=task/bug-MM-BUG-KILN-00181-run-fix-20260815T120422Z-p20252-n181203500-c1 code=2cf3840 gate=manual) -> Closed (2026-09-13T20:44:18Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: pre-fix checks reproduce the AttributeError and PermissionError crashes across all eight manifest cases)
 
 ## Observation
 
@@ -28,5 +28,15 @@ Source-level reproduction: replace the archive member manifest with syntacticall
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `2cf38405`) by an agent other than the fixer.
+
+The regressions cover every recorded case: null, array, scalar and string manifest roots; a non-mapping `members`; a directory member; an unreadable member.
+
+**Fails-before (method B).** Removing the two `isinstance` guards and restoring `exists` plus unguarded `sha256_file` gives 8 errors: `AttributeError: 'NoneType' object has no attribute 'get'` for the six shapes and `PermissionError` for the directory and unreadable members. Restored; all three `SalamanderArchiveCacheTest` regressions pass on HEAD and assert both the cache miss and the rebuild.
+
+**Gates.** Causes no gate failure; trunk `8b6a6f86` is red for other recorded reasons.
 
 ## Notes

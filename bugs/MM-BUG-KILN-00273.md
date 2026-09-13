@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00273 — Steinway regeneration command leaves the embedded FLAC bank stale
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** Steinway sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T08:39:27Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T202823Z-27f01e73
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00273-run-verify-20260913T202823Z-27f01e73
-- **Owner base:** c525a1dfca0c025529df2b78a8d39baab8a356d9
-- **Owner fingerprint:** sha256:83a68deb2060ef84c25f3c32fe7dcf375b46b623146a785839e7f7223eed4635
-- **Owner since:** 2026-09-13T20:28:23Z
-- **Owner until:** 2026-09-13T22:28:23Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T08:39:27Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:44:12Z, deltic:auto role=fix run=fix-20260913T173029Z-61dd10a6 branch=task/bug-MM-BUG-KILN-00273-run-fix-20260913T173029Z-61dd10a6 code=cd258ca69b488cccb9a077452d399e7bca07939f gate=manual)
+- **State history:** Open (2026-08-17T08:39:27Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:44:12Z, deltic:auto role=fix run=fix-20260913T173029Z-61dd10a6 branch=task/bug-MM-BUG-KILN-00273-run-fix-20260913T173029Z-61dd10a6 code=cd258ca69b488cccb9a077452d399e7bca07939f gate=manual) -> Closed (2026-09-13T20:44:18Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: --only=steinwayb replaces 27 FLACs with no WAVs; WAV-copying publisher reddens the scoped test)
 
 ## Observation
 
@@ -54,6 +54,16 @@ the command and tests were not run.
 verify the exact inventory and decoded PCM there, reject mixed same-stem
 containers, then publish the complete bank atomically and refresh the alias and
 Rust tables. Add a negative control starting from the current FLAC-only tree.>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (test `cd258ca6`; root cause `55298fb1` + `dc135609`) by an agent other than the fixer.
+
+`SteinwayGenericScopedPublicationTest` drives `main` with `--only=steinwayb` over the 27 physical sources; only the 27 FLACs remain, each replaced.
+
+**Fails-before (method B).** Making the shared publisher copy WAVs fails the published-set assertion. Restored; it, `SteinwayOutputInventoryTest` and `SteinwayPackagedContractTest` pass on HEAD.
+
+The red `SteinwayAliasDeduplicationTest` is not caused by this fix: it comes from `8244afb1`'s legacy alias rows (KILN-00272), proven by restoring the older `ALIASES`; tracked as MM-BUG-CRU-00058.
 
 ## Notes
 

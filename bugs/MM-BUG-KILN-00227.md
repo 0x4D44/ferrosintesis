@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00227 — Mandatory gate can accept fret-noise WAVs that violate BAKE-SHA256
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** fret-noise sample integrity gate
 - **Raised:** 2026-08-16T16:53:04Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T203630Z-912a1a8d
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00227-run-verify-20260913T203630Z-912a1a8d
-- **Owner base:** 1a16a7c61c1fc313034a3ed12659bba3cba22623
-- **Owner fingerprint:** sha256:b4ef3b30a666699da3cd291c8fe38cdda2dc5d3fb1b2acf7ea3b4b25eac36494
-- **Owner since:** 2026-09-13T20:36:30Z
-- **Owner until:** 2026-09-13T22:36:30Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T16:53:04Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T16:15:47Z, deltic:auto role=fix run=fix-20260913T155945Z-fcf1412b branch=task/bug-MM-BUG-KILN-00227-run-fix-20260913T155945Z-fcf1412b code=a2f0f9dc38151ac172bc006a712a500f0ac27599 gate=manual)
+- **State history:** Open (2026-08-16T16:53:04Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T16:15:47Z, deltic:auto role=fix run=fix-20260913T155945Z-fcf1412b branch=task/bug-MM-BUG-KILN-00227-run-fix-20260913T155945Z-fcf1412b code=a2f0f9dc38151ac172bc006a712a500f0ac27599 gate=manual) -> Closed (2026-09-13T20:44:18Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: a same-length one-byte mutation of a committed fret-noise FLAC fails the mandatory stdlib BAKE-SHA256 test)
 
 ## Observation
 
@@ -46,6 +46,16 @@ Unfixed. Add an always-on, standard-library-only check that strictly parses
 every committed WAV. Keep the canonical NumPy re-bake as stronger optional
 coverage. Add a same-length PCM mutation negative control and require that it
 fails.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `a2f0f9dc`) by an agent other than the fixer.
+
+**Original observation re-derived.** `test_fretnoise_manifest.py` is standard-library only (no numpy skip) and is collected by the mandatory `unittest discover -s tools/ferrosintesis-samples` gate step. It strictly parses `BAKE-SHA256`, requires the manifest's file set to equal the 12 committed FLACs, and hashes each.
+
+**Fails-before (static reproduction from the record).** Flipping one mid-file byte of `fretnoise_rr01.flac` without changing its length fails `test_committed_bank_matches_exact_file_manifest` (sha256 52c57212... != pinned aed3e134...). Flipped back; status clean; all four `FretNoiseManifestTests` pass on HEAD.
+
+This fix does not touch `sampler.rs`; the clavinet gate failures trace to `6ee2af43` (MM-BUG-CRU-00064).
 
 ## Notes
 

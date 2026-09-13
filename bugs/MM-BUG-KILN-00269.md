@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00269 — Sax regeneration command leaves the embedded FLAC bank stale
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sax sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T06:31:31Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T202621Z-e3282bc0
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00269-run-verify-20260913T202621Z-e3282bc0
-- **Owner base:** d676a08827b7486c047f3be22de16d22c5e9dcfe
-- **Owner fingerprint:** sha256:866975e58cdae23d469f1b08721d8c6d0917e7b61050579b1efad3245c79e46e
-- **Owner since:** 2026-09-13T20:26:21Z
-- **Owner until:** 2026-09-13T22:26:21Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T06:31:31Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:10:36Z, deltic:auto role=fix run=fix-20260913T170255Z-304e895d branch=task/bug-MM-BUG-KILN-00269-run-fix-20260913T170255Z-304e895d code=c5282f988d2120272e0767369b8109e145470f3c gate=manual)
+- **State history:** Open (2026-08-17T06:31:31Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:10:36Z, deltic:auto role=fix run=fix-20260913T170255Z-304e895d branch=task/bug-MM-BUG-KILN-00269-run-fix-20260913T170255Z-304e895d code=c5282f988d2120272e0767369b8109e145470f3c gate=manual) -> Closed (2026-09-13T20:44:18Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: --sax-only publishes the FLAC bank atomically; WAV-copying publisher fails the complete-bake test on the WAV symptom)
 
 ## Observation
 
@@ -28,5 +28,13 @@ The package documents python3 tools/ferrosintesis-samples/prepare.py --sax-only 
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `c5282f98` + `55298fb1`) by an agent other than the fixer.
+
+`MtgSaxCacheTest.test_complete_bake_publishes_the_flac_bank_without_wav_duplicates` runs `_bake_mtg_sax` (used by `--sax-only`) with publication live; exactly `sax_sop_C4_f.flac` and `sax_sop_C4_p.flac` remain.
+
+**Fails-before (method B).** Making the staged publisher copy WAVs fails it (`['sax_sop_C4_f.wav', 'sax_sop_C4_p.wav'] != [...flac]`). Restored; it and the rollback test pass on HEAD.
 
 ## Notes

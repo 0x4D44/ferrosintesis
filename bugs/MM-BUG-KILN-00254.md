@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00254 — MuseScore-grand regeneration command leaves the embedded FLAC bank stale
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** MuseScore grand sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T02:30:02Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T202347Z-c247718b
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00254-run-verify-20260913T202347Z-c247718b
-- **Owner base:** d4e62476718edd048a53200cc8901078a14e196a
-- **Owner fingerprint:** sha256:95ba4ab4a7df500c7e6832bfc7a5b95371f47d8d00dbd9911a03b94e3f45e9ab
-- **Owner since:** 2026-09-13T20:23:47Z
-- **Owner until:** 2026-09-13T22:23:47Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T02:30:02Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T08:12:39Z, deltic:auto role=fix run=fix-20260913T081029Z-2fd3bf02 branch=task/bug-MM-BUG-KILN-00254-run-fix-20260913T081029Z-2fd3bf02 code=55298fb16c0f370149bafafb7e518685cafa4443 gate=manual)
+- **State history:** Open (2026-08-17T02:30:02Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T08:12:39Z, deltic:auto role=fix run=fix-20260913T081029Z-2fd3bf02 branch=task/bug-MM-BUG-KILN-00254-run-fix-20260913T081029Z-2fd3bf02 code=55298fb16c0f370149bafafb7e518685cafa4443 gate=manual) -> Closed (2026-09-13T20:44:18Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: MuseScore-grand bake replaces its FLAC bank with no WAVs; WAV-copying publisher reproduces the doubled inventory)
 
 ## Observation
 
@@ -28,5 +28,15 @@ The package documents `python3 tools/ferrosintesis-samples/prepare.py --only=mus
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fixes `55298fb1`, current path `6cd7e62e`) by an agent other than the fixer.
+
+**Original observation re-run.** A scratch harness ran the success path of `_bake_musescore_grand` (what `--only=musescoregrand` calls) on the committed SF3 fixture from a FLAC-only bank: all FLACs replaced, no WAVs.
+
+**Fails-before (method B).** Making the shared publisher copy WAVs doubles the inventory in that scenario (6 != 3); the committed replacement-failure test also goes red, but only indirectly (`OSError not raised`). Restored; `MuseScoreGrandWholeBankPublicationTest` and `MuseScoreGrandSampleApiContractTest` pass on HEAD.
+
+**Coverage note.** No committed test asserts that a successful bake leaves a FLAC-only inventory; logged in `scratchpad.md`.
 
 ## Notes

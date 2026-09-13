@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00248 — Headroom regeneration command leaves the embedded FLAC bank stale
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** headroom sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T00:04:33Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T202155Z-b242a743
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00248-run-verify-20260913T202155Z-b242a743
-- **Owner base:** 4160f58a6112510f10416cf2e5b295787a2abada
-- **Owner fingerprint:** sha256:d817dd7912f99b567b9735e5a6dbf9e7587ab015330aa72c05e750d4328df6d9
-- **Owner since:** 2026-09-13T20:21:55Z
-- **Owner until:** 2026-09-13T22:21:55Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T00:04:33Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:40:10Z, deltic:auto role=fix run=fix-20260913T073537Z-248083dd branch=task/bug-MM-BUG-KILN-00248-run-fix-20260913T073537Z-248083dd code=55298fb1 gate=manual)
+- **State history:** Open (2026-08-17T00:04:33Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:40:10Z, deltic:auto role=fix run=fix-20260913T073537Z-248083dd branch=task/bug-MM-BUG-KILN-00248-run-fix-20260913T073537Z-248083dd code=55298fb1 gate=manual) -> Closed (2026-09-13T20:44:18Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: --only=headroom publishes 45 FLACs and no WAVs; WAV-copying publisher reproduces the 90-file mixed inventory)
 
 ## Observation
 
@@ -47,5 +47,13 @@ review only; the command was not run.
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fixes `55298fb1`, current path `dc135609`) by an agent other than the fixer.
+
+**Original observation re-run.** A scratch harness drove `main` with `--only=headroom` over the real 45-entry `HEADROOM_SOURCES` (fetch, DSP and encode faked) on an isolated FLAC-only bank: all 45 FLACs replaced, no WAV or `.part` files.
+
+**Fails-before (method B).** Making the shared staged publisher copy WAVs reproduces the original 90-file mixed inventory in that scenario and fails the shared `StringsGenericScopedPublicationTest` and `SteinwayGenericScopedPublicationTest`. Restored; they and `HeadroomOutputInventoryTest` pass on HEAD. There is no headroom-specific committed test; the shared path is covered.
 
 ## Notes

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00287 — Orchestral regeneration leaves the embedded FLAC bank stale
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** orchestral sample generation / final-format regeneration
 - **Raised:** 2026-08-17T13:40:55Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T202945Z-333f1549
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00287-run-verify-20260913T202945Z-333f1549
-- **Owner base:** 18f32dfaa2d0317ea51aaadad3cb89e4eab228e0
-- **Owner fingerprint:** sha256:7d39c72bcad6841c97a2ac35d0e1b46599dfcbe6b7fc87ab0d9bcfc8b1909598
-- **Owner since:** 2026-09-13T20:29:45Z
-- **Owner until:** 2026-09-13T22:29:45Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T13:40:55Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:24:49Z, deltic:auto role=fix run=fix-20260913T042224Z-c069c901 branch=task/bug-MM-BUG-KILN-00287-run-fix-20260913T042224Z-c069c901 code=55298fb16c0f370149bafafb7e518685cafa4443 gate=manual)
+- **State history:** Open (2026-08-17T13:40:55Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:24:49Z, deltic:auto role=fix run=fix-20260913T042224Z-c069c901 branch=task/bug-MM-BUG-KILN-00287-run-fix-20260913T042224Z-c069c901 code=55298fb16c0f370149bafafb7e518685cafa4443 gate=manual) -> Closed (2026-09-13T20:44:18Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: steel and chanter regenerations leave FLAC-only banks; each publish reversal reproduces the mixed inventory; bagpipe direct writer split to MM-BUG-CRU-00070)
 
 ## Observation
 
@@ -54,6 +54,16 @@ decoder, app, package command, or exploratory harness ran.
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `55298fb1` + `dc135609`) by an agent other than the fixer.
+
+**Original observation re-run.** A scratch harness drove `main` on an isolated FLAC-only orchestral bank: `--only=steel` (generic path) replaced 8 FLACs and `--only=chanter` (bagpipe path) replaced 17, neither leaving WAVs. The required `SelectedFamilyPreflightTest` compares packaged names and passes.
+
+**Fails-before (method B).** A WAV-copying staged publisher doubles the steel inventory (16 != 8); skipping the pending-bank publish doubles the chanter inventory (34 != 17). Restored; the preflight and shared generic tests pass on HEAD.
+
+**Residual split to MM-BUG-CRU-00070.** `_bake_bagpipe` writes WAVs straight into the live crate and converts at the end, which is not transactional.
 
 ## Notes
 

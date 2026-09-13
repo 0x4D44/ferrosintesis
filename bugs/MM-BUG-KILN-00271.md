@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00271 — Strings regeneration command leaves the embedded FLAC bank stale
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** strings sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T07:29:12Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T202726Z-2b7da5ea
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00271-run-verify-20260913T202726Z-2b7da5ea
-- **Owner base:** d453a21b394a146fb124f2c7b50e12580d434116
-- **Owner fingerprint:** sha256:dde141898f77c8d5d0b1f95ea5a3816ad0c92f6da27a02968525f7116a17f1e7
-- **Owner since:** 2026-09-13T20:27:26Z
-- **Owner until:** 2026-09-13T22:27:26Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T07:29:12Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:29:02Z, deltic:auto role=fix run=fix-20260913T171722Z-c6965ed4 branch=task/bug-MM-BUG-KILN-00271-run-fix-20260913T171722Z-c6965ed4 code=711e6a5a22170ff23bd3a5df09ea37464ff91539 gate=manual)
+- **State history:** Open (2026-08-17T07:29:12Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:29:02Z, deltic:auto role=fix run=fix-20260913T171722Z-c6965ed4 branch=task/bug-MM-BUG-KILN-00271-run-fix-20260913T171722Z-c6965ed4 code=711e6a5a22170ff23bd3a5df09ea37464ff91539 gate=manual) -> Closed (2026-09-13T20:44:18Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: strings selector replaces all 40 FLACs with no WAVs; WAV-copying publisher reddens the scoped test)
 
 ## Observation
 
@@ -28,5 +28,13 @@ The package documents python3 tools/ferrosintesis-samples/prepare.py --only=cell
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (test `711e6a5a`; root cause `55298fb1` + `dc135609`) by an agent other than the fixer.
+
+`StringsGenericScopedPublicationTest.test_strings_selector_replaces_all_three_families_without_wav_duplicates` drives `main` with `--only=cellosolo,dbass,pizzbass` over all 40 real entries; only the 40 FLACs remain.
+
+**Fails-before (method B).** Making the shared publisher copy WAVs fails the published-name set assertion. Restored; it and `StringsPackagedDocumentContractTest` pass on HEAD.
 
 ## Notes

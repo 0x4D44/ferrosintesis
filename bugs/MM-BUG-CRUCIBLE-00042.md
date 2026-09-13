@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00042 — Five packaged sample-crate NOTICEs still call the embedded FLAC banks WAVs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample asset crates / packaged attribution notices
 - **Raised:** 2026-08-18T06:59:44Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T080234Z-3d8fc1e0
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00042-run-fix-20260913T080234Z-3d8fc1e0
-- **Owner base:** 68b69ac6221e46361db510c76e9b298d12d63398
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T08:02:34Z
-- **Owner until:** 2026-09-13T10:02:34Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T06:59:44Z, raised via `deltic bugs new` model=claude-fable-5)
+- **State history:** Open (2026-08-18T06:59:44Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-09-13T08:08:58Z, deltic:auto role=fix run=fix-20260913T080234Z-3d8fc1e0 branch=task/bug-MM-BUG-CRUCIBLE-00042-run-fix-20260913T080234Z-3d8fc1e0 code=7c214447cda4d061de26949a503abccfd43e37e7 gate=manual)
 
 ## Observation
 

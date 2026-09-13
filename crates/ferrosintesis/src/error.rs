@@ -84,6 +84,12 @@ pub enum MidiError {
     },
     /// The data ended in the middle of a header, chunk, or event.
     UnexpectedEof,
+    /// A Set-Tempo event carries zero microseconds per quarter note.
+    #[non_exhaustive]
+    InvalidTempo {
+        /// The invalid microseconds-per-quarter-note value from the event.
+        microseconds_per_quarter: u32,
+    },
     /// A variable-length quantity ran past the four bytes SMF allows.
     ///
     /// Delta times and meta/SysEx lengths are VLQs, and SMF 1.0 caps them at four
@@ -144,6 +150,12 @@ impl fmt::Display for MidiError {
             MidiError::MissingTrack { index } => write!(f, "track {index}: missing MTrk header"),
             MidiError::BadStatusByte { status } => write!(f, "bad status byte {status:#04x}"),
             MidiError::UnexpectedEof => f.write_str("unexpected end of file"),
+            MidiError::InvalidTempo {
+                microseconds_per_quarter,
+            } => write!(
+                f,
+                "invalid Set-Tempo value {microseconds_per_quarter}: microseconds per quarter note must be non-zero"
+            ),
             MidiError::OverlongVlq => {
                 f.write_str("a variable-length quantity is longer than the four bytes SMF allows")
             }

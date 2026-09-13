@@ -208,6 +208,7 @@ mod tests {
             MidiError::MissingTrack { .. } => "MissingTrack",
             MidiError::BadStatusByte { .. } => "BadStatusByte",
             MidiError::UnexpectedEof => "UnexpectedEof",
+            MidiError::InvalidTempo { .. } => "InvalidTempo",
             MidiError::OverlongVlq => "OverlongVlq",
             MidiError::TooLong { .. } => "TooLong",
             MidiError::TooLarge { .. } => "TooLarge",
@@ -344,6 +345,28 @@ mod tests {
                 }),
                 expected: "OverlongVlq",
                 is_expected: |e| matches!(e, MidiError::OverlongVlq),
+            },
+            Case {
+                what: "InvalidTempo: the first event is a Set-Tempo whose three-byte \
+                       microseconds-per-quarter-note payload is 00 00 00. The following \
+                       note-on and note-off are separated by 480 ticks, so accepting the \
+                       zero tempo would collapse their timeline and make the public \
+                       opening BPM non-finite.",
+                bytes: corrupted(|f| {
+                    let mut events = vec![0x00, 0xFF, 0x51, 0x03, 0x00, 0x00, 0x00];
+                    events.extend(good_events());
+                    f.tracks[0].events = events;
+                }),
+                expected: "InvalidTempo { microseconds_per_quarter: 0 }",
+                is_expected: |e| {
+                    matches!(
+                        e,
+                        MidiError::InvalidTempo {
+                            microseconds_per_quarter: 0,
+                            ..
+                        }
+                    )
+                },
             },
             Case {
                 what: "UnexpectedEof: zero bytes. The magic comparison needs four bytes \
@@ -531,6 +554,7 @@ mod tests {
             produced,
             [
                 "BadStatusByte",
+                "InvalidTempo",
                 "MissingTrack",
                 "NotMidi",
                 "OverlongVlq",

@@ -415,6 +415,11 @@ pub fn parse(data: &[u8]) -> Result<Song, MidiError> {
                             let us = ((payload[0] as u32) << 16)
                                 | ((payload[1] as u32) << 8)
                                 | payload[2] as u32;
+                            if us == 0 {
+                                return Err(MidiError::InvalidTempo {
+                                    microseconds_per_quarter: us,
+                                });
+                            }
                             reserve_event_budget(&mut retained_records)?;
                             tempos.push((tick, us));
                         }
@@ -839,6 +844,39 @@ mod tests {
             "{}",
             song.events[1].sec
         );
+    }
+
+    /// MM-BUG-KILN-00275: a zero-microsecond Set-Tempo must not collapse all
+    /// tick-separated events or expose an infinite opening BPM.
+    #[test]
+    fn zero_set_tempo_is_rejected_before_tempo_map_arithmetic() {
+        let track = [
+            0x00, 0xFF, 0x51, 0x03, 0x00, 0x00, 0x00, // invalid zero us/quarter
+            0x00, 0x90, 60, 100, // note-on at tick 0
+            0x83, 0x60, 0x90, 62, 100, // note-on 480 ticks later
+            0x83, 0x60, 0x80, 62, 0, // note-off 480 ticks later
+        ];
+
+        let parsed = parse(&file_from_track(&track));
+        match parsed {
+            Err(MidiError::InvalidTempo {
+                microseconds_per_quarter: 0,
+            }) => {}
+            Err(error) => panic!("zero Set-Tempo was rejected as the wrong error: {error:?}"),
+            Ok(song) => {
+                assert!(
+                    song.initial_bpm.is_finite(),
+                    "accepted zero Set-Tempo exposed non-finite initial BPM: {}",
+                    song.initial_bpm
+                );
+                let seconds: Vec<f64> = song.events.iter().map(|event| event.sec).collect();
+                assert!(
+                    seconds.windows(2).all(|pair| pair[1] > pair[0]),
+                    "accepted zero Set-Tempo collapsed tick-separated events: {seconds:?}"
+                );
+                panic!("zero Set-Tempo was accepted")
+            }
+        }
     }
 
     #[test]

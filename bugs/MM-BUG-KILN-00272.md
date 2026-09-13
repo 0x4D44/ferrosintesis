@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00272 — Steinway FLAC migration dropped half of the legacy WAV lookup keys
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** Steinway sample crate / public lookup compatibility
 - **Raised:** 2026-08-17T08:39:21Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T172137Z-e299aa2e
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00272-run-fix-20260913T172137Z-e299aa2e
-- **Owner base:** 749984a9fe9cea8531528de6a6e853aca92d4ccb
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T17:21:37Z
-- **Owner until:** 2026-09-13T19:21:37Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T08:39:21Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T08:39:21Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:31:07Z, deltic:auto role=fix run=fix-20260913T172137Z-e299aa2e branch=task/bug-MM-BUG-KILN-00272-run-fix-20260913T172137Z-e299aa2e code=8244afb1a90b9eea54500efcce72a67eae2f70a7 gate=manual)
 
 ## Observation
 

@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / render option validation
 - **Raised:** 2026-08-14T11:47:20Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T190546Z-fe474dba
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00026-run-verify-20260913T190546Z-fe474dba
+- **Owner base:** 8b20d0b7468c4cf4f8728d402e7c19a97596ff54
+- **Owner fingerprint:** sha256:8fd10c762069188727f54b3f0334a65e05e58056cd9d134b495c8dcb21786a14
+- **Owner since:** 2026-09-13T19:05:46Z
+- **Owner until:** 2026-09-13T21:05:46Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

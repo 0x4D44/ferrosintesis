@@ -6,15 +6,15 @@
 - **Area:** electric-bass sample generation / shared-crate inventory
 - **Raised:** 2026-08-16T09:39:30Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T205525Z-47203da9
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00207-run-verify-20260913T205525Z-47203da9
+- **Owner base:** 57e3b1ae456e6b0ae4a683651db8f949fbd66c04
+- **Owner fingerprint:** sha256:b523ba6ab2f1554bf6b1e494aa28b99b5685b7382ac296d9034a27fc1c8f1c89
+- **Owner since:** 2026-09-13T20:55:25Z
+- **Owner until:** 2026-09-13T22:55:25Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

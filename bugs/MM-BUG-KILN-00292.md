@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00292 — Fret-noise reproduction recipe omits required ffmpeg executable
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** fret-noise sample generation / documented prerequisites
 - **Raised:** 2026-08-17T20:45:52Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T221630Z-3acd3e5a
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00292-run-fix-20260913T221630Z-3acd3e5a
-- **Owner base:** 5a350b5b96613c15f638b3cb7f7c6c9d5ca47904
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:16:30Z
-- **Owner until:** 2026-09-14T00:16:30Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T20:45:52Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T20:45:52Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T22:20:53Z, deltic:auto role=fix run=fix-20260913T221630Z-3acd3e5a branch=task/bug-MM-BUG-KILN-00292-run-fix-20260913T221630Z-3acd3e5a code=a7dcb7c31cddf1e0106556bf342dd8813b7d5161 gate=manual)
 
 ## Observation
 

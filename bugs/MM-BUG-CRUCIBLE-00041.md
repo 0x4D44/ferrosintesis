@@ -6,15 +6,15 @@
 - **Area:** sampler / bank oracles
 - **Raised:** 2026-08-18T00:08:33Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T074331Z-6ce00098
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00041-run-fix-20260913T074331Z-6ce00098
+- **Owner base:** 011e54bccda3d471d59bd1c1b53ef86929075001
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T07:43:31Z
+- **Owner until:** 2026-09-13T09:43:31Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -1,7 +1,7 @@
 ferrosintesis-samples-vcsl-steinway
 ===================================
 
-The embedded WAV samples in this crate are derived from the "Grand Piano,
+The embedded samples in this crate are derived from the "Grand Piano,
 Steinway B" instrument of the Versilian Community Sample Library (VCSL) by
 Versilian Studios / Sam Gossner.
 

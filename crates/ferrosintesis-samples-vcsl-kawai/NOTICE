@@ -1,7 +1,7 @@
 ferrosintesis-samples-vcsl-kawai
 ================================
 
-The embedded WAV samples in this crate are derived from the "Grand Piano, Kawai"
+The embedded samples in this crate are derived from the "Grand Piano, Kawai"
 instrument of the Versilian Community Sample Library (VCSL) by Versilian Studios /
 Sam Gossner.
 

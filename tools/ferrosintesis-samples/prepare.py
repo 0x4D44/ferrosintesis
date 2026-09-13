@@ -5965,6 +5965,40 @@ def _bake_grand(src):
     return rows
 
 
+def _publish_mandolin_bank(staging_dir, output_dir, logical_names):
+    """Encode and atomically publish one complete mandolin bank with rollback."""
+    return _publish_staged_flac_bank(staging_dir, output_dir, logical_names, "mandolin")
+
+
+def _bake_mandolin(src):
+    """Bake the owner-recorded mandolin bank in private staging, then publish it."""
+    logical_names = tuple(sorted(MANDOLIN_SOURCES))
+    out_dir = os.path.dirname(sample_output_path(logical_names[0]))
+    _validate_generated_output_families(
+        {"mandolin"}, logical_names, output_dir=out_dir
+    )
+    rows = []
+    with tempfile.TemporaryDirectory(prefix=".mandolin-bank-") as staging:
+        for fn in logical_names:
+            seg, sr, row = _prepare_generic_source_sample(fn, src)
+            write_wav_mono(os.path.join(staging, fn), seg, sr)
+            rows.append(row)
+        staged = {
+            name for name in os.listdir(staging)
+            if name.endswith((".wav", PACKAGED_EXT))
+        }
+        if staged != set(logical_names):
+            raise ValueError(
+                "mandolin staging output is incomplete: expected "
+                f"{len(logical_names)} WAVs, found {len(staged)}"
+            )
+        _validate_generated_output_inventory(
+            None, logical_names, output_dir=staging
+        )
+        _publish_mandolin_bank(staging, out_dir, logical_names)
+    return rows
+
+
 _BASS_FAMILIES = frozenset(("fingerbass", "pickbass"))
 
 
@@ -6021,7 +6055,7 @@ def _print_sample_rows(rows):
 def _finish(rows):
     """Publish the banks this run wrote, then print the recipe table.
 
-    Generic paths through `main` end here. The bass and clavinet paths publish
+    Generic paths through `main` end here. The bass, mandolin, and clavinet paths publish
     their own all-or-nothing transactions before entering the generic loop,
     while keeping this final step is what stops `--sax-only` from leaving its
     bank as WAV.
@@ -6402,6 +6436,7 @@ def main():
             ensure_freesound_sources(src)
         if want("mandolin"):
             ensure_mandolin_sources(src)
+            rows += _bake_mandolin(src)
         if want("eastpick"):
             ensure_eastman_sources(src, EASTPICK_SOURCES)
         if want("eastpluck"):
@@ -6532,7 +6567,7 @@ def main():
             | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
         ):
             fam = fn.split("_")[0]
-            if fam == "grand" or fam in _BASS_FAMILIES or not want(fam):
+            if fam in {"grand", "mandolin"} or fam in _BASS_FAMILIES or not want(fam):
                 continue
             family_src = headroom_src if fn in HEADROOM_SOURCES else src
             seg, sr, row = _prepare_generic_source_sample(fn, family_src)

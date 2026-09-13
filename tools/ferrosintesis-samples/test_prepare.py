@@ -2194,6 +2194,137 @@ class ClavinetConcurrentExtractionTest(unittest.TestCase):
             self.assertNotIn(src, path_b)
 
 
+class MuseScoreOnsetConcurrentExtractionTest(unittest.TestCase):
+    """MM-BUG-KILN-00261: concurrent onset bakes isolate SF3 decode intermediates."""
+
+    ROOTS = (40, 52)
+
+    def test_two_processes_use_isolated_onset_decode_intermediates(self):
+        worker = textwrap.dedent(
+            """
+            import os
+            import sys
+            import time
+            from unittest import mock
+
+            import prepare
+
+            src, repo_root, sync, token = sys.argv[1:]
+            other = "B" if token == "A" else "A"
+            roots = (40, 52)
+            zones = [(root, 0, 1, 0, 1, prepare.OUT_SR, 17) for root in roots]
+            token_bytes = token.encode("ascii")
+
+            def fake_run(command, check):
+                ogg = command[command.index("-i") + 1]
+                wav = command[-1]
+                with open(wav, "wb") as output:
+                    output.write(token_bytes)
+                if ogg.endswith("sitar_40.ogg"):
+                    with open(
+                            os.path.join(sync, f"path-{token}"),
+                            "w", encoding="ascii") as path:
+                        path.write(f"{ogg}\\n{wav}")
+                    open(os.path.join(sync, f"ready-{token}"), "wb").close()
+                    deadline = time.monotonic() + 10
+                    while not os.path.exists(os.path.join(sync, f"ready-{other}")):
+                        if time.monotonic() >= deadline:
+                            raise RuntimeError("concurrent onset barrier timed out")
+                        time.sleep(0.01)
+
+            def fake_read(path):
+                with open(path, "rb") as source:
+                    payload = source.read()
+                if payload != token_bytes:
+                    raise RuntimeError(
+                        f"{token}: read another process's decoded WAV {path}")
+                return [0.0, 0.25], prepare.OUT_SR
+
+            with (
+                mock.patch.object(prepare, "REPO_ROOT", repo_root),
+                mock.patch.object(prepare, "ensure_musescore_sf3",
+                                  return_value=os.path.join(src, "MS_Basic.sf3")),
+                mock.patch.object(prepare, "_sf_preset_zones", return_value=(0, zones)),
+                mock.patch.object(prepare.subprocess, "run", side_effect=fake_run),
+                mock.patch.object(prepare, "read_wav", side_effect=fake_read),
+                mock.patch.object(prepare, "trim_to_onset",
+                                  return_value=[0.0, 0.25, -0.25, 0.0]),
+                mock.patch.object(prepare, "measure_f0", return_value=(440.0, 1.0)),
+                mock.patch.object(prepare, "_validate_generated_output_families"),
+                mock.patch.object(prepare, "_validate_generated_output_inventory"),
+                mock.patch.object(prepare, "_publish_staged_flac_bank"),
+            ):
+                prepare._bake_sf_onset(
+                    src, 104, "sitar", "ferrosintesis-samples-musescore",
+                    0.9, 0.20, expected_roots=roots)
+            """
+        )
+        with tempfile.TemporaryDirectory() as temp_root:
+            src = os.path.join(temp_root, "shared-cache")
+            repo_root = os.path.join(temp_root, "repo")
+            sync = os.path.join(temp_root, "sync")
+            os.makedirs(src)
+            os.makedirs(os.path.join(repo_root, "crates", "ferrosintesis-samples-musescore", "samples"))
+            os.makedirs(sync)
+            prior_bank = os.path.join(
+                repo_root, "crates", "ferrosintesis-samples-musescore", "samples",
+                "sitar_C4.flac")
+            prior_bytes = b"prior-valid-sitar-bank"
+            with open(prior_bank, "wb") as output:
+                output.write(prior_bytes)
+            with open(os.path.join(src, "MS_Basic.sf3"), "wb") as source:
+                source.write(b"authenticated synthetic sf3")
+            script = os.path.join(temp_root, "concurrent_onset_worker.py")
+            with open(script, "w", encoding="utf-8") as output:
+                output.write(worker)
+
+            module_dir = os.path.abspath(os.path.dirname(prepare.__file__))
+            child_env = os.environ.copy()
+            child_env["PYTHONPATH"] = (
+                module_dir + os.pathsep + child_env.get("PYTHONPATH", "")
+            )
+            processes = [
+                subprocess.Popen(
+                    [sys.executable, script, src, repo_root, sync, token],
+                    cwd=module_dir,
+                    env=child_env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                for token in ("A", "B")
+            ]
+            results = []
+            try:
+                for process in processes:
+                    stdout, stderr = process.communicate(timeout=15)
+                    results.append((process.returncode, stdout, stderr))
+            except subprocess.TimeoutExpired:
+                for process in processes:
+                    if process.poll() is None:
+                        process.kill()
+                for process in processes:
+                    process.communicate()
+                self.fail("concurrent MuseScore onset worker timed out")
+
+            for token, (returncode, stdout, stderr) in zip(("A", "B"), results):
+                self.assertEqual(
+                    returncode,
+                    0,
+                    f"worker {token} failed:\nstdout={stdout}\nstderr={stderr}",
+                )
+            with open(os.path.join(sync, "path-A"), encoding="ascii") as path:
+                ogg_a, wav_a = path.read().splitlines()
+            with open(os.path.join(sync, "path-B"), encoding="ascii") as path:
+                ogg_b, wav_b = path.read().splitlines()
+            self.assertNotEqual(ogg_a, ogg_b)
+            self.assertNotEqual(wav_a, wav_b)
+            for path in (ogg_a, wav_a, ogg_b, wav_b):
+                self.assertNotIn(src, path)
+            with open(prior_bank, "rb") as source:
+                self.assertEqual(source.read(), prior_bytes)
+
+
 class YdpArchiveCacheTest(unittest.TestCase):
     """MM-BUG-KILN-00141: YDP warm caches remain bound to the archive pin."""
 

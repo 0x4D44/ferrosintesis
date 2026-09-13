@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00278 — Crate rustdoc overstates the embedded payload and evades its size oracle
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** ferrosintesis / public payload documentation
 - **Raised:** 2026-08-17T09:42:03Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T220707Z-29f8619f
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00278-run-fix-20260913T220707Z-29f8619f
-- **Owner base:** 7fb684187aae579c5e149ba722039a0c75646134
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:07:07Z
-- **Owner until:** 2026-09-14T00:07:07Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T09:42:03Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:35:03Z, deltic:auto role=fix run=fix-20260913T181332Z-673057bf branch=task/bug-MM-BUG-KILN-00278-run-fix-20260913T181332Z-673057bf code=4a4df67d171fe46ed93a004de7fde5c2b9433bb1 gate=manual) -> Open (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: the rewritten rustdoc still overstates the payload (1080 recordings against 1026 embedded, 54 MiB for 51.5 MiB) and the fix breaks the clippy gate)
+- **State history:** Open (2026-08-17T09:42:03Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:35:03Z, deltic:auto role=fix run=fix-20260913T181332Z-673057bf branch=task/bug-MM-BUG-KILN-00278-run-fix-20260913T181332Z-673057bf code=4a4df67d171fe46ed93a004de7fde5c2b9433bb1 gate=manual) -> Open (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: the rewritten rustdoc still overstates the payload (1080 recordings against 1026 embedded, 54 MiB for 51.5 MiB) and the fix breaks the clippy gate) -> Fixed (2026-09-13T22:15:38Z, deltic:auto role=fix run=fix-20260913T220707Z-29f8619f branch=task/bug-MM-BUG-KILN-00278-run-fix-20260913T220707Z-29f8619f code=5070143610b3a3bc657de4257e6fd8322f28b258 gate=manual)
 
 ## Observation
 

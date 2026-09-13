@@ -6,15 +6,15 @@
 - **Area:** YDP sample generation / failure atomicity
 - **Raised:** 2026-08-16T08:40:59Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T201135Z-88babc3a
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00205-run-verify-20260913T201135Z-88babc3a
+- **Owner base:** 677d3d6aff41c8bc74f329d460113eb99826307b
+- **Owner fingerprint:** sha256:af85f1473d8adf9cb1b93ad7873d2118f8cecb1c97a5fb7c6906fc6e41ddece0
+- **Owner since:** 2026-09-13T20:11:35Z
+- **Owner until:** 2026-09-13T22:11:35Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

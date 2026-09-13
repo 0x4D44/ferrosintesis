@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00291 — Fret-noise public API still documents WAV keys and bytes after FLAC conversion
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** fret-noise sample crate / public lookup contract
 - **Raised:** 2026-08-17T20:45:41Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T192808Z-986c2aa3
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00291-run-fix-20260913T192808Z-986c2aa3
-- **Owner base:** 78f8d9f63fdcf74209fa5c359649ab9019fab99d
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T19:28:08Z
-- **Owner until:** 2026-09-13T21:28:08Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T20:45:41Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T20:45:41Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:32:20Z, deltic:auto role=fix run=fix-20260913T192808Z-986c2aa3 branch=task/bug-MM-BUG-KILN-00291-run-fix-20260913T192808Z-986c2aa3 code=84b6a05dcc286fc0974bd7c416a0bdd941ac77c2 gate=manual)
 
 ## Observation
 

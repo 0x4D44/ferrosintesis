@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00041 — banks_parse sanity sweep is a hand-written chain that omits the bass banks and most other zone families
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sampler / bank oracles
 - **Raised:** 2026-08-18T00:08:33Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T074331Z-6ce00098
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00041-run-fix-20260913T074331Z-6ce00098
-- **Owner base:** 011e54bccda3d471d59bd1c1b53ef86929075001
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T07:43:31Z
-- **Owner until:** 2026-09-13T09:43:31Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T00:08:33Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-18T00:08:33Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T08:01:07Z, deltic:auto role=fix run=fix-20260913T074331Z-6ce00098 branch=task/bug-MM-BUG-CRUCIBLE-00041-run-fix-20260913T074331Z-6ce00098 code=e0d68e7078df8cb44c25e48169e1f03f79bcac24 gate=manual)
 
 ## Observation
 

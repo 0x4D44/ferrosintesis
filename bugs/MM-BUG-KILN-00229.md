@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00229 — Fret-noise regeneration can publish a partial mixed bank after a late write failure
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** fret-noise sample generation / failure atomicity
 - **Raised:** 2026-08-16T16:53:19Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T053018Z-56ab7513
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00229-run-fix-20260913T053018Z-56ab7513
-- **Owner base:** 1e0998dbed0a404df3b905e3e4ef64a29c4669f5
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T05:30:18Z
-- **Owner until:** 2026-09-13T07:30:18Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T16:53:19Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-16T16:53:19Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T05:41:55Z, deltic:auto role=fix run=fix-20260913T053018Z-56ab7513 branch=task/bug-MM-BUG-KILN-00229-run-fix-20260913T053018Z-56ab7513 code=b30f9fc89a0488fcd825b7ad71312de48789700a gate=manual)
 
 ## Observation
 

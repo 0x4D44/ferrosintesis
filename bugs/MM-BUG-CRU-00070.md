@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00070 — Gong, honky-tonk and bagpipe bakes write straight into the live crate and convert per file, so a late failure leaves a mixed bank
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample tooling / failure atomicity
 - **Raised:** 2026-09-13T19:26:11Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T214019Z-23fbd881
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00070-run-fix-20260913T214019Z-23fbd881
-- **Owner base:** e3cdce75f25df21dc4c6a2c15e4608e06bf11628
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T21:40:19Z
-- **Owner until:** 2026-09-13T23:40:19Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:26:11Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:26:11Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T21:47:48Z, deltic:auto role=fix run=fix-20260913T214019Z-23fbd881 branch=task/bug-MM-BUG-CRU-00070-run-fix-20260913T214019Z-23fbd881 code=ffd22d054ab0bc6c9aaa6e84608902e415884b6f gate=manual)
 
 ## Observation
 

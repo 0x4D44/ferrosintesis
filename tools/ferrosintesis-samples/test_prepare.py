@@ -4331,6 +4331,64 @@ class GeneratedCrateDocHeaderTest(unittest.TestCase):
             )
 
 
+class GenCrateLibMixedContainerTest(unittest.TestCase):
+    """The sample-crate generator parses and inventories both bank formats."""
+
+    def test_generator_parses_and_imports_without_writing(self):
+        source_path = pathlib.Path(gen_crate_lib.__file__)
+        source = source_path.read_text(encoding="utf-8")
+
+        tree = ast.parse(source, filename=str(source_path))
+        compile(tree, str(source_path), "exec")
+        self.assertTrue(callable(gen_crate_lib.main))
+
+    def test_main_generates_a_sorted_mixed_wav_flac_inventory(self):
+        with tempfile.TemporaryDirectory() as crate:
+            crate_path = pathlib.Path(crate)
+            samples = crate_path / "samples"
+            samples.mkdir()
+            (crate_path / "src").mkdir()
+            (crate_path / "Cargo.toml").write_text(
+                '[package]\ninclude = ["LICENSE-MIT"]\n',
+                encoding="utf-8",
+            )
+            (crate_path / "LICENSE-MIT").write_text("test license\n", encoding="utf-8")
+            flac = b"fLaC\x00\x01\x02"
+            wav = b"RIFF\x00\x00\x00\x00WAVE\x03\x04"
+            (samples / "a.flac").write_bytes(flac)
+            (samples / "b.wav").write_bytes(wav)
+            (samples / "ignored.txt").write_text("not a bank\n", encoding="utf-8")
+
+            with mock.patch.object(
+                gen_crate_lib.sys,
+                "argv",
+                ["gen_crate_lib.py", crate, "--doc", "Mixed test bank."],
+            ), mock.patch.object(gen_crate_lib.subprocess, "run"):
+                gen_crate_lib.main()
+
+            generated = (crate_path / "src" / "lib.rs").read_text(encoding="utf-8")
+
+        self.assertIn("pub const FILE_COUNT: usize = 2;", generated)
+        self.assertIn(
+            f"const EXPECTED_BYTES: usize = {len(flac) + len(wav)};", generated
+        )
+        self.assertIn(
+            "//! committed `samples/*.wav` / `samples/*.flac`; consumers normally reach it through",
+            generated,
+        )
+        self.assertEqual(
+            [line.strip() for line in generated.splitlines() if "include_bytes!" in line],
+            [
+                '("a.flac", include_bytes!("../samples/a.flac")),',
+                '("b.wav", include_bytes!("../samples/b.wav")),',
+            ],
+        )
+        self.assertIn('Some("wav" | "flac")', generated)
+        self.assertIn('&bytes[..4] == b"RIFF"', generated)
+        self.assertIn('&bytes[..4] == b"fLaC"', generated)
+        self.assertNotIn("ignored.txt", generated)
+
+
 class B1InventoryRegenerationTest(unittest.TestCase):
     """MM-BUG-KILN-00169: B1 regeneration must preserve its natural-tail oracle."""
 

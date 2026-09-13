@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00239 — Gong regeneration command leaves the embedded FLAC bank stale
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** gong sample crate / deterministic regeneration
 - **Raised:** 2026-08-16T21:53:11Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T062419Z-07b08de2
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00239-run-fix-20260913T062419Z-07b08de2
-- **Owner base:** b73321a5ff4dc066f9faf8a7716c11bfe6500b0b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T06:24:19Z
-- **Owner until:** 2026-09-13T08:24:19Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T21:53:11Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T21:53:11Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:34:33Z, deltic:auto role=fix run=fix-20260913T062419Z-07b08de2 branch=task/bug-MM-BUG-KILN-00239-run-fix-20260913T062419Z-07b08de2 code=c91028c3285522b6643a786671cc0a1ad471925a gate=manual)
 
 ## Observation
 

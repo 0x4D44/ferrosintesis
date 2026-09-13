@@ -1,7 +1,7 @@
 # ferrosintesis-samples-gong
 
 Embedded pitched gong-ageng bank for ferrosintesis: two full-ring one-shot
-layers (soft + loud), mono 16-bit 44.1 kHz WAVs, exposed as raw WAV bytes
+layers (soft + loud), mono 16-bit 44.1 kHz FLACs, exposed as encoded FLAC bytes
 (`get`). This is the sample source for the GM14 CC0=2 alt-bank pitched gong.
 
 Unlike the other sample crates, this bank is **CC BY 3.0**, not CC0: the audio
@@ -12,7 +12,12 @@ downstream user while the ferrosintesis code stays MIT/Apache. See
 `PROVENANCE.md` for the Freesound IDs, license verification, and the processing
 chain.
 
-The WAVs under `samples/` are source, not build output; regenerate them with
+The exact, case-sensitive lookup keys are `gong_ageng_soft.flac` and
+`gong_ageng_loud.flac`. `get` returns the encoded FLAC container bytes, not
+decoded PCM.
+
+The committed WAVs under `tools/ferrosintesis-samples/gong-src/` are source
+inputs; the FLACs under `samples/` are the packaged outputs. Regenerate them with
 `python3 tools/ferrosintesis-samples/prepare.py --local-only` from the repo root
 (reads the committed source WAVs under `tools/ferrosintesis-samples/gong-src/`;
 no network needed).

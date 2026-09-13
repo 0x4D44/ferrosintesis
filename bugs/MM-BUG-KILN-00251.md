@@ -6,15 +6,15 @@
 - **Area:** honky-tonk sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T01:05:18Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T202230Z-1f3c523b
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00251-run-verify-20260913T202230Z-1f3c523b
+- **Owner base:** 9628e351883c4dab862eba48a10d29258902ea14
+- **Owner fingerprint:** sha256:95c785a10e06b9f6008322705873aa905c25b5d4f976c29df85bfd7e3e546546
+- **Owner since:** 2026-09-13T20:22:30Z
+- **Owner until:** 2026-09-13T22:22:30Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

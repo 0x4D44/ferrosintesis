@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00059 — Parent README still says five of these ten attribution banks, and the NOTICE count oracle only reads numbers before three phrases
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** licensing / attribution documentation
 - **Raised:** 2026-09-13T19:22:42Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T200524Z-659a531d
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00059-run-fix-20260913T200524Z-659a531d
-- **Owner base:** 2b83dc6ff33e7ec8c9f2982e75efeeb4371ef09b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T20:05:24Z
-- **Owner until:** 2026-09-13T22:05:24Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:22:42Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:22:42Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T20:13:52Z, deltic:auto role=fix run=fix-20260913T200524Z-659a531d branch=task/bug-MM-BUG-CRU-00059-run-fix-20260913T200524Z-659a531d code=6475418989789eea7c88d1a2b828f06be19a5e59 gate=manual)
 
 ## Observation
 

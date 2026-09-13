@@ -5,7 +5,8 @@
 and B1 crates carry hand-written extras on top of that shape, so regenerating the file
 wholesale would throw them away. This rewrites only the `SAMPLES` array, `FILE_COUNT`,
 and aggregate size pins. If a crate has an `EXPECTED_TAIL_BYTES` pin, every WAV must
-first pass the strict B1 natural-tail validation below.
+first pass the strict B1 natural-tail validation below; ordinary crates may package
+either WAV or FLAC assets.
 
 Idempotent: running it on an unchanged directory is a no-op.
 
@@ -148,8 +149,8 @@ def b1_tail_payload_size(wav, path):
     return payload_size
 
 
-def main():
-    crate = sys.argv[1]
+def refresh(crate):
+    """Refresh one crate in place and keep the CLI and generators on one path."""
     lib = os.path.join(crate, "src", "lib.rs")
     samples_dir = os.path.join(crate, "samples")
     names = sorted(
@@ -221,6 +222,10 @@ def main():
     # width limit for the longer names, and the gate runs `cargo fmt --check`.
     subprocess.run(["rustfmt", "--edition", "2021", lib], check=True)
     print(f"{lib}: rustfmt clean")
+
+
+def main():
+    refresh(sys.argv[1])
 
 
 if __name__ == "__main__":

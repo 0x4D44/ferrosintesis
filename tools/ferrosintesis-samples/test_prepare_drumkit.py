@@ -113,6 +113,36 @@ class DrumkitOutputPlanTests(unittest.TestCase):
 
             publish.assert_not_called()
 
+    def test_regenerate_refreshes_both_embedded_tables_after_publish(self):
+        plans = {
+            prepare_drumkit.CORE_PACKAGE: {"core.wav"},
+            prepare_drumkit.ACCENT_PACKAGE: {"accent.wav"},
+        }
+        with tempfile.TemporaryDirectory() as repo_root:
+            tables = mock.Mock()
+            with mock.patch.object(
+                prepare_drumkit, "output_plan", return_value=plans
+            ), mock.patch.object(
+                prepare_drumkit, "generate_staged", return_value=17
+            ), mock.patch.object(prepare_drumkit, "publish_staged"):
+                with mock.patch.object(
+                    prepare_drumkit, "regen_samples_table", tables, create=True
+                ):
+                    result = prepare_drumkit.regenerate(
+                        "ffmpeg", "cache", repo_root
+                    )
+
+            self.assertEqual(result, (plans, 17))
+            tables.refresh.assert_has_calls([
+                mock.call(os.path.join(
+                    repo_root, "crates", prepare_drumkit.CORE_PACKAGE
+                )),
+                mock.call(os.path.join(
+                    repo_root, "crates", prepare_drumkit.ACCENT_PACKAGE
+                )),
+            ])
+            self.assertEqual(tables.refresh.call_count, 2)
+
     def test_output_plan_rejects_duplicate_or_unowned_banks(self):
         bank = (
             prepare_drumkit.CORE_PACKAGE,
@@ -193,6 +223,52 @@ class DrumkitOutputPlanTests(unittest.TestCase):
                     with open(packaged, "rb") as f:
                         self.assertEqual(f.read(), b"old")
                     self.assertFalse(os.path.exists(packaged + ".part"))
+
+    def test_publish_rejects_mixed_wav_and_flac_outputs(self):
+        plans = {
+            prepare_drumkit.CORE_PACKAGE: {"core.wav"},
+            prepare_drumkit.ACCENT_PACKAGE: {"accent.wav"},
+        }
+        with tempfile.TemporaryDirectory() as root, \
+                tempfile.TemporaryDirectory() as staging:
+            for package, names in plans.items():
+                staged_dir = os.path.join(staging, package)
+                output_dir = os.path.join(root, "crates", package, "samples")
+                os.makedirs(staged_dir)
+                os.makedirs(output_dir)
+                for name in names:
+                    with open(os.path.join(staged_dir, name), "wb") as staged:
+                        staged.write(b"staged")
+                    with open(
+                        os.path.join(output_dir, prepare_drumkit.packaged_name(name)),
+                        "wb",
+                    ) as committed:
+                        committed.write(b"old flac")
+
+            with open(
+                os.path.join(
+                    root,
+                    "crates",
+                    prepare_drumkit.CORE_PACKAGE,
+                    "samples",
+                    "core.wav",
+                ),
+                "wb",
+            ) as legacy:
+                legacy.write(b"old wav")
+
+            def fake_encode(_source, destination):
+                with open(destination, "wb") as encoded:
+                    encoded.write(b"encoded")
+
+            with mock.patch.object(prepare_drumkit, "_encode_flac", fake_encode), \
+                    mock.patch.object(
+                        prepare_drumkit, "_decode_flac_pcm", return_value=b"pcm"
+                    ), mock.patch.object(
+                        prepare_drumkit, "_read_wav_pcm", return_value=b"pcm"
+                    ):
+                with self.assertRaisesRegex(RuntimeError, "FLAC-only"):
+                    prepare_drumkit.publish_staged(staging, root, plans)
 
 
 class DrumkitSourceCacheTests(unittest.TestCase):

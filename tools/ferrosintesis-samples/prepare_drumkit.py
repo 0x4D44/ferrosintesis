@@ -35,10 +35,12 @@ The sources are FLAC; decoding shells out to ffmpeg (pcm_s24le, no resample —
 FLAC decode is bit-exact, so the ffmpeg version does not affect output). All
 audible processing happens here in stdlib Python, mirroring prepare.py: mono
 downmix, linear resample to 44.1 kHz, onset trim (3% of peak, 8 ms pre-pad),
-tail cap + squared fade-out, 2 ms fade-in, peak-normalize to 0.9, 16-bit WAV.
+tail cap + squared fade-out, 2 ms fade-in, peak-normalize to 0.9, and write
+16-bit WAV staging files. Each staged file is then encoded and bit-exactly
+verified as FLAC before publication.
 
-ffmpeg is a tool-time dependency only — the shipped synth consumes the plain
-16-bit WAVs this script writes.
+ffmpeg is a tool-time dependency only — the shipped synth consumes the
+published 16-bit mono FLACs this script produces.
 
 Run from the repository root:
     python tools/ferrosintesis-samples/prepare_drumkit.py
@@ -53,6 +55,8 @@ import subprocess
 import sys
 import tempfile
 import wave
+
+import regen_samples_table
 
 from prepare import (
     _decode_flac_pcm,
@@ -366,11 +370,24 @@ def publish_staged(staging_root, repo_root, plans):
             out_dir = os.path.join(repo_root, "crates", package, "samples")
             os.makedirs(out_dir, exist_ok=True)
             owned = {packaged_name(name) for name in expected}
-            existing = {
-                packaged_name(name)
-                for name in os.listdir(out_dir)
-                if name.endswith((".wav", ".flac"))
-            }
+            existing_names = sorted(os.listdir(out_dir))
+            legacy_wavs = [
+                name for name in existing_names if name.lower().endswith(".wav")
+            ]
+            if legacy_wavs:
+                raise RuntimeError(
+                    f"{package} contains mixed or legacy WAV outputs; "
+                    f"packaged banks must be FLAC-only: {legacy_wavs}"
+                )
+            non_flac = [
+                name for name in existing_names
+                if not name.lower().endswith(".flac")
+            ]
+            if non_flac:
+                raise RuntimeError(
+                    f"{package} contains non-FLAC outputs: {non_flac}"
+                )
+            existing = set(existing_names)
             unexpected = existing - owned
             if unexpected:
                 raise RuntimeError(
@@ -396,13 +413,17 @@ def publish_staged(staging_root, repo_root, plans):
 
 
 def regenerate(ffmpeg, cache, repo_root=None):
-    """Stage the whole two-package kit, then publish it."""
+    """Stage, publish, and refresh the whole two-package kit."""
     # Call-time, not import-time (MM-BUG-NMI-00003).
     repo_root = REPO_ROOT if repo_root is None else repo_root
     plans = output_plan()
     with tempfile.TemporaryDirectory(prefix="drumkit_staging_") as staging_root:
         total_bytes = generate_staged(ffmpeg, cache, staging_root, plans)
         publish_staged(staging_root, repo_root, plans)
+    for package in OUTPUT_PACKAGES:
+        regen_samples_table.refresh(
+            os.path.join(repo_root, "crates", package)
+        )
     return plans, total_bytes
 
 

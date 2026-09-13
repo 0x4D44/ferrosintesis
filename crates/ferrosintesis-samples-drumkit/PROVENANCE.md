@@ -104,13 +104,17 @@ tool-time only, the version does not affect the decoded PCM); stereo→mono
 downmix (0.5/0.5); linear resample 48 kHz to 44.1 kHz; onset trim at 3% of peak with an 8 ms pre-pad; tail
 cap per the table above with a squared fade-out; 2 ms fade-in; peak-normalize
 to 0.9 (the bank-wide convention — per-layer natural loudness is discarded;
-the synth applies velocity gain). Output: 16-bit mono WAV.
+the synth applies velocity gain). The staging output is WAV; the published
+assets are bit-exact 16-bit mono FLAC.
 
 ## Regenerating
 
 ```powershell
 python3 tools/ferrosintesis-samples/prepare_drumkit.py
 ```
+
+The command validates and publishes the exact FLAC inventory, then refreshes
+both crates' embedded Rust tables.
 
 Pure-stdlib Python except the FLAC decode, which shells out to `ffmpeg` (must
 be on PATH). Downloads are cached under the system temp directory keyed by

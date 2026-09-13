@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00037 — No guard stops an ungated test reading outside the published crate archive
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / test boundary
 - **Raised:** 2026-08-17T20:48:42Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T200823Z-80317c9b
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00037-run-verify-20260913T200823Z-80317c9b
-- **Owner base:** f6c6eadb370a5c1deb4b6fc1a12aa4f927c07c9a
-- **Owner fingerprint:** sha256:bff7a29dc67274b2669a70db723b2f121ad0d7b19334e1d065d3451f659b9679
-- **Owner since:** 2026-09-13T20:08:23Z
-- **Owner until:** 2026-09-13T22:08:23Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T20:48:42Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:45:20Z, deltic:auto role=fix run=fix-20260913T062844Z-33a2e38c branch=task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T062844Z-33a2e38c code=6a582ab29a74011e2e07d8059a3a6527fe0440d0 gate=manual) -> Open (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: removing the cfg gate from the sax provenance test, the exact recorded escape, leaves repository_source_has_no_ungated_outside_reads green) -> Fixed (2026-09-13T20:02:48Z, deltic:auto role=fix run=fix-20260913T194944Z-b03da02f branch=task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T194944Z-b03da02f code=dac45daaaf96b8adf9b28f10ed5fdb498bd83e8d gate=manual)
+- **State history:** Open (2026-08-17T20:48:42Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:45:20Z, deltic:auto role=fix run=fix-20260913T062844Z-33a2e38c branch=task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T062844Z-33a2e38c code=6a582ab29a74011e2e07d8059a3a6527fe0440d0 gate=manual) -> Open (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: removing the cfg gate from the sax provenance test, the exact recorded escape, leaves repository_source_has_no_ungated_outside_reads green) -> Fixed (2026-09-13T20:02:48Z, deltic:auto role=fix run=fix-20260913T194944Z-b03da02f branch=task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T194944Z-b03da02f code=dac45daaaf96b8adf9b28f10ed5fdb498bd83e8d gate=manual) -> Closed (2026-09-13T20:14:52Z, independent verify by Codex run=verify-20260913T200823Z-80317c9b: current fix verified; original escape and all recorded adversarial shapes are rejected)
 
 ## Observation
 
@@ -68,19 +68,12 @@ this class survives local testing.
 
 ## Fix
 
-<unfixed — raised only>
-
-One part now, since the audit is done and found nothing further:
-
-A guard test that fails when a `#[test]` in `crates/ferrosintesis/src/**` reaches outside
-the crate without `#[cfg(ferrosintesis_repository_tests)]`. It should judge by what the
-test READS, so `CARGO_MANIFEST_DIR` joined to a packaged path stays legal while a
-`.parent()` escape or a sibling-crate name does not. A naive keyword scan is not good
-enough — it produced 31 hits and 31 false positives here. Being a source-scanning guard it
-belongs in the classes described in the repo's own guard doctrine.
-
-Note the guard cannot be a cross-check against a packaged archive, because the archive is
-only built at release time; it has to be a source-shape check to be useful per-landing.
+`dac45daaaf96b8adf9b28f10ed5fdb498bd83e8d` (`fix(MM-BUG-CRUCIBLE-00037): harden archive boundary scanner`)
+completes the source-shape guard. It gates repository-only corpus helpers and makes the
+scanner lex char literals, recognize `env!("CARGO_MANIFEST_DIR")`, detect chained
+`.parent()`/`.ancestors()` escapes and parent path components, and reject filesystem use
+through the qualified `crates_dir` helper. Six adversarial fixtures cover the missed escape
+shapes, while packaged reads remain allowed.
 
 ## Notes
 
@@ -103,3 +96,20 @@ Checked on trunk `8b6a6f86` (fix `6a582ab2`) by an agent other than the fixer. T
 Of six adversarial ungated escapes only `.join("..")` was caught; `concat!(env!(..), "/../...")`, `format!("{}/../../CLAUDE.md")`, `.parent().unwrap().parent()`, `.ancestors().nth(2)` and `crate::licensing::crates_dir()` all passed.
 
 **Needed to close.** Char-literal lexing, the `env!` string treated as the manifest-dir marker, `concat!`/`format!` path handling, and fixtures for each missed shape, including a `'"'` ahead of an escaping test.
+
+### Verification (closure) (2026-09-13, Codex, independent)
+
+Verified the current fix `dac45daaaf96b8adf9b28f10ed5fdb498bd83e8d`, not the earlier fix that
+was correctly reopened. `cargo test -p ferrosintesis --test archive_boundary` passed all 5
+tests, including `repository_source_has_no_ungated_outside_reads` and the six-shape
+`guard_rejects_adversarial_manifest_path_escapes` regression.
+
+The regression test was made deliberately weaker by removing the `env!` manifest marker:
+it failed with 1 finding instead of the expected 6. Restoring the marker made all 5 tests
+pass again, and the source tree is clean.
+
+Repository gates: `cargo fmt --all -- --check` passed. `cargo test --workspace` reached 895
+passed and 44 ignored but retains 4 unrelated failures in inventory, payload documentation,
+and the clavinet bank parser. `cargo clippy --workspace --all-targets -- -D warnings` retains
+unrelated errors for two unused clavinet constants and existing `repeat().take()` and
+`filter().next_back()` lints. These failures do not touch the archive-boundary fix.

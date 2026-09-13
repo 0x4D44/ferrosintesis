@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00067 — gen_crate_lib.py silently deletes the drum-kit crate's hand-written bank API
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample tooling / crate lib generator
 - **Raised:** 2026-09-13T19:23:49Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T212218Z-6db24862
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00067-run-fix-20260913T212218Z-6db24862
-- **Owner base:** 653eaa78a8a4aa21a62be7d7af443f03e73ab1db
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T21:22:18Z
-- **Owner until:** 2026-09-13T23:22:18Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:23:49Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:23:49Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T21:31:50Z, deltic:auto role=fix run=fix-20260913T212218Z-6db24862 branch=task/bug-MM-BUG-CRU-00067-run-fix-20260913T212218Z-6db24862 code=d5e8573225b757402d273ff610b6ad7c2b09bbc7 gate=manual)
 
 ## Observation
 

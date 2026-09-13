@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00053 — YDP regeneration falsely claims to require no ffmpeg
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** YDP sample package / regeneration documentation
 - **Raised:** 2026-08-20T15:50:56Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T152133Z-9adb0a87
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00053-run-fix-20260913T152133Z-9adb0a87
-- **Owner base:** ef5a9a2fc7300990a6ab73c122d0a09710e3bea6
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:21:33Z
-- **Owner until:** 2026-09-13T17:21:33Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T15:50:56Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-20T15:50:56Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:26:22Z, deltic:auto role=fix run=fix-20260913T152133Z-9adb0a87 branch=task/bug-MM-BUG-CRU-00053-run-fix-20260913T152133Z-9adb0a87 code=126eda68a39decc989c86deff21d17c66c4a7a9b gate=manual)
 
 ## Observation
 

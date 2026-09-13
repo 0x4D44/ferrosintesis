@@ -922,6 +922,82 @@ mod tests {
         }
     }
 
+    // Duration bounds per articulation: (minimum, maximum) seconds after trim.
+    // Keep this table separate from BANKS so the test proves every registered
+    // bank has an explicit quality contract.
+    const AUDIO_BOUNDS: [(&Bank, f64, f64); 10] = [
+        (&RIDE_BELL, 0.5, 1.25),
+        (&RIDE, 0.5, 1.25),
+        (&HH_CLOSED, 0.2, 1.25),
+        (&HH_OPEN, 0.2, 1.25),
+        (&HH_PEDAL, 0.2, 1.25),
+        (&KICK, 0.3, 0.65),
+        (&SNARE, 0.3, 0.65),
+        (&SIDESTICK, 0.2, 0.45),
+        (&TOM_HI, 0.5, 0.85),
+        (&TOM_LO, 0.5, 0.85),
+    ];
+
+    fn validate_decoded_take(
+        name: &str,
+        pcm: &[i16],
+        min_s: f64,
+        max_s: f64,
+    ) -> Result<(), String> {
+        if pcm.is_empty() {
+            return Err(format!("{name}: empty PCM"));
+        }
+        let duration = pcm.len() as f64 / SAMPLE_RATE_HZ as f64;
+        if !(min_s..=max_s).contains(&duration) {
+            return Err(format!("{name}: {duration:.3} s outside {min_s}..{max_s}"));
+        }
+        let peak = pcm
+            .iter()
+            .map(|&sample| (sample as i32).abs())
+            .max()
+            .unwrap();
+        let peak_f = peak as f64 / 32768.0;
+        if !(0.85..=0.92).contains(&peak_f) {
+            return Err(format!("{name}: peak {peak_f:.3}"));
+        }
+        let rms = (pcm
+            .iter()
+            .map(|&sample| (sample as f64 / 32768.0).powi(2))
+            .sum::<f64>()
+            / pcm.len() as f64)
+            .sqrt();
+        if rms <= 0.01 {
+            return Err(format!("{name}: rms {rms:.4} is silence"));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn audio_bounds_cover_every_registered_bank_once() {
+        assert_eq!(AUDIO_BOUNDS.len(), BANKS.len());
+        for bank in BANKS {
+            let matches = AUDIO_BOUNDS
+                .iter()
+                .filter(|(candidate, _, _)| std::ptr::eq(*candidate, bank))
+                .count();
+            assert_eq!(matches, 1, "{} must have one duration bound", bank.name);
+        }
+    }
+
+    #[test]
+    fn decoded_audio_oracle_rejects_silent_omitted_bank_control() {
+        let (bank, min_s, max_s) = AUDIO_BOUNDS
+            .iter()
+            .find(|(candidate, _, _)| std::ptr::eq(*candidate, &RIDE_BELL))
+            .map(|(bank, min_s, max_s)| (*bank, *min_s, *max_s))
+            .expect("ride-bell duration bounds must be registered");
+        let silent = vec![0i16; bank.pcm(0, 0).len()];
+        assert!(
+            validate_decoded_take("silent_ridebell", &silent, min_s, max_s).is_err(),
+            "same-length silent ride-bell PCM must be rejected"
+        );
+    }
+
     #[test]
     fn bank_take_indices_match_the_owning_inventory() {
         for bank in BANKS {
@@ -1059,37 +1135,19 @@ mod tests {
 
     #[test]
     fn decoded_banks_are_valid_audio() {
-        // duration bounds per articulation: (min_s, max_s) after trim/cap
-        for (bank, min_s, max_s) in [
-            (&RIDE, 0.5, 1.25),
-            (&HH_CLOSED, 0.2, 1.25),
-            (&KICK, 0.3, 0.65),
-            (&SNARE, 0.3, 0.65),
-            (&SIDESTICK, 0.2, 0.45),
-            (&TOM_HI, 0.5, 0.85),
-            (&TOM_LO, 0.5, 0.85),
-        ] {
+        assert_eq!(AUDIO_BOUNDS.len(), BANKS.len());
+        for bank in BANKS {
+            let (min_s, max_s) = AUDIO_BOUNDS
+                .iter()
+                .find(|(candidate, _, _)| std::ptr::eq(*candidate, bank))
+                .map(|(_, min_s, max_s)| (*min_s, *max_s))
+                .expect("every registered bank must have duration bounds");
             for layer in 0..bank.layers() {
                 for rr in 0..bank.round_robins {
                     let pcm = bank.pcm(layer, rr);
-                    let dur = pcm.len() as f64 / SAMPLE_RATE_HZ as f64;
-                    let peak = pcm.iter().map(|&v| (v as i32).abs()).max().unwrap();
-                    let rms = (pcm
-                        .iter()
-                        .map(|&v| (v as f64 / 32768.0).powi(2))
-                        .sum::<f64>()
-                        / pcm.len() as f64)
-                        .sqrt();
                     let name = bank.file_name(layer, rr);
-                    println!(
-                        "{name}: {dur:.3} s @ {SAMPLE_RATE_HZ} Hz, peak {:.3}, rms {rms:.3}",
-                        peak as f64 / 32768.0
-                    );
-                    assert!((min_s..=max_s).contains(&dur), "{name}: {dur:.3} s");
-                    // peak-normalized to 0.9 by the generator
-                    let peak_f = peak as f64 / 32768.0;
-                    assert!((0.85..=0.92).contains(&peak_f), "{name}: peak {peak_f:.3}");
-                    assert!(rms > 0.01, "{name}: rms {rms:.4} is silence");
+                    validate_decoded_take(name.as_str(), pcm, min_s, max_s)
+                        .unwrap_or_else(|error| panic!("{error}"));
                 }
             }
         }

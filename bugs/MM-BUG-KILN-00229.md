@@ -6,15 +6,15 @@
 - **Area:** fret-noise sample generation / failure atomicity
 - **Raised:** 2026-08-16T16:53:19Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T220044Z-d005d852
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00229-run-fix-20260913T220044Z-d005d852
+- **Owner base:** f46f5e575dc5c45190bbcdaf02f108dd2ee92f57
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T22:00:44Z
+- **Owner until:** 2026-09-14T00:00:44Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

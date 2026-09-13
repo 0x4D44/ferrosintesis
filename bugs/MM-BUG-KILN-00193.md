@@ -6,15 +6,15 @@
 - **Area:** sample assets / orchestral2 licence evidence
 - **Raised:** 2026-08-13T22:54:39Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T195332Z-398564c1
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00193-run-verify-20260913T195332Z-398564c1
+- **Owner base:** 1652216c88848015d8c0d90429123a67f91f0e41
+- **Owner fingerprint:** sha256:adb0a2031bfe65af3d313d11300513cc76e689d5ccb5f7e393b1981534d1fbcb
+- **Owner since:** 2026-09-13T19:53:32Z
+- **Owner until:** 2026-09-13T21:53:32Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

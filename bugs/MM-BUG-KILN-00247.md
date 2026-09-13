@@ -6,15 +6,15 @@
 - **Area:** headroom sample crate / public package contract
 - **Raised:** 2026-08-17T00:04:27Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T195910Z-997375c7
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00247-run-verify-20260913T195910Z-997375c7
+- **Owner base:** 389b8db6c1a8a4513ca79d5207edff597ce1bddc
+- **Owner fingerprint:** sha256:98509932921e72927da2dc86f9a3ec1a9584667089f4298530af51b98e6a5949
+- **Owner since:** 2026-09-13T19:59:10Z
+- **Owner until:** 2026-09-13T21:59:10Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

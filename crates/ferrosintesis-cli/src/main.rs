@@ -17,11 +17,42 @@ use ferrosintesis::offline::{self, Options};
 use std::path::PathBuf;
 use std::time::Instant;
 
-fn usage() -> ! {
-    eprintln!(
-        "usage: ferrosintesis <input.mid> [-o out.wav] [--rate 44100] [--wet 0.32] [--delay MS] [--tail 6] [--no-samples] [--solo CH[,CH...]] [--lufs LUFS] [--tp-ceiling dBTP] [--peak-normalize] [-q]\n  default: loudness-normalize to -18 LUFS with a -1 dBTP true-peak limit;\n  --peak-normalize uses the legacy per-track peak normalization (-1 dBFS)."
-    );
+const HELP_TEXT: &str = concat!(
+    "usage: ferrosintesis <input.mid> [-o out.wav] [--rate 44100] [--wet 0.32] [--delay MS] [--tail 6] [--no-samples] [--solo CH[,CH...]] [--lufs LUFS] [--tp-ceiling dBTP] [--peak-normalize] [-q] [-h] [-V]\n",
+    "  default: loudness-normalize to -18 LUFS with a -1 dBTP true-peak limit;\n",
+    "  --peak-normalize uses the legacy per-track peak normalization (-1 dBFS).\n",
+    "  -h, --help       print this help text; -V, --version    print the package version;\n",
+    "  --               stop option parsing so a filename beginning with '-' can be used."
+);
+
+fn help() -> ! {
+    println!("{HELP_TEXT}");
+    std::process::exit(0);
+}
+
+fn usage_error(message: &str) -> ! {
+    eprintln!("error: {message}\n{HELP_TEXT}");
     std::process::exit(2);
+}
+
+fn version() -> ! {
+    println!("ferrosintesis {}", env!("CARGO_PKG_VERSION"));
+    std::process::exit(0);
+}
+
+fn next_arg(args: &mut impl Iterator<Item = String>, option: &str) -> String {
+    args.next()
+        .unwrap_or_else(|| usage_error(&format!("missing value for {option}")))
+}
+
+fn parse_arg<T>(args: &mut impl Iterator<Item = String>, option: &str) -> T
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    let raw = next_arg(args, option);
+    raw.parse()
+        .unwrap_or_else(|error| usage_error(&format!("invalid value for {option}: {error}")))
 }
 
 fn clamp_warnings(
@@ -82,69 +113,51 @@ fn main() {
     let mut tp_ceiling = -1.0f32; // true-peak ceiling (dBTP)
 
     let mut args = std::env::args().skip(1);
+    let mut options_enabled = true;
     while let Some(a) = args.next() {
-        match a.as_str() {
-            "-o" | "--out" => output = Some(PathBuf::from(args.next().unwrap_or_else(|| usage()))),
-            "--rate" => {
-                rate = args
-                    .next()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or_else(|| usage())
-            }
-            "--wet" => {
-                wet = args
-                    .next()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or_else(|| usage())
-            }
-            "--delay" => {
-                delay_ms = Some(
-                    args.next()
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or_else(|| usage()),
-                )
-            }
-            "--tail" => {
-                tail = args
-                    .next()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or_else(|| usage())
-            }
-            "--no-samples" => samples = false,
-            "--peak-normalize" => peak_normalize = true,
-            "--lufs" => {
-                target_lufs = args
-                    .next()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or_else(|| usage())
-            }
-            "--tp-ceiling" => {
-                tp_ceiling = args
-                    .next()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or_else(|| usage())
-            }
-            "--solo" => {
-                // render only the listed 0-based channels (e.g. "11" or "12,13")
-                let list = args.next().unwrap_or_else(|| usage());
-                solo = 0;
-                for part in list.split(',') {
-                    let ch: u8 = part
-                        .trim()
-                        .parse()
-                        .ok()
-                        .filter(|&c| c < 16)
-                        .unwrap_or_else(|| usage());
-                    solo |= 1 << ch;
+        if options_enabled && a == "--" {
+            options_enabled = false;
+            continue;
+        }
+        if options_enabled {
+            match a.as_str() {
+                "-o" | "--out" => output = Some(PathBuf::from(next_arg(&mut args, "--out"))),
+                "--rate" => rate = parse_arg(&mut args, "--rate"),
+                "--wet" => wet = parse_arg(&mut args, "--wet"),
+                "--delay" => delay_ms = Some(parse_arg(&mut args, "--delay")),
+                "--tail" => tail = parse_arg(&mut args, "--tail"),
+                "--no-samples" => samples = false,
+                "--peak-normalize" => peak_normalize = true,
+                "--lufs" => target_lufs = parse_arg(&mut args, "--lufs"),
+                "--tp-ceiling" => tp_ceiling = parse_arg(&mut args, "--tp-ceiling"),
+                "--solo" => {
+                    // render only the listed 0-based channels (e.g. "11" or "12,13")
+                    let list = next_arg(&mut args, "--solo");
+                    solo = 0;
+                    for part in list.split(',') {
+                        let ch: u8 = part
+                            .trim()
+                            .parse()
+                            .ok()
+                            .filter(|&c| c < 16)
+                            .unwrap_or_else(|| usage_error("invalid value for --solo"));
+                        solo |= 1 << ch;
+                    }
                 }
+                "-q" | "--quiet" => verbose = false,
+                "-h" | "--help" => help(),
+                "-V" | "--version" => version(),
+                _ if a.starts_with('-') => usage_error(&format!("unknown option `{a}`")),
+                _ if input.is_none() => input = Some(PathBuf::from(a)),
+                _ => usage_error(&format!("unexpected argument `{a}`")),
             }
-            "-q" | "--quiet" => verbose = false,
-            "-h" | "--help" => usage(),
-            _ if input.is_none() => input = Some(PathBuf::from(a)),
-            _ => usage(),
+        } else if input.is_none() {
+            input = Some(PathBuf::from(a));
+        } else {
+            usage_error(&format!("unexpected argument `{a}`"));
         }
     }
-    let input = input.unwrap_or_else(|| usage());
+    let input = input.unwrap_or_else(|| usage_error("missing input path"));
     let output = output.unwrap_or_else(|| input.with_extension("wav"));
 
     if let Err(e) = output::reject_input_alias(&input, &output) {

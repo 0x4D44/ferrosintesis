@@ -380,17 +380,14 @@ mod tests {
     fn the_cli_help_text_states_the_real_defaults() {
         let a = authority();
         let cli = read("crates/ferrosintesis-cli/src/main.rs");
-        let usage = cli
-            .split_once("fn usage() -> !")
-            .and_then(|(_, rest)| {
-                rest.split_once("std::process::exit(2);")
-                    .map(|(body, _)| body)
-            })
-            .expect("the CLI still has a usage() function with a terminating exit");
+        let help = cli
+            .split_once("const HELP_TEXT: &str =")
+            .and_then(|(_, rest)| rest.split_once("fn help() -> !").map(|(body, _)| body))
+            .expect("the CLI still has a HELP_TEXT constant before help()");
 
         for (flag, field_name) in [("--rate", "sr"), ("--wet", "wet"), ("--tail", "tail")] {
             let want = num(field(&a, field_name)).expect("a numeric default");
-            let found = usage
+            let found = help
                 .split_once(flag)
                 .and_then(|(_, rest)| rest.split_whitespace().next())
                 .and_then(|tok| {

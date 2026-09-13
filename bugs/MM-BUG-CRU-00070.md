@@ -6,15 +6,15 @@
 - **Area:** sample tooling / failure atomicity
 - **Raised:** 2026-09-13T19:26:11Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T214019Z-23fbd881
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00070-run-fix-20260913T214019Z-23fbd881
+- **Owner base:** e3cdce75f25df21dc4c6a2c15e4608e06bf11628
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T21:40:19Z
+- **Owner until:** 2026-09-13T23:40:19Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

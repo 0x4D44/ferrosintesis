@@ -10,6 +10,9 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **Audio oracle tables must cover derived BANKS** (`drumkit2/src/lib.rs`).
+  - A hand-maintained duration list can silently omit a registered articulation; derive the sweep and assert exact coverage.
+
 - 2026.09.13 — **Same-tick MIDI controls need a cross-track fixture** (`album_midi_overlaps.rs`).
   - A same-track reset test already orders itself; only separate tracks prove the global reset sort.
 

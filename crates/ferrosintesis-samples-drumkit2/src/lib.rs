@@ -212,6 +212,22 @@ pub static CHINA: Bank = Bank {
 /// Every articulation in this half of the kit.
 pub static BANKS: [&Bank; 3] = [&CRASH, &SPLASH, &CHINA];
 
+/// Duration bounds for the registered banks. The checked set is derived from
+/// `BANKS`; this table supplies only the bank-specific limits.
+#[cfg(test)]
+const BANK_DURATION_BOUNDS: &[(&str, f64, f64)] = &[
+    ("crash", 2.0, 2.85),
+    ("splash", 1.5, 2.25),
+    ("china", 1.5, 2.25),
+];
+
+#[cfg(test)]
+fn duration_bounds(bank: &Bank) -> Option<(f64, f64)> {
+    BANK_DURATION_BOUNDS
+        .iter()
+        .find_map(|(name, min_s, max_s)| (*name == bank.name).then_some((*min_s, *max_s)))
+}
+
 /// Returns the embedded sample bytes for an exact (case-sensitive) name.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
@@ -550,11 +566,9 @@ mod tests {
     /// tail caps to the long crash and the splash/china articulations.
     #[test]
     fn decoded_banks_are_valid_audio() {
-        for (bank, min_s, max_s) in [
-            (&CRASH, 2.0, 2.85),
-            (&SPLASH, 1.5, 2.25),
-            (&CHINA, 1.5, 2.25),
-        ] {
+        for bank in BANKS {
+            let (min_s, max_s) = duration_bounds(bank)
+                .unwrap_or_else(|| panic!("{} has no duration bounds", bank.name));
             for layer in 0..bank.layers() {
                 for rr in 0..bank.round_robins {
                     let name = bank.file_name(layer, rr);
@@ -566,6 +580,37 @@ mod tests {
                     validate_decoded_take(&name, pcm, min_s, max_s).unwrap();
                 }
             }
+        }
+    }
+
+    #[test]
+    fn duration_bounds_cover_every_registered_bank_once() {
+        let mut registered = Vec::new();
+        for bank in BANKS {
+            assert!(
+                !registered.contains(&bank.name),
+                "BANKS registers {} more than once",
+                bank.name
+            );
+            registered.push(bank.name);
+            assert!(
+                BANK_DURATION_BOUNDS
+                    .iter()
+                    .any(|(name, _, _)| *name == bank.name),
+                "{} has no duration bounds",
+                bank.name
+            );
+        }
+        assert_eq!(
+            BANK_DURATION_BOUNDS.len(),
+            BANKS.len(),
+            "duration bounds and BANKS must have the same number of entries"
+        );
+        for &(name, _, _) in BANK_DURATION_BOUNDS {
+            assert!(
+                BANKS.iter().any(|bank| bank.name == name),
+                "duration bounds contain unregistered bank {name}"
+            );
         }
     }
 

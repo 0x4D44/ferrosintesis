@@ -10,6 +10,10 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **Source oracles should find calls structurally, not match one spelling** (`inventory.rs:validation_precedes_source_uses`).
+  - Grouped validation changed a one-line per-family call into a multiline package call;
+    strip comments and strings, then compare the validator call with later source-table use.
+
 - 2026.09.13 — **ffmpeg/PATH proximity is not a prerequisite; reject local negation** (`test_prepare.py`).
   - A document can say “does not need ffmpeg on PATH” and satisfy a proximity regex;
     inspect requirement words and nearby negation, while keeping unrelated “no 7z” text out of scope.

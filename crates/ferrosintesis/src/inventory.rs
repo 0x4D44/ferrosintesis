@@ -312,6 +312,12 @@ mod tests {
         functions
     }
 
+    fn python_function_contains_call(source: &str, function: &str, callee: &str) -> bool {
+        top_level_python_functions(source)
+            .get(function)
+            .is_some_and(|body| !python_call_positions(body, callee).is_empty())
+    }
+
     fn is_python_ident(ch: char) -> bool {
         ch == '_' || ch.is_ascii_alphanumeric()
     }
@@ -372,7 +378,7 @@ mod tests {
         })
     }
 
-    /// Does `function` run `validator` before it first mentions each `expected` name?
+    /// Does `function` call `validator` before it first mentions each `expected` name?
     ///
     /// The sibling above requires the source-table name to appear ON the validation
     /// line, which is right for a hand-written `_validate_generated_output_inventory(
@@ -387,31 +393,18 @@ mod tests {
         validator: &str,
         expected: &[&str],
     ) -> bool {
-        let definition = format!("def {function}(");
-        let mut in_function = false;
+        let Some(body) = top_level_python_functions(source).get(function).cloned() else {
+            return false;
+        };
         let mut validation_line = None;
         let mut first_use = vec![None; expected.len()];
 
-        for (line_number, line) in source.lines().enumerate() {
-            if line.starts_with("def ") {
-                if in_function {
-                    break;
-                }
-                in_function = line.starts_with(&definition);
-                continue;
-            }
-            if !in_function {
-                continue;
-            }
-            let code = line.trim();
-            if code.starts_with('#') {
-                continue;
-            }
-            if code == validator {
+        for (line_number, line) in body.lines().enumerate() {
+            if !python_call_positions(line, validator).is_empty() {
                 validation_line.get_or_insert(line_number);
             }
             for (first, expected) in first_use.iter_mut().zip(expected) {
-                if code.contains(expected) && first.is_none() {
+                if line.contains(expected) && first.is_none() {
                     *first = Some(line_number);
                 }
             }
@@ -1267,7 +1260,7 @@ mod tests {
             validation_precedes_source_uses(
                 &prepare,
                 "main",
-                "_validate_generated_output_inventory(family, expected)",
+                "_validate_generated_output_inventory",
                 &[
                     "KAWAI_SOURCES",
                     "STEINWAYB_SOURCES",
@@ -1281,10 +1274,57 @@ mod tests {
              the source tables — before using any of those tables"
         );
         assert!(
-            prepare.contains("for family, expected in sorted(_family_output_sets().items()):"),
-            "the derived validation must iterate the family->outputs map, so a family \
-             added to a source table is guarded on its first run"
+            python_function_contains_call(&prepare, "main", "_family_output_groups"),
+            "main must derive grouped output validation from the family-output map, so a \
+             family added to a source table is guarded on its first run"
         );
+    }
+
+    #[test]
+    fn validation_order_oracle_accepts_a_multiline_grouped_call() {
+        let source = r#"
+def main():
+    for output_dir, (families, expected) in sorted(_family_output_groups().items()):
+        _validate_generated_output_inventory(
+            None, expected, output_dir=output_dir, families=families)
+    for name in KAWAI_SOURCES:
+        write_wav_mono(name)
+"#;
+
+        assert!(python_function_contains_call(
+            source,
+            "main",
+            "_family_output_groups"
+        ));
+        assert!(validation_precedes_source_uses(
+            source,
+            "main",
+            "_validate_generated_output_inventory",
+            &["KAWAI_SOURCES"],
+        ));
+    }
+
+    #[test]
+    fn validation_order_oracle_ignores_comment_and_string_mentions() {
+        let source = r#"
+def main():
+    # _validate_generated_output_inventory(None, expected)
+    note = "_validate_generated_output_inventory(None, expected)"
+    for name in KAWAI_SOURCES:
+        write_wav_mono(name)
+"#;
+
+        assert!(!python_function_contains_call(
+            source,
+            "main",
+            "_validate_generated_output_inventory"
+        ));
+        assert!(!validation_precedes_source_uses(
+            source,
+            "main",
+            "_validate_generated_output_inventory",
+            &["KAWAI_SOURCES"],
+        ));
     }
 
     #[test]

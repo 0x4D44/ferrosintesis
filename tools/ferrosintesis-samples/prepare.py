@@ -1642,12 +1642,14 @@ def ensure_guitar_sources(src):
                            GUITAR_SOURCES, "scg_extract")
 
 
-def ensure_ebass_sources(src):
-    """Fetch + verify + extract the pinned FreePats electric-bass-YR archives (finger+pick)."""
-    ensure_archive_sources(src, EBASS_FINGER_URL, EBASS_FINGER_SHA256,
-                           FINGERBASS_SOURCES, "fingerbass_extract")
-    ensure_archive_sources(src, EBASS_PICK_URL, EBASS_PICK_SHA256,
-                           PICKBASS_SOURCES, "pickbass_extract")
+def ensure_ebass_sources(src, only=None):
+    """Fetch selected pinned FreePats electric-bass-YR archives (finger+pick)."""
+    if _wants_family(only, "fingerbass"):
+        ensure_archive_sources(src, EBASS_FINGER_URL, EBASS_FINGER_SHA256,
+                               FINGERBASS_SOURCES, "fingerbass_extract")
+    if _wants_family(only, "pickbass"):
+        ensure_archive_sources(src, EBASS_PICK_URL, EBASS_PICK_SHA256,
+                               PICKBASS_SOURCES, "pickbass_extract")
 
 
 def ensure_bagpipe_sources(src):
@@ -6432,7 +6434,7 @@ def main():
         if want("nylon"):
             ensure_guitar_sources(src)
         if want("fingerbass") or want("pickbass"):
-            ensure_ebass_sources(src)
+            ensure_ebass_sources(src, only)
         if want("rhodes") or want("dulcimer") or want("musicbox") or want("bottle"):
             ensure_freesound_sources(src)
         if want("mandolin"):

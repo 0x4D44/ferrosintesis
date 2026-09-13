@@ -3971,6 +3971,77 @@ class BassWholeBankPublicationTest(unittest.TestCase):
         bake_bass.assert_called_once()
         self.assertEqual(bake_bass.call_args.args[1], {"fingerbass"})
 
+    def test_main_fingerbass_cold_cache_never_fetches_pick_archive(self):
+        calls = []
+
+        def fetch_selected(_src, url, _sha256, _member_map, _extract_subdir):
+            calls.append(url)
+            if url == prepare.EBASS_PICK_URL:
+                raise AssertionError("fingerbass selection fetched pickbass archive")
+
+        with (
+            mock.patch.object(prepare, "REPO_ROOT", self.repo_root),
+            mock.patch.object(prepare, "_require_ffmpeg"),
+            mock.patch.object(prepare.socket, "setdefaulttimeout"),
+            mock.patch.object(prepare.tempfile, "gettempdir",
+                              return_value=self.repo_root),
+            mock.patch.object(prepare, "_validate_generated_output_inventory"),
+            mock.patch.object(prepare, "ensure_archive_sources",
+                              side_effect=fetch_selected),
+            mock.patch.object(prepare, "_bake_bass", return_value=[]),
+            mock.patch.object(prepare, "_prepare_generic_source_sample",
+                              side_effect=AssertionError("generic loop touched bass")),
+            mock.patch.object(prepare, "_finish"),
+            mock.patch.object(prepare, "_bake_selected_local_banks", return_value=[]),
+            mock.patch.object(
+                prepare.sys, "argv", ["prepare.py", "--only=fingerbass"]
+            ),
+        ):
+            prepare.main()
+
+        self.assertEqual(calls, [prepare.EBASS_FINGER_URL])
+
+    def test_main_pickbass_cold_cache_never_fetches_finger_archive(self):
+        calls = []
+
+        def fetch_selected(_src, url, _sha256, _member_map, _extract_subdir):
+            calls.append(url)
+            if url == prepare.EBASS_FINGER_URL:
+                raise AssertionError("pickbass selection fetched fingerbass archive")
+
+        with (
+            mock.patch.object(prepare, "REPO_ROOT", self.repo_root),
+            mock.patch.object(prepare, "_require_ffmpeg"),
+            mock.patch.object(prepare.socket, "setdefaulttimeout"),
+            mock.patch.object(prepare.tempfile, "gettempdir",
+                              return_value=self.repo_root),
+            mock.patch.object(prepare, "_validate_generated_output_inventory"),
+            mock.patch.object(prepare, "ensure_archive_sources",
+                              side_effect=fetch_selected),
+            mock.patch.object(prepare, "_bake_bass", return_value=[]),
+            mock.patch.object(prepare, "_prepare_generic_source_sample",
+                              side_effect=AssertionError("generic loop touched bass")),
+            mock.patch.object(prepare, "_finish"),
+            mock.patch.object(prepare, "_bake_selected_local_banks", return_value=[]),
+            mock.patch.object(
+                prepare.sys, "argv", ["prepare.py", "--only=pickbass"]
+            ),
+        ):
+            prepare.main()
+
+        self.assertEqual(calls, [prepare.EBASS_PICK_URL])
+
+    def test_ebass_without_selection_fetches_both_archives(self):
+        calls = []
+
+        def fetch(_src, url, _sha256, _member_map, _extract_subdir):
+            calls.append(url)
+
+        with mock.patch.object(prepare, "ensure_archive_sources", side_effect=fetch):
+            prepare.ensure_ebass_sources(self.src)
+
+        self.assertEqual(calls, [prepare.EBASS_FINGER_URL, prepare.EBASS_PICK_URL])
+
 
 class HonkytonkOutputInventoryTest(unittest.TestCase):
     """MM-BUG-KILN-00143: rebakes must reject obsolete owned outputs."""

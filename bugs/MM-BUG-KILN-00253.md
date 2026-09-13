@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00253 — MuseScore-grand package still documents WAV payloads after FLAC conversion
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** MuseScore grand sample crate / published package contract
 - **Raised:** 2026-08-17T02:29:49Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T080115Z-16968b61
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00253-run-fix-20260913T080115Z-16968b61
-- **Owner base:** e0d68e7078df8cb44c25e48169e1f03f79bcac24
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T08:01:15Z
-- **Owner until:** 2026-09-13T10:01:15Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T02:29:49Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-17T02:29:49Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T08:07:48Z, deltic:auto role=fix run=fix-20260913T080115Z-16968b61 branch=task/bug-MM-BUG-KILN-00253-run-fix-20260913T080115Z-16968b61 code=12b5f29b5e1e2ae473ab3c97048ae5520b7af99e gate=manual)
 
 ## Observation
 

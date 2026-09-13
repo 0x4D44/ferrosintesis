@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00037 — No guard stops an ungated test reading outside the published crate archive
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / test boundary
 - **Raised:** 2026-08-17T20:48:42Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T194944Z-b03da02f
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T194944Z-b03da02f
-- **Owner base:** 2b87b1528a9de41ccc783e26c12dba4d4d799077
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T19:49:44Z
-- **Owner until:** 2026-09-13T21:49:44Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T20:48:42Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:45:20Z, deltic:auto role=fix run=fix-20260913T062844Z-33a2e38c branch=task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T062844Z-33a2e38c code=6a582ab29a74011e2e07d8059a3a6527fe0440d0 gate=manual) -> Open (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: removing the cfg gate from the sax provenance test, the exact recorded escape, leaves repository_source_has_no_ungated_outside_reads green)
+- **State history:** Open (2026-08-17T20:48:42Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:45:20Z, deltic:auto role=fix run=fix-20260913T062844Z-33a2e38c branch=task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T062844Z-33a2e38c code=6a582ab29a74011e2e07d8059a3a6527fe0440d0 gate=manual) -> Open (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: removing the cfg gate from the sax provenance test, the exact recorded escape, leaves repository_source_has_no_ungated_outside_reads green) -> Fixed (2026-09-13T20:02:48Z, deltic:auto role=fix run=fix-20260913T194944Z-b03da02f branch=task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T194944Z-b03da02f code=dac45daaaf96b8adf9b28f10ed5fdb498bd83e8d gate=manual)
 
 ## Observation
 

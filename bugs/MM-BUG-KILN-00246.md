@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00246 — Dark-Salamander regeneration ignores the migrated FLAC grand sources
 
-- **State:** Open
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** dark-Salamander sample generation / FLAC source migration
@@ -19,7 +19,8 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T22:56:45Z, raised via `deltic bugs new`)
+- **Resolution:** obsolete
+- **State history:** Open (2026-08-16T22:56:45Z, raised via `deltic bugs new`) -> Closed (2026-09-13T07:34:39Z, deltic:manual host=CRUCIBLE verdict=close resolution=obsolete)
 
 ## Observation
 
@@ -47,3 +48,7 @@ negative control proving an empty source selection fails rather than succeeding.
 
 The grand crate was the primary review area; this direct dependent was inspected
 only to verify the regeneration contract broken by its format migration.
+
+### Close note (2026-09-13T07:34:39Z, deltic:manual host=CRUCIBLE verdict=close resolution=obsolete)
+
+Close reason: The dark-Salamander alternate crate, runtime route, and --only=darkgrand baker were intentionally removed by 04d841baf465757bc5fd0020e09eab5b40082c47 before this report was raised. The current generator has no darkgrand source or output path, so the FLAC migration symptom is obsolete; the surviving bank remains covered by --only=grand.

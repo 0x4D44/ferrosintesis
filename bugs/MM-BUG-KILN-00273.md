@@ -6,15 +6,15 @@
 - **Area:** Steinway sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T08:39:27Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T202823Z-27f01e73
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00273-run-verify-20260913T202823Z-27f01e73
+- **Owner base:** c525a1dfca0c025529df2b78a8d39baab8a356d9
+- **Owner fingerprint:** sha256:83a68deb2060ef84c25f3c32fe7dcf375b46b623146a785839e7f7223eed4635
+- **Owner since:** 2026-09-13T20:28:23Z
+- **Owner until:** 2026-09-13T22:28:23Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

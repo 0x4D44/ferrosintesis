@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00213 — Sampled GM76 notes eagerly construct and discard the modeled fallback
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** ferrosintesis / GM76 voice construction
 - **Raised:** 2026-08-16T11:38:34Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T191407Z-8bcb5494
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00213-run-verify-20260913T191407Z-8bcb5494
-- **Owner base:** 31eb54d242b6bb38a40ede86ad8ac64c7c90110b
-- **Owner fingerprint:** sha256:cb715973f65c9bb59acc18f5db0867173d5e2e69f3dddd02396d60384a6f65ea
-- **Owner since:** 2026-09-13T19:14:07Z
-- **Owner until:** 2026-09-13T21:14:07Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T11:38:34Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:42:25Z, deltic:auto role=fix run=fix-20260913T153429Z-3c547ddf branch=task/bug-MM-BUG-KILN-00213-run-fix-20260913T153429Z-3c547ddf code=97c2083ef6d904f714eee673c8557e1e461bfba3 gate=manual)
+- **State history:** Open (2026-08-16T11:38:34Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:42:25Z, deltic:auto role=fix run=fix-20260913T153429Z-3c547ddf branch=task/bug-MM-BUG-KILN-00213-run-fix-20260913T153429Z-3c547ddf code=97c2083ef6d904f714eee673c8557e1e461bfba3 gate=manual) -> Closed (2026-09-13T19:25:30Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: eager unwrap_or restored fails the constructor-count test; its no-default-features gate break split to MM-BUG-CRU-00062)
 
 ## Observation
 
@@ -50,5 +50,15 @@ Move modeled-bottle construction into a closure/helper and call it from the no-s
 arm or `unwrap_or_else` fallback. A regression should count modeled constructor calls:
 zero for a representative in-range sampled key, one for an out-of-range fallback, and
 one when samples are disabled, while retaining the existing render oracles.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `97c2083e`) by an agent other than the fixer.
+
+**Original observation re-derived.** The GM76 arm now builds the modeled bottle only through `unwrap_or_else(|| make_gm76_model(..))` or on the no-samples arm; the eager construct-and-discard is gone.
+
+**Fails-before (method B).** Restoring eager `.unwrap_or(make_gm76_model(..))` fails `voices::tests::gm76_model_fallback_is_constructed_only_when_selected` ("sampled GM76 must not build its fallback", left 1, right 0). Restored; `git diff` empty; passes with default features.
+
+**Residual split to MM-BUG-CRU-00062 (Must).** The test is not gated on `embedded-samples`; in a modeled-only build the fallback is correctly built once, so `cargo test -p ferrosintesis --no-default-features` fails. That is a required gate step on trunk `8b6a6f86`. The voice code needs no change.
 
 ## Notes

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00219 — Clavinet embeds and decodes more than one second of unreachable audio per zone
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** clavinet sample assets / binary and runtime footprint
 - **Raised:** 2026-08-16T13:44:22Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T192309Z-e61a1e78
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00219-run-verify-20260913T192309Z-e61a1e78
-- **Owner base:** c77341b5c27d42e1338bb3d7261365a08c83c3cf
-- **Owner fingerprint:** sha256:851c2d15e69853467c52aa4355116ed8acf2113bc5dbe5ed0a8e69eb8e9449b4
-- **Owner since:** 2026-09-13T19:23:09Z
-- **Owner until:** 2026-09-13T21:23:09Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T13:44:22Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T15:57:32Z, deltic:auto role=fix run=fix-20260913T154255Z-e6d44563 branch=task/bug-MM-BUG-KILN-00219-run-fix-20260913T154255Z-e6d44563 code=6ee2af43e4ead58a1422302ad2e03b0ab2dacaf9 gate=manual)
+- **State history:** Open (2026-08-16T13:44:22Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T15:57:32Z, deltic:auto role=fix run=fix-20260913T154255Z-e6d44563 branch=task/bug-MM-BUG-KILN-00219-run-fix-20260913T154255Z-e6d44563 code=6ee2af43e4ead58a1422302ad2e03b0ab2dacaf9 gate=manual) -> Closed (2026-09-13T19:25:30Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: trimmed clavinet assets are exact prefixes with identical loops and 1485 bit-identical renders; its two gate breaks split to MM-BUG-CRU-00064)
 
 ## Observation
 
@@ -34,5 +34,15 @@ Concrete fix: trim each baked WAV after a proved-safe interpolation guard beyond
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `6ee2af43`) by an agent other than the fixer.
+
+**Original observation re-run.** All 11 clavinet assets went from 70,560 to 19,849 frames. Decoding the `6ee2af43^` assets: each trimmed asset equals the old asset's first 19,849 samples, the prefix SHA-256 pins match, loop points are identical in all 11 zones (largest loop end 17,842), and 1,485 renders on old versus trimmed data are bit-identical (3 keys per zone; 22.05/44.1/96 kHz; bends 0.25x-4x; 3 velocities; with note-off). `ClavinetSampled::sample_at` never reads at or beyond `loop_end`.
+
+**Regression.** `sampler::tests::clavinet_assets_end_at_the_runtime_reachable_prefix` passes on HEAD; the old 70,560-frame assets fail its length-equals-reach assertion (method A).
+
+**Residual split to MM-BUG-CRU-00064 (Must).** The landing broke two required gates: `CLAVINET_RUNTIME_GUARD_FRAMES`/`CLAVINET_REACH_FRAMES` are dead outside tests (workspace clippy), and the pre-existing `banks_parse` 20,000-frame floor now rejects the bank. The measured reachability shows the floor, not the trim, needs the adjustment.
 
 ## Notes

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00232 — FLAC total sample count can abort the decoder with an enormous allocation
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis-flac / resource bounds
 - **Raised:** 2026-08-16T20:59:04Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T191914Z-a6909962
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00232-run-verify-20260913T191914Z-a6909962
-- **Owner base:** 15b480ab543f48432736c1a349c0de467b9c45ec
-- **Owner fingerprint:** sha256:db167b11e76c2d375906f4f61d4c5a06c22584e2fa57a9688636656f1c08c95f
-- **Owner since:** 2026-09-13T19:19:14Z
-- **Owner until:** 2026-09-13T21:19:14Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T20:59:04Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T05:56:31Z, deltic:auto role=fix run=fix-20260913T054211Z-eb7058c3 branch=task/bug-MM-BUG-KILN-00232-run-fix-20260913T054211Z-eb7058c3 code=4d6ec363e4fd3698acf02aa21afed2bb90417ad gate=manual)
+- **State history:** Open (2026-08-16T20:59:04Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T05:56:31Z, deltic:auto role=fix run=fix-20260913T054211Z-eb7058c3 branch=task/bug-MM-BUG-KILN-00232-run-fix-20260913T054211Z-eb7058c3 code=4d6ec363e4fd3698acf02aa21afed2bb90417ad gate=manual) -> Closed (2026-09-13T19:25:30Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: 42-byte 2^36-1-sample STREAMINFO rejected before allocation; test fails with MAX_DECODED_SAMPLES removed)
 
 ## Observation
 
@@ -28,5 +28,15 @@ Observation: A 42-byte FLAC-shaped input can declare STREAMINFO total_samples = 
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `4d6ec363`) by an agent other than the fixer.
+
+**Original observation re-run.** The regression is the exact repro: a 42-byte STREAMINFO-only input declaring 2^36-1 samples now returns `Err("FLAC: decoded sample count exceeds supported limit")` with no allocation attempt.
+
+**Fails-before (method B).** Removing the `MAX_DECODED_SAMPLES` bound fails `an_enormous_declared_length_is_rejected_before_allocation` (it reaches "stream ended before the declared sample count" instead). Restored; `git diff` empty; all 15 `ferrosintesis-flac` tests pass.
+
+Reservation is fallible, a fit check precedes each append, and MD5 is hashed incrementally, so no second PCM copy is built. The reordered fit-before-push check has no dedicated test.
 
 ## Notes

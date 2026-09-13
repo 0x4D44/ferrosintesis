@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00184 — Headroom logical alias duplicates packaged and decoded PCM
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** Headroom sample package / memory and package size
 - **Raised:** 2026-08-13T19:30:29Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T192217Z-84a6881c
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00184-run-verify-20260913T192217Z-84a6881c
-- **Owner base:** 3748acbe6d1ea0bd1855b52eec288e56ee498f00
-- **Owner fingerprint:** sha256:3f5cd462c253580a4e2779604a1aa5ef111eca75bb7343eb43d80ab2d4c4b778
-- **Owner since:** 2026-09-13T19:22:17Z
-- **Owner until:** 2026-09-13T21:22:17Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T19:30:29Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T15:22:12Z, deltic:auto role=fix run=fix-20260815T152013Z-p47488-n173234600-c2 branch=task/bug-MM-BUG-KILN-00184-run-fix-20260815T152013Z-p47488-n173234600-c2 code=0f54b1a gate=manual)
+- **State history:** Open (2026-08-13T19:30:29Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T15:22:12Z, deltic:auto role=fix run=fix-20260815T152013Z-p47488-n173234600-c2 branch=task/bug-MM-BUG-KILN-00184-run-fix-20260815T152013Z-p47488-n173234600-c2 code=0f54b1a gate=manual) -> Closed (2026-09-13T19:25:30Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: Headroom packages 45 unique payloads plus 9 aliases; parent tree held 9 byte-identical duplicates)
 
 ## Observation
 
@@ -59,5 +59,15 @@ crates so undeclared Headroom duplicates cannot return.
 Suggested regression: assert 45 physical files and 54 logical names; resolve
 every alias; require pointer identity for the shared decoded banks; reject an
 undeclared duplicate payload. Estimated effort: Medium.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `0f54b1a6`, follow-ups `b2fe20fd`, `5f416608`) by an agent other than the fixer.
+
+**Original observation re-run.** Grouping Headroom sample blobs by content: HEAD has 45 files, all unique; `ALIASES` declares 9 rows; `LOGICAL_FILE_COUNT` 54, `FILE_COUNT` 45. `headroom_f_rr2()` delegates to `headroom_mf_rr2()` (`sampler.rs:1661`), so the decoded bank is shared.
+
+**Fails-before (method A).** At `0f54b1a6^` the package held 54 files and 45 unique blobs (9 duplicated), which the crate's no-duplicate-payload predicate rejects. `cargo test -p ferrosintesis-samples-headroom` passes 4/4 on HEAD, and the Python `HeadroomOutputInventoryTest` passes.
+
+There is no explicit pointer-identity test for the shared decoded bank; sharing is structural through delegation.
 
 ## Notes

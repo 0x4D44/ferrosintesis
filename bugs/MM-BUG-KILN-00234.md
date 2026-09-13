@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00234 — FLAC decoder ignores mandatory frame CRCs
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis-flac / frame integrity
 - **Raised:** 2026-08-16T20:59:26Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T192034Z-c510ecfa
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00234-run-verify-20260913T192034Z-c510ecfa
-- **Owner base:** 63a80669e39b359450f41b454778e333719d594f
-- **Owner fingerprint:** sha256:86f50fff1f1e12bb9178ff2f69d797391e54d2726eaf92b8e67e215544c7cbd9
-- **Owner since:** 2026-09-13T19:20:34Z
-- **Owner until:** 2026-09-13T21:20:34Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T20:59:26Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:23:07Z, deltic:auto role=fix run=fix-20260913T060531Z-212caf5b branch=task/bug-MM-BUG-KILN-00234-run-fix-20260913T060531Z-212caf5b code=971ec0cf64c7769508fd7a446778bebb69887a7f gate=manual)
+- **State history:** Open (2026-08-16T20:59:26Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:23:07Z, deltic:auto role=fix run=fix-20260913T060531Z-212caf5b branch=task/bug-MM-BUG-KILN-00234-run-fix-20260913T060531Z-212caf5b code=971ec0cf64c7769508fd7a446778bebb69887a7f gate=manual) -> Closed (2026-09-13T19:25:30Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: corrupted frames with no STREAMINFO MD5 now rejected; test accepts the damaged stream with CRC comparisons disabled)
 
 ## Observation
 
@@ -28,5 +28,15 @@ Observation: decode_frame reads the header CRC-8 and frame CRC-16 into underscor
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `971ec0cf`) by an agent other than the fixer.
+
+**Original observation re-run.** A one-sample zero-MD5 stream decodes to `Ok([0])`; flipping a header byte, the CRC-8, a frame byte or the CRC-16 now returns the matching CRC mismatch error. The real embedded FLAC banks still decode under the check.
+
+**Fails-before (method B).** Disabling both CRC comparisons fails `frame_crc_corruption_is_rejected_without_a_streaminfo_md5` (left `Ok([0])`, right the CRC-8 mismatch error). Restored; `git diff` empty; passes on HEAD.
+
+**Gates.** This fix causes no gate failure; trunk `8b6a6f86` is red for other recorded reasons.
 
 ## Notes

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00277 — Pluck legato and tremolo allocate excitation buffers in the realtime callback
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / realtime pluck articulation
 - **Raised:** 2026-08-17T09:41:50Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T191728Z-94fda33a
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00277-run-verify-20260913T191728Z-94fda33a
-- **Owner base:** 8c00fd87cafed92ec6a4fd3fd54e8ae2ca5351e9
-- **Owner fingerprint:** sha256:050d848406b770cbce212b4173f48677c108e3165f0ce38b33f887da50c1baa6
-- **Owner since:** 2026-09-13T19:17:28Z
-- **Owner until:** 2026-09-13T21:17:28Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T09:41:50Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:23:58Z, deltic:auto role=fix run=fix-20260913T181210Z-063c97f3 branch=task/bug-MM-BUG-KILN-00277-run-fix-20260913T181210Z-063c97f3 code=885af17b0dd468d6d535662a4986bfc92cc551e5 gate=manual)
+- **State history:** Open (2026-08-17T09:41:50Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:23:58Z, deltic:auto role=fix run=fix-20260913T181210Z-063c97f3 branch=task/bug-MM-BUG-KILN-00277-run-fix-20260913T181210Z-063c97f3 code=885af17b0dd468d6d535662a4986bfc92cc551e5 gate=manual) -> Closed (2026-09-13T19:25:30Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: reverting the legato and retrigger hunks fails the preallocated-excitation capacity test)
 
 ## Observation
 
@@ -34,5 +34,15 @@ Static review only. Existing retrigger bugs cover routing and round-robin semant
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `885af17b`) by an agent other than the fixer.
+
+**Original observation re-derived.** `legato_to` and `retrigger` fill `self.hammer` in place within capacity reserved at construction; the per-restrike `raw`/`exc` Vecs are gone.
+
+**Fails-before (method B).** Reverting only the `legato_to` and `retrigger` hunks, keeping the reservation, fails `voices::pluck_realtime_excitation_storage_is_preallocated_and_reused` on its capacity check (left 66, right 21580). Restored; `git diff` empty; passes on HEAD.
+
+By reading, the in-place comb computes `raw[i] - 0.9*raw[(i+comb)%n]` for every index, including `step == 0`; no render-diff inventory was run. Minor edges, noted in `scratchpad.md`: each Pluck reserves about 86 KB, and at the lowest keys under an extreme down-bend the burst can be shortened by up to about 11%.
 
 ## Notes

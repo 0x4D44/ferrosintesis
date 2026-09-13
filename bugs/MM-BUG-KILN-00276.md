@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00276 — ScaledVoice allocates scratch storage on its first realtime render
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / realtime velocity-corrected voices
 - **Raised:** 2026-08-17T09:41:38Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T191604Z-320cdd3d
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00276-run-verify-20260913T191604Z-320cdd3d
-- **Owner base:** 5c493c63128a9140a8ee60f1566adb873f6f92af
-- **Owner fingerprint:** sha256:fa34526a2ac80946105341331feb64ed26d676cf72cf510e0d521aa3c3a49490
-- **Owner since:** 2026-09-13T19:16:04Z
-- **Owner until:** 2026-09-13T21:16:04Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T09:41:38Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:10:44Z, deltic:auto role=fix run=fix-20260913T175902Z-4ca006d0 branch=task/bug-MM-BUG-KILN-00276-run-fix-20260913T175902Z-4ca006d0 code=1a6e21862ca095aaecf7e05de4973d26eeeb9a0d gate=manual)
+- **State history:** Open (2026-08-17T09:41:38Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:10:44Z, deltic:auto role=fix run=fix-20260913T175902Z-4ca006d0 branch=task/bug-MM-BUG-KILN-00276-run-fix-20260913T175902Z-4ca006d0 code=1a6e21862ca095aaecf7e05de4973d26eeeb9a0d gate=manual) -> Closed (2026-09-13T19:25:30Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: Vec scratch restored fails the inline size test; the new live fresh-state test does not cover the fix)
 
 ## Observation
 
@@ -34,5 +34,15 @@ Static review only. Open MM-BUG-KILN-00216 tracks the same defect shape in LaVoi
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `1a6e2186`) by an agent other than the fixer.
+
+**Original observation re-derived.** `ScaledVoice.scratch` is `[f32; engine::BLOCK]` at all four `voices.rs` construction sites and the `drums.rs` site, and render processes output in 64-frame chunks with no resize.
+
+**Fails-before (method B).** Reverting the type to `Vec` with resize-on-render fails `voices::scaled_voice_realtime_scratch_is_inline_and_block_sized` (left 24, right 256). Restored; `git diff` empty; passes with and without default features.
+
+**Coverage note.** `live::tests::realtime_corrected_melodic_and_drum_voices_render_from_fresh_state` stays green with the fix reverted (it checks only voice count and finite output), so the static type-size pin is the only guard. The counting-allocator regression the record suggested is not possible in-crate under `#![forbid(unsafe_code)]`. The fix itself is correct.
 
 ## Notes

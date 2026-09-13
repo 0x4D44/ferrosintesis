@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00073 — drumkit2 audio oracle's per-bank duration table is hand-maintained beside BANKS, so dropping a bank stays green
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample assets / drumkit2 audio validation
 - **Raised:** 2026-09-13T19:32:32Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T215412Z-ac79c27b
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00073-run-fix-20260913T215412Z-ac79c27b
-- **Owner base:** 911b6384ed1d9728592571e804bc6ae8e87d2dd4
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T21:54:12Z
-- **Owner until:** 2026-09-13T23:54:12Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:32:32Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:32:32Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T21:59:42Z, deltic:auto role=fix run=fix-20260913T215412Z-ac79c27b branch=task/bug-MM-BUG-CRU-00073-run-fix-20260913T215412Z-ac79c27b code=361044ea9be21a5888d359f33e2917833ed24f41 gate=manual)
 
 ## Observation
 

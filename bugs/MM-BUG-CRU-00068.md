@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00068 — Freesound and Eastman source intakes copy into the shared vsco2ce_src temp directory with no lock or per-run path
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample tooling / concurrent source isolation
 - **Raised:** 2026-09-13T19:26:11Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T212430Z-44a85e6e
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00068-run-fix-20260913T212430Z-44a85e6e
-- **Owner base:** 74cba33778d710d3641a56101e2bbdd23ccca26f
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T21:24:30Z
-- **Owner until:** 2026-09-13T23:24:30Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:26:11Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:26:11Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T21:45:03Z, deltic:auto role=fix run=fix-20260913T212430Z-44a85e6e branch=task/bug-MM-BUG-CRU-00068-run-fix-20260913T212430Z-44a85e6e code=d44a74e37c6fec84052d83eac7bb713962f44ea7 gate=manual)
 
 ## Observation
 

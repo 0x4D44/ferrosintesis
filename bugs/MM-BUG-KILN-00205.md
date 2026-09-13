@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00205 — YDP regeneration can publish a mixed bank after a late failure
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** YDP sample generation / failure atomicity
 - **Raised:** 2026-08-16T08:40:59Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T042703Z-f85fec24
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00205-run-fix-20260913T042703Z-f85fec24
-- **Owner base:** d9ca1672c6baa1cc8fa1eca9e3c0bda5f9cc750e
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T04:27:03Z
-- **Owner until:** 2026-09-13T06:27:03Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T08:40:59Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-16T08:40:59Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T04:40:51Z, deltic:auto role=fix run=fix-20260913T042703Z-f85fec24 branch=task/bug-MM-BUG-KILN-00205-run-fix-20260913T042703Z-f85fec24 code=76901f85db7f73b396957d099553e489166bb6dd gate=manual)
 
 ## Observation
 

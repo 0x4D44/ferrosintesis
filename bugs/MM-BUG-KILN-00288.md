@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00288 — Sample inventory guard skips multi-family aggregation crates
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample inventory / public package surfaces
 - **Raised:** 2026-08-17T13:41:00Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T190749Z-15df7645
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00288-run-fix-20260913T190749Z-15df7645
-- **Owner base:** c4c997788c62809322fbfab45435fda2c24c5579
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T19:07:49Z
-- **Owner until:** 2026-09-13T21:07:49Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T13:41:00Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T13:41:00Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:31:31Z, deltic:auto role=fix run=fix-20260913T190749Z-15df7645 branch=task/bug-MM-BUG-KILN-00288-run-fix-20260913T190749Z-15df7645 code=fd4768c77ca50a8d14b8b84ead17057767b8980d gate=manual)
 
 ## Observation
 

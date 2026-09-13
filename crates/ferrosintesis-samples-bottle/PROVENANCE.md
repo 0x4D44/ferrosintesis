@@ -24,7 +24,7 @@ offline reproducibility):
 |-------------|---------|
 | `tools/ferrosintesis-samples/freesound-src/bottle_G3.wav` | `56421959ee1aa62d43fa171b11f7626fa7ef08636abf9a3afed821c8d0e965fd` |
 
-Baked to `samples/bottleloop_G3.wav` (mono 16-bit 44.1 kHz, 1.6500 s, measured root
+Baked to `samples/bottleloop_G3.flac` (mono 16-bit 44.1 kHz, 1.6500 s, measured root
 **205.0 Hz**) by `tools/ferrosintesis-samples/prepare.py:bake_bottle_loop`
 (`python3 prepare.py --only=bottleloop`), leaving a recorded attack that swells into a looped
 plateau body (`ferrosintesis` finds the pitch-synchronous loop at construction). Voices

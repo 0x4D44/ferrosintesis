@@ -5,7 +5,7 @@ Embedded **CC BY 3.0** FreePats YDP Grand (Yamaha Disklavier Pro) samples — th
 strike than the GM 1 default (VCSL Kawai). Voices the **GM 1 Bright Acoustic
 Piano alternate** (CC0=1) in [ferrosintesis](https://github.com/0x4D44/ferrosintesis).
 
-9 pitch zones (C2–C6) × single velocity = mono 16-bit 44.1 kHz WAVs, embedded via
+9 pitch zones (C2–C6) × single velocity = mono 16-bit 44.1 kHz FLACs, embedded via
 `include_bytes!`. Extracted from the SF2's middle velocity layer; dynamics come
 from the LA blend + model (see `PROVENANCE.md`).
 

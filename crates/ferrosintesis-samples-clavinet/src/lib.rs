@@ -58,9 +58,7 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     ),
 ];
 
-/// Returns the embedded WAV bytes for an exact file name.
-///
-/// Names include the `.wav` suffix and are case-sensitive.
+/// Returns the embedded sample bytes for an exact (case-sensitive) name.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
         .iter()

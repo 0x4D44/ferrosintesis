@@ -275,9 +275,7 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     ),
 ];
 
-/// Returns the embedded WAV bytes for an exact file name.
-///
-/// Names include the `.wav` suffix and are case-sensitive.
+/// Returns the embedded sample bytes for an exact (case-sensitive) name.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     // Preserve the old low-level lookups while representing these cells
     // truthfully as aliases rather than embedding duplicate payload files.

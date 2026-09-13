@@ -18,7 +18,7 @@ an octave low rather than a double bass.
 | `dbass_*` | 43 | Solo double bass (arco, non-vibrato) | VSCO 2 CE "Solo Contrabass" SusNV ([github](https://github.com/sgossner/VSCO-2-CE), rev `44030090`) | CC0-1.0 |
 | `pizzbass_*` | 32 | Solo double bass (**pizzicato**), voices the acoustic bass | VSCO 2 CE "Solo Contrabass" pizz ([github](https://github.com/sgossner/VSCO-2-CE), rev `44030090`) | CC0-1.0 |
 
-File names encode the **measured sounding pitch** (e.g. `cellosolo_C2_f.wav` sounds
+File names encode the **measured sounding pitch** (e.g. `cellosolo_C2_f.flac` sounds
 C2 ≈ 65 Hz). Both source libraries label their files one octave below sounding
 pitch; the bake in `tools/ferrosintesis-samples/prepare.py` measures every root and
 names by the sounding pitch, so the zone tables never trust the source label.

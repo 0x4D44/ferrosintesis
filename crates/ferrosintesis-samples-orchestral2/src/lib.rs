@@ -11,9 +11,9 @@
 
 #![forbid(unsafe_code)]
 
-/// Embedded (file-name, bytes) pairs. Names include the `.wav` suffix and are
-/// case-sensitive. Kept as a slice (not a fixed-size array) so families can be
-/// added without threading a count constant through the file.
+/// Embedded (file-name, bytes) pairs. Names are exact and case-sensitive. Kept as a
+/// slice (not a fixed-size array) so families can be added without threading a count
+/// constant through the file.
 static SAMPLES: &[(&str, &[u8])] = &[
     (
         "banjo_A#3.flac",
@@ -404,12 +404,10 @@ static SAMPLES: &[(&str, &[u8])] = &[
     ),
 ];
 
-/// Number of embedded WAV files.
+/// Number of embedded sample files.
 pub const FILE_COUNT: usize = SAMPLES.len();
 
-/// Returns the embedded WAV bytes for an exact file name.
-///
-/// Names include the `.wav` suffix and are case-sensitive.
+/// Returns the embedded sample bytes for an exact (case-sensitive) name.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
         .iter()

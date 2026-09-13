@@ -28,7 +28,7 @@ use std::sync::OnceLock;
 /// Number of sample files embedded in this package.
 pub const FILE_COUNT: usize = 128;
 
-/// Sample rate of every embedded WAV, in hertz.
+/// Sample rate of every embedded sample, in hertz.
 pub const SAMPLE_RATE_HZ: u32 = 44_100;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
@@ -550,7 +550,7 @@ static PCM_CACHE: OnceLock<Vec<Vec<i16>>> = OnceLock::new();
 
 /// Where a bank's embedded takes actually live.
 ///
-/// A `Bank` descriptor and the WAVs it names are not always in the same crate. The three
+/// A `Bank` descriptor and the sample files it names are not always in the same crate. The three
 /// accent-cymbal banks (crash, splash, china) were split out into
 /// `ferrosintesis-samples-drumkit2` so that neither package exceeds the crates.io 10 MiB
 /// per-crate limit — the combined kit packaged at 15.8 MiB and was rejected outright.
@@ -559,7 +559,7 @@ static PCM_CACHE: OnceLock<Vec<Vec<i16>>> = OnceLock::new();
 /// stays single: `SampledDrum` holds one `&'static Bank` and does not care which crate
 /// embedded the bytes. Each bank simply carries the lookups of its owning crate.
 pub struct BankSource {
-    /// Raw embedded WAV bytes for an exact file name, or `None` if absent.
+    /// Raw embedded sample bytes for an exact name, or `None` if absent.
     pub wav: fn(&str) -> Option<&'static [u8]>,
     /// Decoded mono 16-bit 44.1 kHz PCM for an exact file name, or `None` if absent.
     pub pcm: fn(&str) -> Option<&'static [i16]>,
@@ -575,7 +575,7 @@ pub static SOURCE: BankSource = BankSource {
 };
 
 /// A cymbal articulation: `vel_hi.len()` velocity layers x `round_robins`
-/// round-robin takes. File names follow `<name>_vl{L}_rr{R}.wav`, 1-based.
+/// round-robin takes. File names follow `<name>_vl{L}_rr{R}.flac`, 1-based.
 pub struct Bank {
     /// Articulation stem, e.g. `"ride"`.
     pub name: &'static str,
@@ -723,7 +723,7 @@ impl Bank {
         self.first_sample_index + layer * self.round_robins + rr
     }
 
-    /// Raw embedded WAV bytes for a take (0-based indices).
+    /// Raw embedded sample bytes for a take (0-based indices).
     pub fn wav(&self, layer: usize, rr: usize) -> &'static [u8] {
         let name = self.file_name(layer, rr);
         (self.source.wav)(&name).expect("the embedded inventory covers every bank take")
@@ -737,9 +737,7 @@ impl Bank {
     }
 }
 
-/// Returns the embedded WAV bytes for an exact file name.
-///
-/// Names include the `.wav` suffix and are case-sensitive.
+/// Returns the embedded sample bytes for an exact (case-sensitive) name.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
         .iter()

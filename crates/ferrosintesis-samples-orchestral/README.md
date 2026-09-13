@@ -2,7 +2,7 @@
 
 Compile-time sample payload for
 [`ferrosintesis`](https://crates.io/crates/ferrosintesis). This crate embeds
-158 mono, 16-bit, 44.1 kHz WAV recordings (attack transients + looped sustains):
+158 mono, 16-bit, 44.1 kHz FLAC recordings (attack transients + looped sustains):
 
 - 24 violin/cello ensemble onsets for the GM 48–49 string sections;
 - 56 brass onsets for trumpet, muted trumpet, trombone, tuba, and horn;
@@ -14,15 +14,15 @@ Compile-time sample payload for
 
 `ferrosintesis` uses these recordings for the onset of a note, then crossfades
 into its modeled sustain. Cargo retrieves this package at build time and
-`include_bytes!` places the selected WAV data in the final binary. There is no
+`include_bytes!` places the selected FLAC data in the final binary. There is no
 runtime filesystem or network access.
 
 The small public API exists for `ferrosintesis`:
 
 ```rust
 assert_eq!(ferrosintesis_samples_orchestral::FILE_COUNT, 158);
-let wav = ferrosintesis_samples_orchestral::get("trumpet_C3_f.wav").unwrap();
-assert_eq!(&wav[..4], b"RIFF");
+let flac = ferrosintesis_samples_orchestral::get("trumpet_C3_f.flac").unwrap();
+assert_eq!(&flac[..4], b"fLaC");
 ```
 
 ## Provenance and license

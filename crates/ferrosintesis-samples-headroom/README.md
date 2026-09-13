@@ -6,7 +6,7 @@ Acoustic Grand alternate** (bank select CC0=4) in
 [ferrosintesis](https://github.com/0x4D44/ferrosintesis).
 
 9 pitch zones (C2–C6) × 3 dynamics (pp/mf/f) × 2 round robins = 54 mono 16-bit
-44.1 kHz WAVs, embedded via `include_bytes!`. Consumers normally reach this crate
+44.1 kHz FLACs, embedded via `include_bytes!`. Consumers normally reach this crate
 through `ferrosintesis`. Provenance and processing: see `PROVENANCE.md`.
 
 **Licence: CC BY 4.0 — attribution is required.** `NOTICE` credits Bengt Nilsson

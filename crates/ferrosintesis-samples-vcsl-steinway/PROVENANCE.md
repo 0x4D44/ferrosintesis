@@ -7,12 +7,12 @@
 | `steinwayb_*` | 27 |
 
 Grand-piano attack/body bank for a **GM 0 Acoustic Grand alternate** (CC0=3):
-27 unique mono 16-bit 44.1 kHz WAVs serving 54 logical names across 9 pitch
+27 unique mono 16-bit 44.1 kHz FLACs serving 54 logical names across 9 pitch
 zones (C2–C6) × 3 dynamics (pp/mf/f) × 2 round robins. The 27 repeated upstream
 velocity cells are declared in `ALIASES` rather than packaged twice. Generated
 by `tools/ferrosintesis-samples/prepare.py` (family `steinwayb`) from the VCSL
-"Grand Piano, Steinway B" close-mic samples. The WAVs under `samples/` are
-**source, not build output** — committed and embedded via `include_bytes!`.
+"Grand Piano, Steinway B" close-mic samples. The FLACs under `samples/` are
+**packaged data, not build output** — committed and embedded via `include_bytes!`.
 
 Kept in its own crate so the CC0 dedication is isolated from the other banks'
 licences and so `ferrosintesis-samples-core` stays under the crates.io 10 MiB cap.

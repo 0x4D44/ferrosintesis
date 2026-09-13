@@ -311,9 +311,7 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     ),
 ];
 
-/// Returns the embedded WAV bytes for an exact file name.
-///
-/// Names include the `.wav` suffix and are case-sensitive.
+/// Returns the embedded sample bytes for an exact (case-sensitive) name.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
         .iter()
@@ -328,7 +326,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    // Aggregate byte size of the 74 embedded WAVs; regenerate with prepare.py
+    // Aggregate byte size of the 74 embedded FLACs; regenerate with prepare.py
     // and re-pin if the bank changes. Guards against an accidental sample re-cut.
     const EXPECTED_BYTES: usize = 2470849;
 

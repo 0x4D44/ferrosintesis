@@ -6,7 +6,7 @@
 |--------|------:|
 | `rain_*` | 1 |
 
-`rain_loop.wav` — a real steady-rain recording made by the repository owner in **2017**
+`rain_loop.flac` — a real steady-rain recording made by the repository owner in **2017**
 (`S4320004.mp4`), dedicated **CC0 1.0 Universal** (public domain). The owner holds the
 recording and grants it to the public domain; no third-party licence applies.
 

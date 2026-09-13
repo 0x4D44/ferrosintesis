@@ -77,6 +77,8 @@ pub(crate) fn embedded_payload() -> (usize, usize, u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
+    use std::path::Path;
 
     /// Spelt-out numbers the prose uses, e.g. "twenty-four".
     fn spelled(n: usize) -> String {
@@ -118,6 +120,218 @@ mod tests {
 
     fn parent(file: &str) -> String {
         read(&crates_dir().join("ferrosintesis").join(file))
+    }
+
+    /// The container formats the package actually embeds, derived from its sample files.
+    ///
+    /// The docs below describe the published crate, not the upstream recordings or the
+    /// temporary PCM/WAV produced while baking. Keep those source and processing references
+    /// valid while refusing a package claim that names a format no longer under `samples/`.
+    fn packaged_containers(krate: &str) -> BTreeSet<&'static str> {
+        fn visit(
+            dir: &Path,
+            formats: &mut BTreeSet<&'static str>,
+            files: &mut usize,
+            unknown: &mut Vec<String>,
+        ) {
+            for entry in std::fs::read_dir(dir)
+                .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
+            {
+                let path = entry.expect("sample entry must be readable").path();
+                if path.is_dir() {
+                    visit(&path, formats, files, unknown);
+                    continue;
+                }
+                let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                match extension {
+                    "wav" => {
+                        formats.insert("wav");
+                        *files += 1;
+                    }
+                    "flac" => {
+                        formats.insert("flac");
+                        *files += 1;
+                    }
+                    other => unknown.push(format!("{} ({other:?})", path.display())),
+                }
+            }
+        }
+
+        let dir = crates_dir().join(krate).join("samples");
+        let mut formats = BTreeSet::new();
+        let mut files = 0;
+        let mut unknown = Vec::new();
+        visit(&dir, &mut formats, &mut files, &mut unknown);
+        assert!(
+            unknown.is_empty(),
+            "{krate}/samples contains unsupported non-audio files:\n  {}",
+            unknown.join("\n  ")
+        );
+        assert!(
+            files > 0 && !formats.is_empty(),
+            "{krate}/samples has no WAV or FLAC files — the container oracle would pass vacuously"
+        );
+        formats
+    }
+
+    fn mentions_container(text: &str, container: &str) -> bool {
+        let lower = text.to_lowercase();
+        let mut tokens = lower.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'));
+        match container {
+            "wav" => {
+                lower.contains(".wav")
+                    || tokens.clone().any(|token| matches!(token, "wav" | "wavs"))
+                    || tokens.clone().any(|token| matches!(token, "riff" | "wave"))
+            }
+            "flac" => {
+                lower.contains(".flac") || tokens.any(|token| matches!(token, "flac" | "flacs"))
+            }
+            _ => false,
+        }
+    }
+
+    fn source_or_processing_context(text: &str) -> bool {
+        let lower = text.to_lowercase();
+        [
+            "source",
+            "upstream",
+            "archive",
+            "decode",
+            "input",
+            "trimmed from",
+            "extracted from",
+            "fetched",
+            "retired",
+            "read_wav",
+            "temporary",
+            "source cuts",
+            "source recordings",
+            "original",
+            "auto-fetch",
+        ]
+        .iter()
+        .any(|marker| lower.contains(marker))
+    }
+
+    fn package_claim_context(text: &str) -> bool {
+        let lower = text.to_lowercase();
+        [
+            "embedded",
+            "packaged",
+            "include_bytes",
+            "under `samples/",
+            "under samples/",
+            "baked to `samples/",
+            "raw ",
+            "suffix",
+            "exact",
+            "file name",
+            "file-name",
+            "sample names",
+            "sample file",
+            "sample bytes",
+            "stored as",
+            "get(\"",
+            "wav data",
+            "flac data",
+            "wav bytes",
+            "flac bytes",
+            "wav recordings",
+            "flac recordings",
+            "wav attack",
+            "flac attack",
+            "wav bodies",
+            "flac bodies",
+            "flac is lossless",
+            "package file",
+            "final package",
+        ]
+        .iter()
+        .any(|marker| lower.contains(marker))
+    }
+
+    /// Find format words that describe the package surface, not its source or bake steps.
+    ///
+    /// The split at sentence/semicolon/dash boundaries matters: a correct sentence can say
+    /// "source WAV ...; FLACs under samples ...". Treating that whole line as one claim would
+    /// make a source format look like a packaged format and would blind the oracle to future
+    /// mixed-input docs.
+    fn documented_container_mismatches(
+        file: &str,
+        text: &str,
+        packaged: &BTreeSet<&'static str>,
+    ) -> Vec<String> {
+        let source_file = file.ends_with("src/lib.rs");
+        let mut packaged_section = !source_file;
+        let mut errors = Vec::new();
+
+        for (line_number, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            let lower = trimmed.to_lowercase();
+            if !source_file && trimmed.starts_with('#') {
+                let ends_package_section = if file.ends_with("README.md") {
+                    lower.contains("provenance and license")
+                        || lower.starts_with("## source")
+                        || lower.starts_with("## processing")
+                        || lower.starts_with("## regenerat")
+                } else {
+                    lower.starts_with("## source")
+                        || lower.starts_with("## sources")
+                        || lower.starts_with("## processing")
+                        || lower.starts_with("## regenerat")
+                        || lower.starts_with("## selection")
+                        || lower.contains("upstream")
+                        || lower.contains("identity")
+                        || lower.contains("committed-source")
+                        || lower.contains("checksums")
+                        || lower.starts_with("## removed")
+                };
+                if ends_package_section {
+                    packaged_section = false;
+                }
+            }
+
+            if source_file && !trimmed.starts_with("///") && !trimmed.starts_with("//!") {
+                continue;
+            }
+            if !source_file
+                && trimmed.starts_with('|')
+                && !lower.contains("embedded")
+                && !lower.contains("packaged")
+            {
+                continue;
+            }
+
+            let clauses = line
+                .split(';')
+                .flat_map(|part| part.split(" — "))
+                .flat_map(|part| part.split(". "));
+            for clause in clauses {
+                if clause.to_lowercase().contains("alias") {
+                    continue;
+                }
+                let sourceish = source_or_processing_context(clause);
+                let packageish = package_claim_context(clause);
+                if !packaged_section && !packageish {
+                    continue;
+                }
+                if sourceish && !packageish {
+                    continue;
+                }
+                for container in ["wav", "flac"] {
+                    if packaged.contains(container) || !mentions_container(clause, container) {
+                        continue;
+                    }
+                    errors.push(format!(
+                        "{file}:{} names {container} for a package containing {}: {}",
+                        line_number + 1,
+                        packaged.iter().copied().collect::<Vec<_>>().join("/"),
+                        trimmed
+                    ));
+                }
+            }
+        }
+        errors
     }
 
     /// Size-of-the-embedded-bank claims: `(file, line, value in MiB)`.
@@ -433,6 +647,70 @@ mod tests {
         assert!(
             files > 1000 && bytes > 48 * 1024 * 1024,
             "payload scan found only {files} files / {bytes} bytes"
+        );
+    }
+
+    /// Every public sample-crate document must name only the format its samples/ payload
+    /// actually ships. The scan covers the API rustdoc and both packaged prose documents,
+    /// while deliberately leaving upstream and temporary decode formats alone.
+    #[test]
+    fn sample_crate_documents_match_their_packaged_containers() {
+        let crates = default_sample_crates();
+        assert!(
+            crates.len() > 15,
+            "found only {} default sample crates — the documentation scan would be too narrow",
+            crates.len()
+        );
+
+        let mut checked_documents = 0usize;
+        let mut errors = Vec::new();
+        for krate in crates {
+            let packaged = packaged_containers(&krate);
+            let root = crates_dir().join(&krate);
+            for file in ["src/lib.rs", "README.md", "PROVENANCE.md"] {
+                let path = root.join(file);
+                let text = read(&path);
+                checked_documents += 1;
+                errors.extend(
+                    documented_container_mismatches(file, &text, &packaged)
+                        .into_iter()
+                        .map(|error| format!("{krate}: {error}")),
+                );
+            }
+        }
+        assert!(
+            checked_documents > 45,
+            "checked only {checked_documents} sample-crate documents — the scan is not seeing the full set"
+        );
+        assert!(
+            errors.is_empty(),
+            "sample-crate prose names a container its package does not ship:\n  {}",
+            errors.join("\n  ")
+        );
+    }
+
+    #[test]
+    fn sample_container_oracle_rejects_a_mutated_public_document() {
+        let packaged = BTreeSet::from(["flac"]);
+        let stale = "/// Returns the embedded WAV bytes for an exact file name.\n\
+/// Names include the .wav suffix and are case-sensitive.";
+        let errors = documented_container_mismatches("src/lib.rs", stale, &packaged);
+        assert!(
+            !errors.is_empty(),
+            "the oracle accepted a stale WAV public contract"
+        );
+
+        let valid_mixed_input = "The source WAV is decoded; the FLAC under samples/ is packaged.";
+        assert!(
+            documented_container_mismatches("PROVENANCE.md", valid_mixed_input, &packaged)
+                .is_empty(),
+            "the oracle mistook a source WAV for the packaged FLAC"
+        );
+
+        let valid_legacy_alias = r#"The legacy .wav spelling is an alias: get("piano_C2_pp_rr2.wav") resolves to a packaged FLAC single take."#;
+        assert!(
+            documented_container_mismatches("README.md", valid_legacy_alias, &packaged).is_empty(),
+            "the oracle mistook a compatibility alias for a packaged WAV"
         );
     }
 

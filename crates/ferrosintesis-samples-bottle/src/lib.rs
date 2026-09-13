@@ -17,9 +17,7 @@ static SAMPLES: [(&str, &[u8]); 1] = [(
     include_bytes!("../samples/bottleloop_G3.flac"),
 )];
 
-/// Returns the embedded WAV bytes for an exact file name.
-///
-/// Names include the `.wav` suffix and are case-sensitive.
+/// Returns the embedded sample bytes for an exact (case-sensitive) name.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
         .iter()

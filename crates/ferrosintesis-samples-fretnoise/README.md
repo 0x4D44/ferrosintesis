@@ -10,7 +10,7 @@ and no ringing pitch. The bank is a round-robin one-shot: successive notes advan
 takes so repeated fret noise does not machine-gun, and the written pitch is ignored, as GM
 specifies for the sound-effects block.
 
-The public API exposes `get` for lookup by exact WAV name, plus `take_name` and
+The public API exposes `get` for lookup by exact FLAC name, plus `take_name` and
 `ROUND_ROBINS` for the wrapping 0-based round-robin sequence.
 
 It is the **default** GM 120 voice. The modeled band-passed noise burst it replaced is retained
@@ -38,7 +38,7 @@ venv\fretnoise-bake\Scripts\python tools\ferrosintesis-samples\fretnoise_bake.py
 
 `BAKE-SHA256` pins every output independently. Verification re-bakes all twelve
 files in memory, checks the generated and committed hashes, and writes nothing.
-Omit `--verify` only when intentionally restoring the tracked WAVs from the
+Omit `--verify` only when intentionally restoring the tracked source WAVs from the
 committed source cuts; the script validates every generated hash before its
 first write.
 

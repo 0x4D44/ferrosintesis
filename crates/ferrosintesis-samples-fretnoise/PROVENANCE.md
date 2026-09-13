@@ -65,7 +65,7 @@ cross-platform FFT identity. `BAKE-SHA256` pins every output; the bake's
 and committed hashes without writing. The observed canonical re-bake matches all
 twelve pins.
 
-The embedded WAVs are **16-bit mono 44.1 kHz** (the format
+The embedded FLACs are **16-bit mono 44.1 kHz** (the format
 `sampler::parse_wav` requires). Total embedded size ≈ 1.0 MiB. Independent
 acoustic-tolerance oracles in `ferrosintesis::voices` guard the sampled GM120
 level, rasp spectrum, pitch independence, and one-shot lifetime even when a

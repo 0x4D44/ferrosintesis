@@ -2,7 +2,7 @@
 
 Compile-time sample payload for
 [`ferrosintesis`](https://crates.io/crates/ferrosintesis). This crate embeds 69
-mono, 16-bit, 44.1 kHz WAV attack transients:
+mono, 16-bit, 44.1 kHz FLAC attack transients:
 
 - 52 upright-piano strikes: nine pitch zones and three dynamics; 25 cells have
   two round robins, while quiet C2 and G2 are explicitly single-take because the
@@ -12,20 +12,21 @@ mono, 16-bit, 44.1 kHz WAV attack transients:
 
 `ferrosintesis` uses these recordings for the onset of a note, then crossfades
 into its modeled sustain. Cargo retrieves this package at build time and
-`include_bytes!` places the selected WAV data in the final binary. There is no
+`include_bytes!` places the selected FLAC data in the final binary. There is no
 runtime filesystem or network access.
 
 The small public API exists for `ferrosintesis`:
 
 ```rust
 assert_eq!(ferrosintesis_samples_core::FILE_COUNT, 69);
-let wav = ferrosintesis_samples_core::get("flute_A4.wav").unwrap();
-assert_eq!(&wav[..4], b"RIFF");
+let flac = ferrosintesis_samples_core::get("flute_A4.flac").unwrap();
+assert_eq!(&flac[..4], b"fLaC");
 ```
 
-`PIANO_SINGLE_TAKE_CELLS` reports the two exceptions. For compatibility,
-`get("piano_C2_pp_rr2.wav")` and `get("piano_G2_pp_rr2.wav")` still resolve to
-their single takes; they are aliases, not additional embedded files.
+`PIANO_SINGLE_TAKE_CELLS` reports the two exceptions. For compatibility, legacy
+`.wav` spellings are aliases: `get("piano_C2_pp_rr2.wav")` and `get("piano_G2_pp_rr2.wav")`
+still resolve to their single takes, not additional
+embedded files.
 
 ## Provenance and license
 
@@ -38,7 +39,7 @@ dedication. Source downloads are pinned to repository commit
 The repository's
 [`tools/ferrosintesis-samples/prepare.py`](https://github.com/0x4D44/ferrosintesis/blob/main/tools/ferrosintesis-samples/prepare.py)
 performs onset detection, trimming, fades, peak normalization, and conversion
-to mono 16-bit 44.1 kHz WAV. The piano transients retain about 1.8 seconds; the
+to mono 16-bit 44.1 kHz PCM, then encodes the packaged samples as FLAC. The piano transients retain about 1.8 seconds; the
 violin and flute transients retain about 0.63 seconds.
 
 The packaged samples and this package are dedicated to the public domain under

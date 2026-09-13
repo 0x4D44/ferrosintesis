@@ -75,9 +75,7 @@ pub const FILE_COUNT: usize = SAMPLES.len();
 /// consecutive fret-noise events do not repeat the same sample.
 pub const ROUND_ROBINS: usize = FILE_COUNT;
 
-/// Returns the embedded WAV bytes for an exact file name.
-///
-/// Names include the `.wav` suffix and are case-sensitive.
+/// Returns the embedded sample bytes for an exact (case-sensitive) name.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
         .iter()
@@ -97,7 +95,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    /// Aggregate byte size of the embedded WAVs. DELIBERATELY a pinned literal, not
+    /// Aggregate byte size of the embedded FLACs. DELIBERATELY a pinned literal, not
     /// a sum derived from `SAMPLES` (that would assert `sum == sum` — vacuous) nor
     /// from the files on disk (that would only mirror whatever was last baked). Its
     /// value here is as a CANARY on the committed bank's identity: a re-bake that
@@ -112,8 +110,8 @@ mod tests {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("samples")
     }
 
-    /// The `.wav` files actually committed under `samples/`, sorted ascending. The
-    /// bake writes `fretnoise_rrNN.wav` with a zero-padded two-digit ordinal, so
+    /// The `.flac` files actually committed under `samples/`, sorted ascending. The
+    /// bake writes `fretnoise_rrNN.flac` with a zero-padded two-digit ordinal, so
     /// lexicographic order here IS the bake's emission order.
     fn packaged_names() -> Vec<String> {
         let mut names: Vec<String> = fs::read_dir(samples_dir())

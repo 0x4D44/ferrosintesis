@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00228 — Packaged fret-noise README points to provenance data absent from the package
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** fret-noise package documentation / provenance
 - **Raised:** 2026-08-16T16:53:13Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T161451Z-b2335558
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00228-run-fix-20260913T161451Z-b2335558
-- **Owner base:** b0d665f67c50750d018545e32cbe24704d484c70
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T16:14:51Z
-- **Owner until:** 2026-09-13T18:14:51Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T16:53:13Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-16T16:53:13Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T16:20:57Z, deltic:auto role=fix run=fix-20260913T161451Z-b2335558 branch=task/bug-MM-BUG-KILN-00228-run-fix-20260913T161451Z-b2335558 code=80747f5953794f95878245ed50a6971d3d22cd64 gate=manual)
 
 ## Observation
 

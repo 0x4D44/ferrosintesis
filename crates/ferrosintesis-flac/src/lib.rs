@@ -491,8 +491,45 @@ fn skip_bytes(reader: &mut BitReader, count: usize) -> Result<()> {
     Ok(())
 }
 
+/// Calculate the FLAC frame-header CRC-8.
+fn crc8(bytes: &[u8]) -> u8 {
+    let mut crc = 0u8;
+    for &byte in bytes {
+        crc ^= byte;
+        for _ in 0..8 {
+            crc = if crc & 0x80 != 0 {
+                crc.wrapping_shl(1) ^ 0x07
+            } else {
+                crc.wrapping_shl(1)
+            };
+        }
+    }
+    crc
+}
+
+/// Calculate the FLAC frame-footer CRC-16.
+fn crc16(bytes: &[u8]) -> u16 {
+    let mut crc = 0u16;
+    for &byte in bytes {
+        crc ^= u16::from(byte) << 8;
+        for _ in 0..8 {
+            crc = if crc & 0x8000 != 0 {
+                crc.wrapping_shl(1) ^ 0x8005
+            } else {
+                crc.wrapping_shl(1)
+            };
+        }
+    }
+    crc
+}
+
 /// Decode one frame into `block`, replacing its previous contents.
 fn decode_frame(reader: &mut BitReader, info: &StreamInfo, block: &mut Vec<i64>) -> Result<()> {
+    if !reader.bit.is_multiple_of(8) {
+        return Err("FLAC: frame does not start on a byte boundary");
+    }
+    let frame_start = reader.bit / 8;
+
     let sync = reader.read(14)?;
     if sync != 0b11_1111_1111_1110 {
         return Err("FLAC: lost frame sync");
@@ -553,7 +590,11 @@ fn decode_frame(reader: &mut BitReader, info: &StreamInfo, block: &mut Vec<i64>)
         _ => return Err("FLAC: frame declares a sample rate other than 44.1 kHz"),
     }
 
-    let _crc8 = reader.read(8)?;
+    let crc8_position = reader.bit / 8;
+    let actual_crc8 = reader.read(8)? as u8;
+    if crc8(&reader.bytes[frame_start..crc8_position]) != actual_crc8 {
+        return Err("FLAC: frame header CRC-8 mismatch");
+    }
 
     block.clear();
     block.resize(block_size as usize, 0);
@@ -561,7 +602,11 @@ fn decode_frame(reader: &mut BitReader, info: &StreamInfo, block: &mut Vec<i64>)
 
     // Frame footer: pad to a byte boundary, then a 16-bit CRC.
     reader.align_to_byte();
-    let _crc16 = reader.read(16)?;
+    let crc16_position = reader.bit / 8;
+    let actual_crc16 = reader.read(16)? as u16;
+    if crc16(&reader.bytes[frame_start..crc16_position]) != actual_crc16 {
+        return Err("FLAC: frame footer CRC-16 mismatch");
+    }
     Ok(())
 }
 
@@ -828,13 +873,23 @@ mod tests {
         let mut bytes = b"fLaC".to_vec();
         bytes.extend_from_slice(&[0x80, 0x00, 0x00, 0x22]);
         let mut streaminfo = [0u8; 34];
-        streaminfo[0..2].copy_from_slice(&1u16.to_be_bytes());
+        streaminfo[0..2].copy_from_slice(&16u16.to_be_bytes());
         streaminfo[2..4].copy_from_slice(&4096u16.to_be_bytes());
         let packed = (u64::from(EXPECTED_SAMPLE_RATE) << 44)
             | (u64::from(EXPECTED_BITS_PER_SAMPLE - 1) << 36)
             | total_samples;
         streaminfo[10..18].copy_from_slice(&packed.to_be_bytes());
         bytes.extend_from_slice(&streaminfo);
+        bytes
+    }
+
+    fn zero_md5_stream() -> Vec<u8> {
+        let mut bytes = streaminfo_only(1);
+        // One zero sample in a fixed-size FLAC frame. The CRC bytes are fixed
+        // values from the FLAC polynomials, not calculated by the code under test.
+        bytes.extend_from_slice(&[
+            0xff, 0xf8, 0x60, 0x00, 0x00, 0x00, 0xea, 0x00, 0x00, 0x00, 0x94, 0xb9,
+        ]);
         bytes
     }
 
@@ -910,6 +965,42 @@ mod tests {
         assert_eq!(
             decode_mono16(&bytes),
             Err("FLAC: decoded sample count exceeds supported limit")
+        );
+    }
+
+    #[test]
+    fn frame_crc_corruption_is_rejected_without_a_streaminfo_md5() {
+        let valid = zero_md5_stream();
+        assert_eq!(decode_mono16(&valid), Ok(vec![0]));
+        let frame_start = streaminfo_only(1).len();
+
+        let mut bad_header = valid.clone();
+        bad_header[frame_start + 4] ^= 1;
+        assert_eq!(
+            decode_mono16(&bad_header),
+            Err("FLAC: frame header CRC-8 mismatch")
+        );
+
+        let mut bad_header_crc = valid.clone();
+        bad_header_crc[frame_start + 6] ^= 1;
+        assert_eq!(
+            decode_mono16(&bad_header_crc),
+            Err("FLAC: frame header CRC-8 mismatch")
+        );
+
+        let mut bad_frame = valid.clone();
+        bad_frame[frame_start + 9] ^= 1;
+        assert_eq!(
+            decode_mono16(&bad_frame),
+            Err("FLAC: frame footer CRC-16 mismatch")
+        );
+
+        let mut bad_footer_crc = valid;
+        let last = bad_footer_crc.len() - 1;
+        bad_footer_crc[last] ^= 1;
+        assert_eq!(
+            decode_mono16(&bad_footer_crc),
+            Err("FLAC: frame footer CRC-16 mismatch")
         );
     }
 

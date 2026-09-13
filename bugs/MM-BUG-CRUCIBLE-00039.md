@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00039 — Packaged FLAC banks pin EXPECTED_BYTES to one ffmpeg build, so a documented re-bake fails the crate size oracle
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / bank reproducibility
 - **Raised:** 2026-08-18T00:08:02Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T193658Z-04784867
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00039-run-verify-20260913T193658Z-04784867
-- **Owner base:** c890ee3d4bb08fe6bd014496bcc8794ca9fb6584
-- **Owner fingerprint:** sha256:d6e591419465a2907de7b5668f111ba3fe265aa1e0c2ab65f7c367307e3143f5
-- **Owner since:** 2026-09-13T19:36:58Z
-- **Owner until:** 2026-09-13T21:36:58Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T00:08:02Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T07:26:35Z, deltic:auto role=fix run=fix-20260913T070447Z-0245f995 branch=task/bug-MM-BUG-CRUCIBLE-00039-run-fix-20260913T070447Z-0245f995 code=6a265326 gate=manual)
+- **State history:** Open (2026-08-18T00:08:02Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T07:26:35Z, deltic:auto role=fix run=fix-20260913T070447Z-0245f995 branch=task/bug-MM-BUG-CRUCIBLE-00039-run-fix-20260913T070447Z-0245f995 code=6a265326 gate=manual) -> Closed (2026-09-13, independently verified by Codex: pinned encoder checks and all selected packaged byte-total tests pass; no residual gap)
 
 ## Observation
 
@@ -91,24 +91,33 @@ not something observed on a second toolchain here.
 
 ## Fix
 
-Unfixed. Raised for the fix-open-bugs loop; this review did not change code.
+Fixed by `6a265326773aff1b9ed2eed6538410479a059085`. The regeneration path now requires
+ffmpeg 8.1.1 with libavformat `Lavf62.12.101`, encodes with bit-exact flags, validates the
+emitted FLAC vendor and encoder comments, and makes byte-pin failures name the encoder.
+Generated sample crates document the same pin in their size-oracle diagnostics.
 
-Pick one reproducibility contract and write it down, in the spirit of closed
-`MM-BUG-KILN-00095`:
+### Verification summary (2026-09-13 — Codex)
 
-1. **Make the bytes encoder-independent.** Pass `-fflags +bitexact` (or strip the
-   VORBIS_COMMENT block after encode) so no vendor string is embedded. Cheapest, and it
-   makes the byte pin mean what the crate implies it means. Verify by re-baking one bank on
-   two ffmpeg versions and `cmp`-ing.
-2. **Pin the encoder explicitly.** Record the required ffmpeg version alongside the bank,
-   check it in `_require_ffmpeg`, and name it in each `PROVENANCE.md`. Honest, but it makes
-   every fleet box's ffmpeg load-bearing.
-3. **Stop pinning container bytes.** Replace `EXPECTED_BYTES` with a per-file decoded-PCM
-   assertion — which also closes MM-BUG-CRUCIBLE-00040 — and drop the aggregate.
+`$null | deltic timeout 300 python -m unittest ...` ran the four focused
+`PackagedContainerTest` cases — encoding metadata, vendor drift, unpinned ffmpeg, and PCM
+round-trip — with 4 passed. Every matching generated sample-crate byte-total test also passed
+under `$null | deltic timeout 600 cargo test --workspace
+every_sample_is_a_nonempty_bank_file_with_the_expected_size`.
 
-Whichever is chosen, the failure message must name ffmpeg. Add a negative control that
-mutates a vendor string and proves the new check reports the encoder rather than an
-unexplained integer mismatch.
+For the required mutation checks, bypassing `_require_pinned_flac_ffmpeg` made
+`test_unpinned_ffmpeg_build_names_the_expected_encoder_pin` fail because no `RuntimeError` was
+raised. Bypassing `_assert_pinned_flac_encoder_metadata` made both vendor-drift subtests fail
+because no `ValueError` was raised. I restored both guards and verified each source diff is
+empty.
+
+The full sample-preparation module ran 228 tests with one unrelated Steinway alias-manifest
+failure. The complete sample-tooling suite ran 264 tests with the same single failure. The
+documented Rust workspace gate reached 892 passed and 44 ignored but failed five unrelated
+inventory, payload, and sampler tests. Workspace clippy also remains red on existing warnings
+in `sampler.rs`, `midi.rs`, `parse_robustness.rs`, and `payload.rs`; `cargo fmt --all -- --check`
+passed. The shared `_require_ffmpeg` and publication helpers have separate records for ffmpeg
+presence, publication atomicity, and documentation; those do not duplicate this encoder
+version/metadata defect.
 
 ## Notes
 

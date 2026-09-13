@@ -2209,6 +2209,122 @@ class ClavinetConcurrentExtractionTest(unittest.TestCase):
             self.assertNotIn(src, path_b)
 
 
+class B1ConcurrentPreparationTest(unittest.TestCase):
+    """MM-BUG-KILN-00266: each B1 bake owns disposable intermediates."""
+
+    def test_two_b1_selection_processes_isolate_and_clean_intermediates(self):
+        worker = textwrap.dedent(
+            """
+            import json
+            import os
+            import sys
+            import time
+            from unittest import mock
+
+            import prepare
+
+            temp_root, repo_root, sync, token = sys.argv[1:]
+            other = "B" if token == "A" else "A"
+            token_bytes = token.encode("ascii")
+            old_shared = os.path.join(temp_root, "b1_upright")
+
+            def fake_bake(src):
+                if os.path.realpath(src) == os.path.realpath(old_shared):
+                    raise AssertionError("B1 bake used the old shared directory")
+                decoded = os.path.join(src, "DR0000_0100.wav")
+                slices = os.path.join(src, "slices")
+                manifest = os.path.join(slices, "DR0000_0100.manifest.json")
+                os.makedirs(slices)
+                with open(decoded, "wb") as output:
+                    output.write(token_bytes)
+                with open(os.path.join(sync, f"path-{token}"), "w", encoding="ascii") as output:
+                    output.write(src)
+                open(os.path.join(sync, f"ready-{token}"), "wb").close()
+                deadline = time.monotonic() + 10
+                while not os.path.exists(os.path.join(sync, f"ready-{other}")):
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError("B1 preparation barrier timed out")
+                    time.sleep(0.01)
+                with open(manifest, "w", encoding="utf-8") as output:
+                    json.dump({"token": token}, output)
+                with open(manifest, encoding="utf-8") as source:
+                    if json.load(source)["token"] != token:
+                        raise RuntimeError(f"{token}: read another process's manifest")
+                with open(decoded, "rb") as source:
+                    if source.read() != token_bytes:
+                        raise RuntimeError(f"{token}: read another process's decoded WAV")
+                return []
+
+            with (
+                mock.patch.object(prepare, "REPO_ROOT", repo_root),
+                mock.patch.object(prepare, "_require_ffmpeg"),
+                mock.patch.object(prepare.socket, "setdefaulttimeout"),
+                mock.patch.object(prepare.tempfile, "gettempdir", return_value=temp_root),
+                mock.patch.object(prepare, "_validate_generated_output_inventory"),
+                mock.patch.object(prepare, "_bake_b1upright", side_effect=fake_bake),
+                mock.patch.object(prepare, "_bake_selected_local_banks", return_value=[]),
+                mock.patch.object(prepare, "_finish"),
+                mock.patch.object(prepare.sys, "argv", ["prepare.py", "--only=b1upright"]),
+            ):
+                prepare.main()
+            """
+        )
+        with tempfile.TemporaryDirectory() as temp_root:
+            repo_root = os.path.join(temp_root, "repo")
+            sync = os.path.join(temp_root, "sync")
+            os.makedirs(repo_root)
+            os.makedirs(sync)
+            script = os.path.join(temp_root, "concurrent_b1_worker.py")
+            with open(script, "w", encoding="utf-8") as output:
+                output.write(worker)
+
+            module_dir = os.path.abspath(os.path.dirname(prepare.__file__))
+            child_env = os.environ.copy()
+            child_env["PYTHONPATH"] = (
+                module_dir + os.pathsep + child_env.get("PYTHONPATH", "")
+            )
+            processes = [
+                subprocess.Popen(
+                    [sys.executable, script, temp_root, repo_root, sync, token],
+                    cwd=module_dir,
+                    env=child_env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                for token in ("A", "B")
+            ]
+            results = []
+            try:
+                for process in processes:
+                    results.append(process.communicate(timeout=15))
+            except subprocess.TimeoutExpired:
+                for process in processes:
+                    if process.poll() is None:
+                        process.kill()
+                for process in processes:
+                    process.communicate()
+                self.fail("concurrent B1 worker timed out")
+
+            for token, process in zip(("A", "B"), processes):
+                stdout, stderr = results.pop(0)
+                self.assertEqual(
+                    process.returncode,
+                    0,
+                    f"worker {token} failed:\nstdout={stdout}\nstderr={stderr}",
+                )
+            with open(os.path.join(sync, "path-A"), encoding="ascii") as path:
+                path_a = path.read()
+            with open(os.path.join(sync, "path-B"), encoding="ascii") as path:
+                path_b = path.read()
+            self.assertNotEqual(path_a, path_b)
+            self.assertNotEqual(os.path.realpath(path_a), os.path.realpath(path_b))
+            self.assertNotEqual(os.path.realpath(path_a), os.path.realpath(os.path.join(temp_root, "b1_upright")))
+            self.assertNotEqual(os.path.realpath(path_b), os.path.realpath(os.path.join(temp_root, "b1_upright")))
+            self.assertFalse(os.path.exists(path_a))
+            self.assertFalse(os.path.exists(path_b))
+
+
 class MuseScoreOnsetConcurrentExtractionTest(unittest.TestCase):
     """MM-BUG-KILN-00261: concurrent onset bakes isolate SF3 decode intermediates."""
 

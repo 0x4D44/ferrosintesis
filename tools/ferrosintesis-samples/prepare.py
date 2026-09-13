@@ -6637,9 +6637,8 @@ def main():
         # committed opus takes, slice them (b1-slice subprocess), 2 timbre layers
         # (normal/hard). No network; the opus archive is the reproducible source.
         if want("b1upright"):
-            b1_src = os.path.join(tempfile.gettempdir(), "b1_upright")
-            os.makedirs(b1_src, exist_ok=True)
-            rows += _bake_b1upright(b1_src)
+            with tempfile.TemporaryDirectory(prefix="b1-upright-") as b1_src:
+                rows += _bake_b1upright(b1_src)
 
         # GM 64-67 saxophones: MTG.SoloSax recorded sax bank (own transform: FLAC fetch +
         # ffmpeg decode), cached by MTG rev, output to the separate CC-BY `-sax` crate.

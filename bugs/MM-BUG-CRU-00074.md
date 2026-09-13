@@ -6,15 +6,15 @@
 - **Area:** quality-gates
 - **Raised:** 2026-09-13T20:58:35Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T221324Z-fccede5e
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00074-run-fix-20260913T221324Z-fccede5e
+- **Owner base:** 73544919aae8c3a336855296adfc468f709ce714
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T22:13:24Z
+- **Owner until:** 2026-09-14T00:13:24Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

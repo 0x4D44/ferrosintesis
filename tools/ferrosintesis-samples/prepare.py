@@ -4811,9 +4811,15 @@ def _bake_clavinet(src):
     }
     rows = []
     with tempfile.TemporaryDirectory(prefix=".clavinet-bank-") as staging:
+        decode_dir = os.path.join(staging, "decode")
+        os.makedirs(decode_dir)
         for root, start, end, _sl, _el, _sr, _sample_type in sorted(zones):
-            ogg = os.path.join(src, f"clavinet_{root}.ogg")
-            wav = os.path.join(src, f"clavinet_{root}.wav")
+            # The authenticated SF3 is safe to share; these extracted streams are not.
+            # Keep both intermediates under this invocation's private staging tree so
+            # concurrent regenerations cannot overwrite one another between ffmpeg and
+            # read_wav.
+            ogg = os.path.join(decode_dir, f"clavinet_{root}.ogg")
+            wav = os.path.join(decode_dir, f"clavinet_{root}.wav")
             with open(ogg, "wb") as f:
                 f.write(sf3[smpl_off + start:smpl_off + end])
             subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",

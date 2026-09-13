@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00074 — Origin trunk quality gates fail on inventory tests and Clippy warnings
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** quality-gates
 - **Raised:** 2026-09-13T20:58:35Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T221324Z-fccede5e
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00074-run-fix-20260913T221324Z-fccede5e
-- **Owner base:** 73544919aae8c3a336855296adfc468f709ce714
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:13:24Z
-- **Owner until:** 2026-09-14T00:13:24Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T20:58:35Z, raised via `deltic bugs new --land`)
+- **State history:** Open (2026-09-13T20:58:35Z, raised via `deltic bugs new --land`) -> Fixed (2026-09-13T22:19:37Z, deltic:auto role=fix run=fix-20260913T221324Z-fccede5e branch=task/bug-MM-BUG-CRU-00074-run-fix-20260913T221324Z-fccede5e code=5a370050e32d31e5663cbe50b34633c28f1bc07c gate=manual)
 
 ## Observation
 

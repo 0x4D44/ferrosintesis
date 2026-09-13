@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00037 — No guard stops an ungated test reading outside the published crate archive
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / test boundary
 - **Raised:** 2026-08-17T20:48:42Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T062844Z-33a2e38c
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T062844Z-33a2e38c
-- **Owner base:** 36615a2cd843a02f6bed18d2ee5467fe8301401d
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T06:28:44Z
-- **Owner until:** 2026-09-13T08:28:44Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T20:48:42Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T20:48:42Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:45:20Z, deltic:auto role=fix run=fix-20260913T062844Z-33a2e38c branch=task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T062844Z-33a2e38c code=6a582ab29a74011e2e07d8059a3a6527fe0440d0 gate=manual)
 
 ## Observation
 

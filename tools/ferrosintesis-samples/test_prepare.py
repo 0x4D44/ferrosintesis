@@ -1,4 +1,5 @@
 import ast
+import contextlib
 import hashlib
 import io
 import json
@@ -4319,6 +4320,127 @@ class Orchestral2RegenerationRecipeTest(unittest.TestCase):
         self.assertIn("the `.flac` suffix", lib)
         self.assertNotIn("Names include the `.wav` suffix", lib)
         self.assertNotIn("packaged WAV", readme)
+
+
+class GenericFamilyWholeBankPublicationTest(unittest.TestCase):
+    """MM-BUG-KILN-00265: generic family bakes preserve the previous bank."""
+
+    NAMES = ("harp_C4.wav", "harp_G4.wav", "harp_C5.wav")
+
+    def setUp(self):
+        self.repo_root = tempfile.mkdtemp()
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.repo_root, True)
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.sample_dir = os.path.join(
+            self.repo_root,
+            "crates",
+            "ferrosintesis-samples-orchestral2",
+            "samples",
+        )
+        os.makedirs(self.sample_dir)
+        self.sources = {name: f"fixture/{name}" for name in self.NAMES}
+        for name in self.NAMES:
+            packaged = prepare.packaged_name(name)
+            with open(os.path.join(self.sample_dir, packaged), "wb") as output:
+                output.write(f"old harp bank: {packaged}".encode("ascii"))
+
+    def snapshot_bank(self):
+        return {
+            name: pathlib.Path(self.sample_dir, name).read_bytes()
+            for name in sorted(os.listdir(self.sample_dir))
+        }
+
+    @staticmethod
+    def staged_sample(name, _src):
+        segment = [0.0, 0.25, -0.25, 0.0]
+        row = (name, 440.0, 440.0, 440.0, 0.0, 1.0, len(segment) / prepare.OUT_SR)
+        return segment, prepare.OUT_SR, row
+
+    def run_main(self, transform, atomic_replace=None):
+        def fake_encode(_wav, flac):
+            with open(flac, "wb") as output:
+                output.write(b"new-flac")
+
+        patches = [
+            mock.patch.object(prepare, "REPO_ROOT", self.repo_root),
+            mock.patch.object(prepare, "HARP_URLS", self.sources),
+            mock.patch.object(prepare, "ensure_source"),
+            mock.patch.object(
+                prepare, "_prepare_generic_source_sample", side_effect=transform
+            ),
+            mock.patch.object(prepare, "_require_ffmpeg"),
+            mock.patch.object(prepare, "_encode_flac", side_effect=fake_encode),
+            mock.patch.object(prepare, "_decode_flac_pcm", return_value=b"pcm"),
+            mock.patch.object(prepare, "_read_wav_pcm", return_value=b"pcm"),
+            mock.patch.object(prepare.socket, "setdefaulttimeout"),
+            mock.patch.object(prepare.sys, "argv", ["prepare.py", "--only=harp"]),
+        ]
+        if atomic_replace is not None:
+            patches.append(
+                mock.patch.object(prepare, "atomic_replace", side_effect=atomic_replace)
+            )
+        with contextlib.ExitStack() as stack:
+            for patcher in patches:
+                stack.enter_context(patcher)
+            return prepare.main()
+
+    def test_late_transform_failure_never_touches_the_previous_bank(self):
+        before = self.snapshot_bank()
+        calls = 0
+
+        def fail_on_third(name, src):
+            nonlocal calls
+            calls += 1
+            if calls == 3:
+                raise OSError("late generic transform")
+            return self.staged_sample(name, src)
+
+        with self.assertRaisesRegex(OSError, "late generic transform"):
+            self.run_main(fail_on_third)
+
+        self.assertEqual(calls, 3)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assertEqual(
+            [
+                name
+                for name in os.listdir(self.sample_dir)
+                if name.endswith((".wav", ".part"))
+                or name.startswith(".harp-")
+            ],
+            [],
+        )
+
+    def test_publication_failure_rolls_back_every_selected_file(self):
+        before = self.snapshot_bank()
+        replacements = 0
+        real_replace = prepare.atomic_replace
+
+        def fail_on_second_publish(source, destination):
+            nonlocal replacements
+            if (
+                os.path.dirname(destination) == self.sample_dir
+                and destination.endswith(".flac")
+            ):
+                replacements += 1
+                if replacements == 2:
+                    raise OSError("injected generic publication failure")
+            return real_replace(source, destination)
+
+        with self.assertRaisesRegex(OSError, "injected generic publication failure"):
+            self.run_main(self.staged_sample, atomic_replace=fail_on_second_publish)
+
+        self.assertGreaterEqual(replacements, 2)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assertEqual(
+            [
+                name
+                for name in os.listdir(self.sample_dir)
+                if name.endswith((".wav", ".part"))
+                or name.startswith(".harp-")
+            ],
+            [],
+        )
 
 
 class GrandRegenerationRecipeTest(unittest.TestCase):

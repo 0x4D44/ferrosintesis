@@ -6110,6 +6110,33 @@ def _bake_bass(src, only):
     return rows
 
 
+def _publish_generic_staged_banks(staged_banks):
+    """Validate and publish each generic family staged by ``main``."""
+    published = 0
+    for family in sorted(staged_banks):
+        staging, logical_names = staged_banks[family]
+        logical_names = tuple(sorted(logical_names))
+        staged = {
+            name
+            for name in os.listdir(staging)
+            if name.endswith((".wav", PACKAGED_EXT))
+        }
+        if staged != set(logical_names):
+            raise ValueError(
+                f"{family} staging output is incomplete: expected "
+                f"{len(logical_names)} WAVs, found {len(staged)}"
+            )
+        _validate_generated_output_inventory(
+            None, logical_names, output_dir=staging
+        )
+        output_dir = os.path.dirname(sample_output_path(logical_names[0]))
+        _publish_staged_flac_bank(
+            staging, output_dir, logical_names, family
+        )
+        published += len(logical_names)
+    return published
+
+
 def _print_sample_rows(rows):
     print(f"{'file':26} {'root_hz':>9} {'measured':>9} {'nominal':>9} {'cents':>7} {'conf':>5} {'len_s':>6}")
     for r in rows:
@@ -6119,15 +6146,14 @@ def _print_sample_rows(rows):
             print(f"{r[0]:26} {r[1]:9.2f} {r[2]:9.2f} {r[3]:9.2f} {r[4]:7.1f} {r[5]:5.2f} {r[6]:6.3f}")
 
 
-def _finish(rows):
+def _finish(rows, published=0):
     """Publish the banks this run wrote, then print the recipe table.
 
-    Generic paths through `main` end here. The bass, mandolin, and clavinet paths publish
-    their own all-or-nothing transactions before entering the generic loop,
-    while keeping this final step is what stops `--sax-only` from leaving its
-    bank as WAV.
+    Generic family banks, plus the bass, mandolin, and clavinet paths, publish their
+    own all-or-nothing transactions before this final step. Keeping the pending-bank
+    pass is what stops direct local recipes and `--sax-only` from leaving a bank as WAV.
     """
-    published = publish_pending_banks()
+    published += publish_pending_banks()
     _print_sample_rows(rows)
     if published:
         print(f"packaged {published} samples as {PACKAGED_EXT}")
@@ -6432,6 +6458,7 @@ def main():
 
     rows = []
     piano_pending = []
+    generic_published = 0
     if sax_only:
         sax_src = os.path.join(tempfile.gettempdir(), "mtg_sax_src", MTG_SAX_REV)
         os.makedirs(sax_src, exist_ok=True)
@@ -6622,41 +6649,59 @@ def main():
             rows += _bake_mtg_sax(sax_src)
         if want("fingerbass") or want("pickbass"):
             rows += _bake_bass(src, only)
-        for fn in sorted(
-            SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
-            | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | VIOLA_URLS
-            | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS | VIBES_URLS | TUBULAR_URLS
-            | SOLO_CELLO_URLS | SOLO_DBASS_URLS | PIZZBASS_URLS
-            | FINGERBASS_SOURCES | PICKBASS_SOURCES | FREESOUND_SOURCES
-            | MANDOLIN_SOURCES
-            | EASTPICK_SOURCES | EASTPLUCK_SOURCES
-            | GRAND_SOURCES
-            | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
-        ):
-            fam = fn.split("_")[0]
-            if fam in {"grand", "mandolin"} or fam in _BASS_FAMILIES or not want(fam):
-                continue
-            family_src = headroom_src if fn in HEADROOM_SOURCES else src
-            seg, sr, row = _prepare_generic_source_sample(fn, family_src)
-            if fam == "piano":
-                piano_pending.append((fn, seg, row))
-            else:
-                write_wav_mono(sample_output_path(fn), seg, sr)
-                rows.append(row)
+        with contextlib.ExitStack() as generic_stages:
+            generic_staged = {}
 
-        if piano_pending:
-            conditioned = condition_piano_bank(
-                {fn: seg for fn, seg, _ in piano_pending}, OUT_SR
-            )
-            for fn, _, row in piano_pending:
-                write_wav_mono(sample_output_path(fn), conditioned[fn], OUT_SR)
-                rows.append(row)
+            def stage_for(family):
+                if family not in generic_staged:
+                    generic_staged[family] = (
+                        generic_stages.enter_context(
+                            tempfile.TemporaryDirectory(prefix=f".{family}-bank-")
+                        ),
+                        [],
+                    )
+                return generic_staged[family]
+
+            for fn in sorted(
+                SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
+                | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | VIOLA_URLS
+                | MARIMBA_URLS | XYLO_URLS | GLOCK_URLS | VIBES_URLS | TUBULAR_URLS
+                | SOLO_CELLO_URLS | SOLO_DBASS_URLS | PIZZBASS_URLS
+                | FINGERBASS_SOURCES | PICKBASS_SOURCES | FREESOUND_SOURCES
+                | MANDOLIN_SOURCES
+                | EASTPICK_SOURCES | EASTPLUCK_SOURCES
+                | GRAND_SOURCES
+                | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
+            ):
+                fam = fn.split("_")[0]
+                if fam in {"grand", "mandolin"} or fam in _BASS_FAMILIES or not want(fam):
+                    continue
+                family_src = headroom_src if fn in HEADROOM_SOURCES else src
+                seg, sr, row = _prepare_generic_source_sample(fn, family_src)
+                staging, logical_names = stage_for(fam)
+                logical_names.append(fn)
+                if fam == "piano":
+                    piano_pending.append((fn, seg, row))
+                else:
+                    write_wav_mono(os.path.join(staging, fn), seg, sr)
+                    rows.append(row)
+
+            if piano_pending:
+                conditioned = condition_piano_bank(
+                    {fn: seg for fn, seg, _ in piano_pending}, OUT_SR
+                )
+                staging, _logical_names = stage_for("piano")
+                for fn, _, row in piano_pending:
+                    write_wav_mono(os.path.join(staging, fn), conditioned[fn], OUT_SR)
+                    rows.append(row)
+
+            generic_published = _publish_generic_staged_banks(generic_staged)
 
     # Local-file recipes: gong one-shots plus the GM 76 whole-voice bottle loop.
     # Family selection keeps `--only=<other>` from rewriting either tracked bank.
     rows += _bake_selected_local_banks(only)
 
-    _finish(rows)
+    _finish(rows, generic_published)
 
 
 if __name__ == "__main__":

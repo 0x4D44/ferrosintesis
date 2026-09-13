@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00277 — Pluck legato and tremolo allocate excitation buffers in the realtime callback
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / realtime pluck articulation
 - **Raised:** 2026-08-17T09:41:50Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T181210Z-063c97f3
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00277-run-fix-20260913T181210Z-063c97f3
-- **Owner base:** 155bbd8646cd85c765e6f813025554ebadb843f5
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T18:12:10Z
-- **Owner until:** 2026-09-13T20:12:10Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T09:41:50Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T09:41:50Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:23:58Z, deltic:auto role=fix run=fix-20260913T181210Z-063c97f3 branch=task/bug-MM-BUG-KILN-00277-run-fix-20260913T181210Z-063c97f3 code=885af17b0dd468d6d535662a4986bfc92cc551e5 gate=manual)
 
 ## Observation
 

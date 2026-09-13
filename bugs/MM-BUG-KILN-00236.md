@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis-flac / frame sample-rate parsing
 - **Raised:** 2026-08-16T20:59:27Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T162023Z-c2fcdbf2
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00236-run-fix-20260913T162023Z-c2fcdbf2
+- **Owner base:** 05baaa8f0d140138964b352a5ffe32993f84b31c
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T16:20:23Z
+- **Owner until:** 2026-09-13T18:20:23Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00058 — Steinway legacy .wav aliases break the alias-dedup oracle, leaving the Python sample-tooling gate red
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** sample tooling / Steinway alias oracle
 - **Raised:** 2026-09-13T19:22:42Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T195027Z-a9432425
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00058-run-fix-20260913T195027Z-a9432425
-- **Owner base:** 4514551f8dccb0c1b9ee5d7c0e9ae2c4df0fd282
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T19:50:27Z
-- **Owner until:** 2026-09-13T21:50:27Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:22:42Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:22:42Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T20:08:34Z, deltic:auto role=fix run=fix-20260913T195027Z-a9432425 branch=task/bug-MM-BUG-CRU-00058-run-fix-20260913T195027Z-a9432425 code=a93b59c18d20119e0ddc3491ffc8164163cc2ce1 gate=manual)
 
 ## Observation
 

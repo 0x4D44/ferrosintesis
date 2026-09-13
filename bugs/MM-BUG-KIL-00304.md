@@ -19,7 +19,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:14Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T23:34:55Z, deltic:auto role=fix run=fix-20260913T232519Z-3bbcd0b2 branch=task/bug-MM-BUG-KIL-00304-run-fix-20260913T232519Z-3bbcd0b2 code=de257e3d309d56f7c58eb8684ce7264467b04437 gate=manual)
+- **State history:** Open (2026-08-19T09:33:14Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T23:34:55Z, deltic:auto role=fix run=fix-20260913T232519Z-3bbcd0b2 branch=task/bug-MM-BUG-KIL-00304-run-fix-20260913T232519Z-3bbcd0b2 code=086841407e8f06152d609f577b174724840f48d3 gate=manual)
 
 ## Observation
 
@@ -72,3 +72,6 @@ this class.
 Raised by the 2026-08-19 static review of `crates/ferrosintesis-samples-drumkit2/`
 (worktree 20260819-REV-MM-CLA@KILN-code-review-101941). Confirmed by two
 independent reviewers plus lead re-read. Estimated effort: Small.
+
+The first manual land recorded the preceding claim-metadata commit by mistake;
+the `code=` provenance above is corrected to the actual integrated fix commit.

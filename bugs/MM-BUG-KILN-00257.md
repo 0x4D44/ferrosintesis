@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00257 — FLAC retarget leaves the required bottle-routing regression red
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** sample tooling / MuseScore bottle routing regression
 - **Raised:** 2026-08-17T03:28:39Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T041633Z-f1983d17
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00257-run-fix-20260913T041633Z-f1983d17
-- **Owner base:** 1e1cb26688e39890a4c37d6394cf459de682b441
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T04:16:33Z
-- **Owner until:** 2026-09-13T06:16:33Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T03:28:39Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-17T03:28:39Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T04:18:39Z, deltic:auto role=fix run=fix-20260913T041633Z-f1983d17 branch=task/bug-MM-BUG-KILN-00257-run-fix-20260913T041633Z-f1983d17 code=699ac8f8b74baaf43eee962fd4332c8da553a79b gate=manual)
 
 ## Observation
 

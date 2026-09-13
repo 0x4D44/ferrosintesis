@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00266 — Concurrent B1 regenerations race host-global decode and slice intermediates
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** B1 sample generation / concurrent intermediate isolation
 - **Raised:** 2026-08-17T05:30:43Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T164454Z-969ec757
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00266-run-fix-20260913T164454Z-969ec757
-- **Owner base:** 08a6f9902670578b57fa317319bd8b75139a9372
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T16:44:54Z
-- **Owner until:** 2026-09-13T18:44:54Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T05:30:43Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-17T05:30:43Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T16:56:01Z, deltic:auto role=fix run=fix-20260913T164454Z-969ec757 branch=task/bug-MM-BUG-KILN-00266-run-fix-20260913T164454Z-969ec757 code=f6d5522ba626330ab5455e46d982b8667cb922ad gate=manual)
 
 ## Observation
 

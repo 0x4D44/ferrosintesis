@@ -24,6 +24,44 @@ fn usage() -> ! {
     std::process::exit(2);
 }
 
+fn clamp_warnings(
+    rate: u32,
+    wet: f32,
+    tail: f32,
+    delay_ms: Option<f32>,
+    opt: &Options,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+    if rate != opt.sample_rate() {
+        warnings.push(format!(
+            "--rate {rate} is out of range; using {}",
+            opt.sample_rate()
+        ));
+    }
+    if wet != opt.reverb() {
+        warnings.push(format!(
+            "--wet {wet} is out of range; using {}",
+            opt.reverb()
+        ));
+    }
+    if tail != opt.tail() {
+        warnings.push(format!(
+            "--tail {tail} is out of range; using {}",
+            opt.tail()
+        ));
+    }
+    if let Some(requested_ms) = delay_ms {
+        let requested_s = requested_ms / 1000.0;
+        if requested_s != opt.echo() {
+            warnings.push(format!(
+                "--delay {requested_ms} ms is out of range; using {} ms",
+                opt.echo() * 1000.0
+            ));
+        }
+    }
+    warnings
+}
+
 fn main() {
     let mut input: Option<PathBuf> = None;
     let mut output: Option<PathBuf> = None;
@@ -126,6 +164,18 @@ fn main() {
         Some(ms) => ms / 1000.0,
         None => (0.75 * 60.0 / song.initial_bpm() as f32).clamp(0.20, 0.62),
     };
+    let opt = Options::default()
+        .with_sample_rate(rate)
+        .with_reverb(wet)
+        .with_tail(tail)
+        .with_echo(delay_s)
+        .with_samples(samples)
+        .with_solo(solo);
+    // Clamp warnings are configuration diagnostics, not progress output; keep them visible
+    // even when `--quiet` suppresses the render summary and progress callbacks.
+    for warning in clamp_warnings(rate, wet, tail, delay_ms, &opt) {
+        eprintln!("warning: {warning}");
+    }
     if verbose {
         eprintln!(
             "{}: {:.2} min, {} events, {} markers, {:.0} bpm at open (echo {:.0} ms)",
@@ -138,18 +188,11 @@ fn main() {
             song.events_len(),
             song.markers_len(),
             song.initial_bpm(),
-            delay_s * 1000.0
+            opt.echo() * 1000.0
         );
     }
 
     let started = Instant::now();
-    let opt = Options::default()
-        .with_sample_rate(rate)
-        .with_reverb(wet)
-        .with_tail(tail)
-        .with_echo(delay_s)
-        .with_samples(samples)
-        .with_solo(solo);
     let normalization = if peak_normalize {
         offline::Normalization::peak(0.891) // legacy: peak to -1 dBFS
     } else {
@@ -190,6 +233,27 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use super::{clamp_warnings, Options};
+
+    #[test]
+    fn reports_each_changed_option_against_the_effective_value() {
+        let opt = Options::default()
+            .with_sample_rate(500_000)
+            .with_reverb(5.0)
+            .with_tail(99_999.0)
+            .with_echo(60.0);
+
+        assert_eq!(
+            clamp_warnings(500_000, 5.0, 99_999.0, Some(60_000.0), &opt),
+            vec![
+                "--rate 500000 is out of range; using 384000",
+                "--wet 5 is out of range; using 1",
+                "--tail 99999 is out of range; using 3600",
+                "--delay 60000 ms is out of range; using 10000 ms",
+            ]
+        );
+    }
+
     #[test]
     fn embedded_samples_feature_is_forwarded_to_the_library() {
         assert_eq!(

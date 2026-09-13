@@ -113,6 +113,53 @@ fn distinct_output_still_replaces_an_existing_wav() {
     );
 }
 
+#[test]
+fn reports_effective_clamped_options() {
+    let dir = TestDir::new("effective-options");
+    let input = dir.join("score.mid");
+    let output = dir.join("score.wav");
+    fs::write(&input, SHORT_MIDI).expect("write MIDI fixture");
+
+    let result = Command::new(env!("CARGO_BIN_EXE_ferrosintesis"))
+        .arg(&input)
+        .args(["-o"])
+        .arg(&output)
+        .args([
+            "--wet",
+            "5",
+            "--tail",
+            "-1",
+            "--delay",
+            "60000",
+            "--no-samples",
+        ])
+        .output()
+        .expect("run ferrosintesis");
+
+    assert!(
+        result.status.success(),
+        "render failed: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        stderr.contains("warning: --wet 5 is out of range; using 1"),
+        "wet clamp was not reported: {stderr}"
+    );
+    assert!(
+        stderr.contains("warning: --tail -1 is out of range; using 0"),
+        "tail clamp was not reported: {stderr}"
+    );
+    assert!(
+        stderr.contains("warning: --delay 60000 ms is out of range; using 10000 ms"),
+        "delay clamp was not reported: {stderr}"
+    );
+    assert!(
+        stderr.contains("(echo 10000 ms)"),
+        "summary did not report the effective echo: {stderr}"
+    );
+}
+
 #[cfg(windows)]
 #[test]
 fn exclusively_held_distinct_output_is_not_reported_as_an_input_alias() {

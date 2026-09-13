@@ -10,6 +10,9 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **CLI diagnostics must read back clamped options before reporting** (`main.rs:clamp_warnings`).
+  - The renderer used effective values while its header showed raw input and gave no clamp warning.
+
 - 2026.09.13 — **CLI default oracles must parse the user-visible usage text beside each flag** (`render_profile.rs`).
   - Scanning module docs for values let swapped flags and missing help defaults pass.
 - 2026.09.13 — **Windows alias probes must never treat input sharing failure as distinct** (`cli/output.rs`).

@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00039 — Packaged FLAC banks pin EXPECTED_BYTES to one ffmpeg build, so a documented re-bake fails the crate size oracle
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / bank reproducibility
 - **Raised:** 2026-08-18T00:08:02Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T070447Z-0245f995
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00039-run-fix-20260913T070447Z-0245f995
-- **Owner base:** f193333a0e750dd3d548f4d436b7dce0d869fbab
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T07:04:47Z
-- **Owner until:** 2026-09-13T09:04:47Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T00:08:02Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-18T00:08:02Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T07:26:35Z, deltic:auto role=fix run=fix-20260913T070447Z-0245f995 branch=task/bug-MM-BUG-CRUCIBLE-00039-run-fix-20260913T070447Z-0245f995 code=6a265326 gate=manual)
 
 ## Observation
 

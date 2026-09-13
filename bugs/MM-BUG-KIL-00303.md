@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00303 — regen_samples_table.py rejects FLAC banks, stranding the documented drum-kit table-refresh recipe
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample generation / regeneration tooling
 - **Raised:** 2026-08-19T09:33:06Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T231646Z-75908282
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00303-run-fix-20260913T231646Z-75908282
-- **Owner base:** 4193c91029baf803f705d07b2d6f903b3cbeb044
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T23:16:46Z
-- **Owner until:** 2026-09-14T01:16:46Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:06Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-19T09:33:06Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T23:21:15Z, deltic:auto role=fix run=fix-20260913T231646Z-75908282 branch=task/bug-MM-BUG-KIL-00303-run-fix-20260913T231646Z-75908282 code=82e6b571cf357b86b8dc480a39e026053146a1f0 gate=manual)
 
 ## Observation
 

@@ -559,9 +559,12 @@ static PCM_CACHE: OnceLock<Vec<Vec<i16>>> = OnceLock::new();
 /// stays single: `SampledDrum` holds one `&'static Bank` and does not care which crate
 /// embedded the bytes. Each bank simply carries the lookups of its owning crate.
 pub struct BankSource {
-    /// Raw embedded sample bytes for an exact name, or `None` if absent.
+    /// Raw embedded FLAC bytes for an exact `.flac` name, or `None` if absent.
+    ///
+    /// The field retains the legacy `wav` name for API compatibility; it does
+    /// not return a WAV container.
     pub wav: fn(&str) -> Option<&'static [u8]>,
-    /// Decoded mono 16-bit 44.1 kHz PCM for an exact file name, or `None` if absent.
+    /// Decoded mono 16-bit 44.1 kHz PCM for an exact `.flac` name, or `None` if absent.
     pub pcm: fn(&str) -> Option<&'static [i16]>,
     /// Decoded PCM at an exact inventory index, or `None` if out of range.
     pub pcm_by_index: fn(usize) -> Option<&'static [i16]>,
@@ -723,7 +726,10 @@ impl Bank {
         self.first_sample_index + layer * self.round_robins + rr
     }
 
-    /// Raw embedded sample bytes for a take (0-based indices).
+    /// Raw embedded FLAC bytes for a take (0-based indices).
+    ///
+    /// The method retains its legacy `wav` name for API compatibility; the
+    /// returned bytes are not a WAV container.
     pub fn wav(&self, layer: usize, rr: usize) -> &'static [u8] {
         let name = self.file_name(layer, rr);
         (self.source.wav)(&name).expect("the embedded inventory covers every bank take")
@@ -737,7 +743,15 @@ impl Bank {
     }
 }
 
-/// Returns the embedded sample bytes for an exact (case-sensitive) name.
+/// Returns the embedded FLAC bytes for an exact (case-sensitive) `.flac` name.
+///
+/// Names use the `.flac` suffix. For example:
+///
+/// ```
+/// let bytes = ferrosintesis_samples_drumkit::get("kick_vl1_rr1.flac")
+///     .expect("the documented sample exists");
+/// assert_eq!(&bytes[..4], b"fLaC");
+/// ```
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
         .iter()
@@ -749,7 +763,7 @@ pub fn get(name: &str) -> Option<&'static [u8]> {
 ///
 /// A miss leaves the cache COLD. Resolving the name first is the whole point
 /// (MM-BUG-CRUCIBLE-00023): this used to call `decoded_samples()` before searching,
-/// so a typo or an availability probe decoded all 128 WAVs — 9,627,358 bytes of PCM,
+/// so a typo or an availability probe decoded all 128 FLACs — 9,627,358 bytes of PCM,
 /// retained for the process lifetime — and then returned `None`. Eager decode after a
 /// VALID lookup is intentional and unchanged.
 pub fn pcm(name: &str) -> Option<&'static [i16]> {
@@ -787,7 +801,8 @@ fn decoded_samples() -> &'static Vec<Vec<i16>> {
     PCM_CACHE.get_or_init(|| SAMPLES.iter().map(|(_, bytes)| decode_wav(bytes)).collect())
 }
 
-/// Decode one bank asset to PCM (16-bit mono 44.1 kHz), FLAC or RIFF.
+/// Decode one bank asset to PCM (16-bit mono 44.1 kHz), accepting the packaged
+/// FLAC container and a legacy RIFF/WAV container.
 ///
 /// Unlike the other asset crates this one decodes its own PCM rather than
 /// handing bytes up to `ferrosintesis` — `pcm()` and `prewarm()` are part of its
@@ -796,8 +811,8 @@ fn decoded_samples() -> &'static Vec<Vec<i16>> {
 /// embedded bytes.
 ///
 /// FLAC is lossless, so the values this returns are bit-identical to the PCM the
-/// encoder was handed and the kit sounds exactly as it did when the bank was
-/// RIFF.
+/// encoder was handed and the kit sounds exactly as it did with the legacy
+/// RIFF/WAV packaging.
 fn decode_wav(bytes: &[u8]) -> Vec<i16> {
     if bytes.starts_with(b"fLaC") {
         // An embedded asset that fails to decode is an asset-pipeline bug, not a
@@ -846,7 +861,7 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn inventory_matches_packaged_samples() {
+    fn inventory_matches_packaged_flac_samples() {
         let samples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("samples");
         let mut packaged: Vec<String> = fs::read_dir(&samples_dir)
             .expect("sample directory must exist")
@@ -875,6 +890,7 @@ mod tests {
         embedded.sort();
 
         assert_eq!(packaged.len(), FILE_COUNT);
+        assert!(packaged.iter().all(|name| name.ends_with(".flac")));
         assert_eq!(embedded, packaged);
         for (name, bytes) in SAMPLES {
             assert_eq!(
@@ -928,6 +944,81 @@ mod tests {
     }
 
     #[test]
+    fn documented_flac_lookup_contract_matches_packaged_inventory() {
+        let api = include_str!("../src/lib.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("the public API must precede the test module");
+        let readme = include_str!("../README.md");
+        let provenance = include_str!("../PROVENANCE.md");
+        let (sample_index, sample) = SAMPLES
+            .iter()
+            .enumerate()
+            .next_back()
+            .expect("the embedded inventory must contain a sample");
+        let (name, expected) = *sample;
+        let (bank, layer, rr) = BANKS
+            .iter()
+            .copied()
+            .find_map(|bank| {
+                (0..bank.layers()).find_map(|layer| {
+                    (0..bank.round_robins).find_map(|rr| {
+                        (bank.file_name(layer, rr) == name).then_some((bank, layer, rr))
+                    })
+                })
+            })
+            .expect("a source-derived sample must belong to a bank");
+        assert_eq!(bank.take_index(layer, rr), sample_index);
+        let from_get = get(name).expect("a source-derived FLAC key must resolve");
+        let from_bank = bank.wav(layer, rr);
+        let wav_name = format!(
+            "{}.wav",
+            name.strip_suffix(".flac")
+                .expect("source-derived sample names must use the FLAC suffix")
+        );
+
+        assert!(
+            name.ends_with(".flac"),
+            "{name} is not a documented FLAC key"
+        );
+        assert!(
+            expected.len() >= 4,
+            "{name} is too short to contain FLAC magic"
+        );
+        assert_eq!(from_get, expected, "get returned the wrong sample bytes");
+        assert_eq!(
+            from_bank, expected,
+            "Bank::wav returned the wrong sample bytes"
+        );
+        assert_eq!(&expected[..4], b"fLaC", "source sample is not FLAC");
+        assert_eq!(&from_get[..4], b"fLaC", "get did not return FLAC bytes");
+        assert_eq!(
+            &from_bank[..4],
+            b"fLaC",
+            "Bank::wav did not return FLAC bytes"
+        );
+        assert!(
+            get(&wav_name).is_none(),
+            "retired WAV key unexpectedly resolves"
+        );
+
+        assert!(api.contains("Returns the embedded FLAC bytes"));
+        assert!(api.contains("Raw embedded FLAC bytes for an exact"));
+        assert!(api.contains("Raw embedded FLAC bytes for a take"));
+        assert!(api.contains("get(\"kick_vl1_rr1.flac\")"));
+        assert!(!api.contains("embedded WAV bytes"));
+        assert!(!api.contains("Names include the `.wav` suffix"));
+        assert!(readme.contains("encoded FLAC container bytes"));
+        assert!(readme.contains("get(\"kick_vl1_rr1.flac\")"));
+        assert!(!readme.contains("raw WAV bytes"));
+        assert!(provenance.contains("5,428,756 raw bytes"));
+        assert!(provenance.contains("File naming: `<articulation>_vl{L}_rr{R}.flac`"));
+        assert!(provenance.contains("published assets are bit-exact FLAC containers"));
+        assert!(!provenance.contains("9,632,990 raw bytes"));
+        assert!(!provenance.contains("Output: 16-bit mono WAV"));
+    }
+
+    #[test]
     fn layer_for_velocity_respects_the_sfz_splits() {
         assert_eq!(RIDE.layer_for_velocity(1), 0);
         assert_eq!(RIDE.layer_for_velocity(42), 0);
@@ -960,7 +1051,8 @@ mod tests {
             assert!(bytes.len() >= 12, "{name} is too short to be a sample");
             assert_eq!(&bytes[..4], b"fLaC", "{name} is not a FLAC sample");
         }
-        assert_eq!(get("missing.wav"), None);
+        assert_eq!(get("missing.flac"), None);
+        assert_eq!(get("kick_vl1_rr1.wav"), None);
     }
 
     const EXPECTED_BYTES: usize = 5428756;
@@ -1046,7 +1138,7 @@ mod tests {
         }
 
         assert_eq!(pcm_cache_initializations(), 0);
-        assert_eq!(pcm("missing.wav"), None);
+        assert_eq!(pcm("missing.flac"), None);
         assert_eq!(pcm_by_index(SAMPLES.len()), None);
         assert_eq!(
             pcm_cache_initializations(),

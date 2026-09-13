@@ -3944,6 +3944,43 @@ For comparison, the text mentions {self.COMMAND}.
         bottle.assert_not_called()
 
 
+class GrandSampleApiContractTest(unittest.TestCase):
+    """MM-BUG-KILN-00243: grand API docs and lookup keys match the FLAC bank."""
+
+    def test_docs_and_lookup_oracle_match_packaged_flac_inventory(self):
+        crate = pathlib.Path(prepare.REPO_ROOT) / "crates" / "ferrosintesis-samples-grand"
+        samples = sorted(
+            path
+            for path in (crate / "samples").iterdir()
+            if path.is_file() and path.suffix in {".wav", ".flac"}
+        )
+        self.assertEqual(len(samples), 54)
+        self.assertEqual({path.suffix for path in samples}, {".flac"})
+        total = sum(path.stat().st_size for path in samples)
+        documented_key = samples[0].name
+
+        readme = (crate / "README.md").read_text(encoding="utf-8")
+        provenance = (crate / "PROVENANCE.md").read_text(encoding="utf-8")
+        lib = (crate / "src" / "lib.rs").read_text(encoding="utf-8")
+
+        file_count = re.search(r"pub const FILE_COUNT: usize = (\d+);", lib)
+        expected_bytes = re.search(r"const EXPECTED_BYTES: usize = (\d+);", lib)
+        self.assertIsNotNone(file_count)
+        self.assertIsNotNone(expected_bytes)
+        self.assertEqual(int(file_count.group(1)), len(samples))
+        self.assertEqual(int(expected_bytes.group(1)), total)
+        self.assertIn(f"{total:,} bytes (54 files)", provenance)
+        self.assertIn("exposed as raw FLAC bytes", readme)
+        self.assertNotIn("exposed as raw WAV bytes", readme)
+        self.assertIn("Returns the embedded FLAC bytes", lib)
+        self.assertIn("Names include the `.flac` suffix", lib)
+        self.assertIn(f'"{documented_key}"', lib)
+        self.assertIn("for (name, bytes) in SAMPLES", lib)
+        self.assertIn("assert_eq!(get(name), Some(bytes));", lib)
+        self.assertIn("inventory_matches_packaged_samples", provenance)
+        self.assertNotIn("inventory_matches_packaged_wavs", provenance)
+
+
 class ObsoleteOwnedOutputTest(unittest.TestCase):
     """MM-BUG-KILN-00123: a rebake must reject obsolete owned outputs.
 

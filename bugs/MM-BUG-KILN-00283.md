@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00283 — Drum-kit regeneration command leaves the embedded FLAC banks stale
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** split drum-kit sample crates / deterministic regeneration
 - **Raised:** 2026-08-17T11:39:57Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T183742Z-34923c74
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00283-run-fix-20260913T183742Z-34923c74
-- **Owner base:** 89f228787ffa3e056d3994803837ebe92ab01423
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T18:37:42Z
-- **Owner until:** 2026-09-13T20:37:42Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T11:39:57Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T11:39:57Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:50:57Z, deltic:auto role=fix run=fix-20260913T183742Z-34923c74 branch=task/bug-MM-BUG-KILN-00283-run-fix-20260913T183742Z-34923c74 code=82e6b571cf357b86b8dc480a39e026053146a1f0 gate=manual)
 
 ## Observation
 

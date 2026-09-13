@@ -6,15 +6,15 @@
 - **Area:** B1 sample generation / concurrent intermediate isolation
 - **Raised:** 2026-08-17T05:30:43Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T201931Z-c06cc954
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00266-run-verify-20260913T201931Z-c06cc954
+- **Owner base:** 71b22bd328c8703f0f365b84fc63572e3142c585
+- **Owner fingerprint:** sha256:3a022a303a265d8832830238ab16fa7806cf6f78a8a859ce8c153d826b1468da
+- **Owner since:** 2026-09-13T20:19:31Z
+- **Owner until:** 2026-09-13T22:19:31Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -4411,6 +4411,25 @@ pub(crate) fn wound_factor(wound_all: bool, wound_key_split: bool, key: u8) -> f
     }
 }
 
+// The engine's largest authored pitch bend is 24 semitones, so a MIDI-0
+// string can be driven down to 0.25× its fundamental. Reserve for that
+// bounded worst case once at voice construction; control changes then only
+// resize within the existing allocation.
+const PLUCK_MIN_BEND: f32 = 0.25;
+
+fn pluck_hammer_capacity(sr: f32) -> usize {
+    ((sr / (key_freq(0) * PLUCK_MIN_BEND)).ceil() as usize + 4).max(4)
+}
+
+fn gcd_usize(mut a: usize, mut b: usize) -> usize {
+    while b != 0 {
+        let remainder = a % b;
+        a = b;
+        b = remainder;
+    }
+    a
+}
+
 pub struct Pluck {
     // a real string vibrates in two polarizations: one rings on (horizontal),
     // one decays faster and slightly detuned (vertical) — their sum gives the
@@ -4510,6 +4529,22 @@ pub struct Pluck {
     sr: f32,
     #[cfg(test)]
     kind: &'static str,
+}
+
+#[cfg(test)]
+#[test]
+fn pluck_realtime_excitation_storage_is_preallocated_and_reused() {
+    let sr = 44_100.0;
+    let mut voice = Pluck::new(&STEEL, 60, 100, sr, 7);
+    let capacity = voice.hammer.capacity();
+    assert!(capacity > 0, "pluck excitation storage was left empty");
+
+    assert!(voice.legato_to(64, 96));
+    assert_eq!(voice.hammer.capacity(), capacity);
+    assert!(voice.retrigger(64, 96));
+    assert_eq!(voice.hammer.capacity(), capacity);
+    assert!(voice.retrigger(64, 96));
+    assert_eq!(voice.hammer.capacity(), capacity);
 }
 
 /// Base sustain-band level for the Shaped excitation (§2.4): the h1..h4
@@ -5066,7 +5101,7 @@ impl Pluck {
             } else {
                 None
             },
-            hammer: Vec::new(),
+            hammer: Vec::with_capacity(pluck_hammer_capacity(sr)),
             hammer_pos: 0,
             rng,
             pick_lp_hz: pick_lp,
@@ -5444,11 +5479,12 @@ impl Voice for Pluck {
         self.base_f = key_freq(key);
         self.apply_pitch();
         let v = vel_amp(vel);
-        let n = ((self.sr / self.base_f) as usize / 2).max(3);
+        let n = (((self.sr / self.base_f) as usize / 2).max(3)).min(self.hammer.capacity());
         let mut lp = OnePole::lowpass((self.pick_lp_hz * 0.5).max(400.0), self.sr);
-        self.hammer = (0..n)
-            .map(|_| lp.process(self.rng.white()) * v * 0.30)
-            .collect();
+        self.hammer.resize(n, 0.0);
+        for sample in &mut self.hammer {
+            *sample = lp.process(self.rng.white()) * v * 0.30;
+        }
         self.hammer_pos = 0;
         self.sub_env = self.sub_env.max(0.6 * v);
         self.env = self.env.max(0.3 * v);
@@ -5497,23 +5533,46 @@ impl Voice for Pluck {
         self.horiz.set_bright(bh, f);
         self.vert.set_bright(bv, f * self.course_detune);
         // a fresh pick burst, trickled INTO the ringing loops (hammer path)
-        let n = ((self.sr / f) as usize).max(4);
+        let n = (((self.sr / f) as usize).max(4)).min(self.hammer.capacity());
         let mut lp = OnePole::lowpass(self.pick_lp_hz, self.sr);
-        let raw: Vec<f32> = (0..n).map(|_| lp.process(self.rng.white())).collect();
+        self.hammer.resize(n, 0.0);
+        for sample in &mut self.hammer {
+            *sample = lp.process(self.rng.white());
+        }
         let comb = ((n as f32 * self.pos) as usize).max(1);
-        let mut exc: Vec<f32> = (0..n).map(|i| raw[i] - 0.9 * raw[(i + comb) % n]).collect();
-        let peak = exc.iter().fold(0f32, |m, &x| m.max(x.abs())).max(1e-6);
+        // The comb is a permutation of the sample indices. Apply each cycle
+        // backwards with one scalar of scratch so the raw sample at the next
+        // tap is still available; this keeps the old raw-then-excitation
+        // result without allocating a second vector in the callback.
+        let step = comb % n;
+        let cycles = gcd_usize(n, step);
+        let cycle_len = n / cycles;
+        for start in 0..cycles {
+            let first = self.hammer[start];
+            let mut next = first;
+            for j in (1..cycle_len).rev() {
+                let index = (start + j * step) % n;
+                let current = self.hammer[index];
+                self.hammer[index] = current - 0.9 * next;
+                next = current;
+            }
+            self.hammer[start] = first - 0.9 * next;
+        }
+        let peak = self
+            .hammer
+            .iter()
+            .fold(0f32, |m, &x| m.max(x.abs()))
+            .max(1e-6);
         let g = v * TREM_RESTRIKE_LEVEL / peak;
-        for x in &mut exc {
+        for x in &mut self.hammer {
             *x *= g;
         }
         // guarantee the stroke deposits FUNDAMENTAL (see TREM_H1_FLOOR / top_up_h1)
-        top_up_h1(&mut exc, TREM_H1_FLOOR * v * TREM_RESTRIKE_LEVEL);
+        top_up_h1(&mut self.hammer, TREM_H1_FLOOR * v * TREM_RESTRIKE_LEVEL);
         // the pick-catch: grab the standing wave so this stroke's
         // displacement owns the string (and the carrier phase)
         self.horiz.catch_damp(TREM_CATCH);
         self.vert.catch_damp(TREM_CATCH);
-        self.hammer = exc;
         self.hammer_pos = 0;
         // the plectrum clicks on every stroke (same law as the spawn pick)
         if let Some(b) = &mut self.onset_pre {

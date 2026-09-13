@@ -6,15 +6,15 @@
 - **Area:** B1 sample crate / published documentation
 - **Raised:** 2026-08-17T05:30:56Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T200535Z-42bb0262
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00267-run-verify-20260913T200535Z-42bb0262
+- **Owner base:** 2b83dc6ff33e7ec8c9f2982e75efeeb4371ef09b
+- **Owner fingerprint:** sha256:be33693210dbf00280f507fd4a1a70768091c9468b31ead0a0a51d8cefae2a8f
+- **Owner since:** 2026-09-13T20:05:35Z
+- **Owner until:** 2026-09-13T22:05:35Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

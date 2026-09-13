@@ -6,15 +6,15 @@
 - **Area:** grand sample crate / public lookup contract
 - **Raised:** 2026-08-16T22:56:37Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T065525Z-90184756
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00243-run-fix-20260913T065525Z-90184756
+- **Owner base:** cb9947f1d544da351d443042eb14d93d35f73319
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T06:55:25Z
+- **Owner until:** 2026-09-13T08:55:25Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

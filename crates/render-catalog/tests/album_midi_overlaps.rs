@@ -50,7 +50,7 @@ enum NoteKind {
 
 #[derive(Clone, Copy)]
 struct NoteEvent {
-    tick: u32,
+    tick: u64,
     ordinal: usize,
     channel: u8,
     key: u8,
@@ -85,12 +85,12 @@ fn track_note_events(
     ordinal: &mut usize,
 ) -> Result<(), String> {
     let mut pos = 0usize;
-    let mut tick = 0u32;
+    let mut tick = 0u64;
     let mut running_status = None;
 
     while pos < track.len() {
         tick = tick
-            .checked_add(vlq(track, &mut pos)?)
+            .checked_add(u64::from(vlq(track, &mut pos)?))
             .ok_or_else(|| "absolute tick overflow".to_string())?;
         let next = *track
             .get(pos)
@@ -479,6 +479,19 @@ mod controls {
                 "{label} was treated as a GM System On"
             );
         }
+    }
+
+    /// Production carries absolute ticks as u64, so the audit must accept a legal
+    /// timeline whose seventeen maximum four-byte deltas cross u32::MAX.
+    #[test]
+    fn accepts_seventeen_maximum_vlq_deltas_before_note_off() {
+        let mut events = vec![0x00, 0x90, 60, 100];
+        for _ in 0..17 {
+            events.extend_from_slice(&[0xff, 0xff, 0xff, 0x7f]);
+            events.extend_from_slice(&[0xff, 0x01, 0x00]);
+        }
+        events.extend_from_slice(&[0x00, 0x80, 60, 0]);
+        assert_eq!(audit(&[&events]), NoteAudit::default());
     }
 
     #[test]

@@ -10,6 +10,9 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **Same-tick MIDI controls need a cross-track fixture** (`album_midi_overlaps.rs`).
+  - A same-track reset test already orders itself; only separate tracks prove the global reset sort.
+
 - 2026.09.13 — **Multi-file sample bakes must stage before FLAC publication** (`prepare.py:_bake_gong_bank`).
   - Per-file pending conversion can leave a mixed bank; stage every output, then use the rollback publisher.
 

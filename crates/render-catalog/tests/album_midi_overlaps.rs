@@ -398,6 +398,22 @@ mod controls {
         assert_eq!(audit(&[&events]), NoteAudit::default());
     }
 
+    /// A format-1 file can put the reset and the replacement note in different tracks.
+    /// Track order must not let the replacement note run before the reset at one tick.
+    #[test]
+    fn gm_system_on_precedes_same_tick_replacement_across_tracks() {
+        let note_track = [
+            0x00, 0x90, 60, 100, // the note held across the reset
+            0x0a, 0x90, 60, 100, // replacement at the reset's tick
+            0x0a, 0x80, 60, 0, // replacement note-off
+        ];
+        let reset_track = [
+            0x0a, // same absolute tick as the replacement note
+            0xf0, 0x05, 0x7e, 0x7f, 0x09, 0x01, 0xf7,
+        ];
+        assert_eq!(audit(&[&note_track, &reset_track]), NoteAudit::default());
+    }
+
     /// A note-off left over from before the reset is harmless in the renderer — its
     /// voice is already gone — so the audit forgives it. Once, and only for a note the
     /// reset actually cleared.

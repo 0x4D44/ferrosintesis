@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00250 — Honky-tonk package still documents WAV keys and bytes after FLAC conversion
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** honky-tonk sample crate / public package contract
 - **Raised:** 2026-08-17T01:05:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T074113Z-2c204a78
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00250-run-fix-20260913T074113Z-2c204a78
-- **Owner base:** 951514b041cb61aae5b14dcb3f3475bc3e47e580
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T07:41:13Z
-- **Owner until:** 2026-09-13T09:41:13Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T01:05:10Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T01:05:10Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:50:30Z, deltic:auto role=fix run=fix-20260913T074113Z-2c204a78 branch=task/bug-MM-BUG-KILN-00250-run-fix-20260913T074113Z-2c204a78 code=3f692a8e729ca4aebdd235397c21ab4cfb315400 gate=manual)
 
 ## Observation
 

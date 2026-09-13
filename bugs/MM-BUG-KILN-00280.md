@@ -6,15 +6,15 @@
 - **Area:** crates/render-catalog / MIDI overlap oracle
 - **Raised:** 2026-08-17T10:31:44Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T182523Z-acac18d4
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00280-run-fix-20260913T182523Z-acac18d4
+- **Owner base:** 5cf180385b299acb639d373a8380198adbccc128
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T18:25:23Z
+- **Owner until:** 2026-09-13T20:25:23Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

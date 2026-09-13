@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00060 — Sample container-documentation oracle misses WAV claims after source-context phrases and headings
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample asset crates / container documentation oracle
 - **Raised:** 2026-09-13T19:22:42Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T201450Z-4b649983
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00060-run-fix-20260913T201450Z-4b649983
-- **Owner base:** 7c7de7ccb81fd0ff984c20019e07e50a6ceccfab
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T20:14:50Z
-- **Owner until:** 2026-09-13T22:14:50Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:22:42Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:22:42Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T20:24:45Z, deltic:auto role=fix run=fix-20260913T201450Z-4b649983 branch=task/bug-MM-BUG-CRU-00060-run-fix-20260913T201450Z-4b649983 code=02b8eec294c48d666cf7717f4ab565660483db00 gate=manual)
 
 ## Observation
 

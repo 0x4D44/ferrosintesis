@@ -1118,6 +1118,29 @@ class PrepareSampleBankTests(unittest.TestCase):
             "(and close MM-BUG-NMI-00001 if the set is now empty)",
         )
 
+    def test_dulcimer_assets_enter_from_silence(self):
+        """The two formerly missed dulcimer openings must be de-clicked at frame zero."""
+        sample_dir = os.path.join(
+            prepare.REPO_ROOT, "crates", "ferrosintesis-samples-ccby", "samples"
+        )
+        expected = {
+            prepare.packaged_name(name)
+            for name in prepare.FREESOUND_SOURCES
+            if name.startswith("dulcimer_")
+        }
+        actual = {name for name in os.listdir(sample_dir) if name.startswith("dulcimer_")}
+        self.assertEqual(actual, expected)
+
+        for name in sorted(expected):
+            with self.subTest(name=name):
+                samples, _sample_rate = prepare.read_wav(
+                    os.path.join(sample_dir, name)
+                )
+                self.assertLessEqual(
+                    abs(samples[0]), 1.0 / 32768.0,
+                    f"{name}: frame zero must enter from silence",
+                )
+
     def test_fetch_is_atomic_on_short_transfer(self):
         with tempfile.TemporaryDirectory() as td:
             final = os.path.join(td, "sample.wav")

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00276 — ScaledVoice allocates scratch storage on its first realtime render
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / realtime velocity-corrected voices
 - **Raised:** 2026-08-17T09:41:38Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T175902Z-4ca006d0
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00276-run-fix-20260913T175902Z-4ca006d0
-- **Owner base:** 69d3fa1869df0748e74935a7bcdf1319b6550361
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T17:59:02Z
-- **Owner until:** 2026-09-13T19:59:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T09:41:38Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T09:41:38Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:10:44Z, deltic:auto role=fix run=fix-20260913T175902Z-4ca006d0 branch=task/bug-MM-BUG-KILN-00276-run-fix-20260913T175902Z-4ca006d0 code=1a6e21862ca095aaecf7e05de4973d26eeeb9a0d gate=manual)
 
 ## Observation
 

@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00045 — Clavinet bank's format assertion accepts RIFF or FLAC, so a WAV regression into a FLAC bank stays green
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-samples-clavinet
 - **Raised:** 2026-08-18T19:41:06Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T192645Z-657a00fd
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00045-run-verify-20260913T192645Z-657a00fd
-- **Owner base:** e53a22e18f9c79dff937cae3bedce5d3fd3694dc
-- **Owner fingerprint:** sha256:e3e0d1aeaf4ce669168afdaad048a967a3f82955156643bcd7293d5b5753f58c
-- **Owner since:** 2026-09-13T19:26:45Z
-- **Owner until:** 2026-09-13T21:26:45Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T19:41:06Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T14:35:13Z, deltic:auto role=fix run=fix-20260913T141946Z-971f4b5e branch=task/bug-MM-BUG-CRUCIBLE-00045-run-fix-20260913T141946Z-971f4b5e code=3385fe47a80d983e636bc90520432087f9dfb772 gate=manual)
+- **State history:** Open (2026-08-18T19:41:06Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T14:35:13Z, deltic:auto role=fix run=fix-20260913T141946Z-971f4b5e branch=task/bug-MM-BUG-CRUCIBLE-00045-run-fix-20260913T141946Z-971f4b5e code=3385fe47a80d983e636bc90520432087f9dfb772 gate=manual) -> Closed (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: a WAV planted in the clavinet bank and RIFF bytes named .flac each fail the derived container policy)
 
 ## Observation
 
@@ -80,5 +80,13 @@ directory set (`payload.rs:42-67`). Once that oracle exists, the twelve crates' 
 `riff || flac` per-file checks can be simplified to a single container assertion.
 
 Effort: ~1 h, and it shares its enumeration with MM-BUG-CRUCIBLE-00044 — fix both together.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `3385fe47`) by an agent other than the fixer.
+
+**Original observation re-run.** A real B1 WAV planted as `ferrosintesis-samples-clavinet/samples/clavinet_zz_planted.wav` fails `default_sample_bank_containers_match_the_derived_policy` ("uses wav, mixed with the bank's flac files"; "uses wav, but this bank must use flac"), and RIFF bytes named `clavinet_zz_riff.flac` fail with "does not contain a flac header". Both plants removed; it and `sample_container_oracle_rejects_a_wav_planted_in_a_flac_bank` pass on HEAD.
+
+**Fails-before (method A, by reading).** At `3385fe47^` the per-crate check was `riff || flac` and `payload.rs` counted wav or flac with no policy, so both plants would pass. A census shows 23 crates assert `fLaC` directly, b1-upright is the one allowlisted exception, and no `riff || flac` remains.
 
 ## Notes

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00202 — Inherited cold-cache marker still bypasses process isolation
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drumkit2 cache regression
 - **Raised:** 2026-08-16T07:16:52Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T193033Z-d353ea1b
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00202-run-verify-20260913T193033Z-d353ea1b
-- **Owner base:** 81157d121b60dd6c067de5891c7c9483dd486b86
-- **Owner fingerprint:** sha256:4b52af993348cfd5d4dda922c9387bf0194fb8406b3b3bb73042f3b479880e12
-- **Owner since:** 2026-09-13T19:30:33Z
-- **Owner until:** 2026-09-13T21:30:33Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T07:16:52Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T14:51:34Z, deltic:auto role=fix run=fix-20260913T144510Z-778d98c1 branch=task/bug-MM-BUG-KILN-00202-run-fix-20260913T144510Z-778d98c1 code=50696dc28e0744a77045bc208fd8eb0dfce277af gate=manual)
+- **State history:** Open (2026-08-16T07:16:52Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T14:51:34Z, deltic:auto role=fix run=fix-20260913T144510Z-778d98c1 branch=task/bug-MM-BUG-KILN-00202-run-fix-20260913T144510Z-778d98c1 code=50696dc28e0744a77045bc208fd8eb0dfce277af gate=manual) -> Closed (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: restoring the marker-based decision fails the inherited-marker regression; the child always runs isolated)
 
 ## Observation
 
@@ -58,6 +58,16 @@ child mode.
 
 Add a regression for the inherited-marker, initially-cold parent case and prove
 it remains isolated while another test initializes `PCM_CACHE`.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `50696dc2`) by an agent other than the fixer.
+
+The outer test always re-runs the ignored child with `--ignored --exact --test-threads=1`; the child demands `PROBE=child` and must print `FERRO_DRUMKIT2_PCM_MISS_CHILD_RAN`, so an inherited marker cannot select in-process mode. All 9 drumkit2 tests pass.
+
+**Fails-before (method B).** Restoring the pre-fix outer test fails `inherited_probe_marker_still_runs_the_isolated_child` ("the inherited-marker probe did not run an isolated child"). Restored; passes on HEAD.
+
+**Coverage note.** The regression's concurrent-initializer thread runs in the parent process while the probe runs in a subprocess, so it adds no real race coverage; logged in `scratchpad.md`.
 
 ## Notes
 

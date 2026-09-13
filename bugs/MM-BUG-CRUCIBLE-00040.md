@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00040 — Generated sample-crate payload test is self-referential: nothing binds an embedded payload to its packaged file
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample asset crates / generated oracles
 - **Raised:** 2026-08-18T00:08:18Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T192454Z-433399f5
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00040-run-verify-20260913T192454Z-433399f5
-- **Owner base:** 945970d49acb98497078755c12341efac2e7b7c8
-- **Owner fingerprint:** sha256:ca7160079e0de5f8bdf24ea813c31e62b2165eb98076a78739af176be1a7dd6b
-- **Owner since:** 2026-09-13T19:24:54Z
-- **Owner until:** 2026-09-13T21:24:54Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T00:08:18Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T07:41:21Z, deltic:auto role=fix run=fix-20260913T072749Z-8da5161c branch=task/bug-MM-BUG-CRUCIBLE-00040-run-fix-20260913T072749Z-8da5161c code=951514b0 gate=manual)
+- **State history:** Open (2026-08-18T00:08:18Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T07:41:21Z, deltic:auto role=fix run=fix-20260913T072749Z-8da5161c branch=task/bug-MM-BUG-CRUCIBLE-00040-run-fix-20260913T072749Z-8da5161c code=951514b0 gate=manual) -> Closed (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: transposing two bass include_bytes paths reddens the crate test; reverting the generator to self-comparison reddens its swap regression)
 
 ## Observation
 
@@ -112,6 +112,16 @@ oracles, which are gated behind `ferrosintesis_repository_tests`.
 **Prove it fails first.** Regenerate one crate with two `include_bytes!` targets
 transposed, watch the new assertion go red and the four existing ones stay green, then
 restore. A fix landed without that demonstration repeats the defect being reported.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `951514b0`, container assertion later tightened by `3385fe47`) by an agent other than the fixer.
+
+**Original observation re-run (the record's defeat).** Swapping the `include_bytes!` targets of `fingerbass_E1.flac` and `fingerbass_D2.flac` in `crates/ferrosintesis-samples-bass/src/lib.rs` turns `inventory_matches_packaged_samples` red (`fingerbass_D2.flac`), while the size test stays green as the record predicted. A census shows all 24 sample crates carry the byte-for-byte comparison.
+
+**Fails-before (method B, generator).** Reverting the emitted `fs::read(samples_dir.join(name))` to the old `bytes.to_vec()` self-comparison fails `GenCrateLibMixedContainerTest.test_swapped_embedded_payload_fails_the_packaged_file_oracle` (`cargo test` passed on the swapped crate). Restored; it and the bass crate's 2 tests pass on HEAD.
+
+Swapping the files on disk rather than the paths remains out of scope (MM-REQ-KILN-00211).
 
 ## Notes
 

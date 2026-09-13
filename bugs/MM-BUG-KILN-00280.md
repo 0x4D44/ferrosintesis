@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00280 — Catalog overlap oracle accepts invalid high-bit GM reset
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/render-catalog / MIDI overlap oracle
 - **Raised:** 2026-08-17T10:31:44Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T193314Z-04bb33d5
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00280-run-verify-20260913T193314Z-04bb33d5
-- **Owner base:** b197e1c2be0bcf061de9ae11dfb0b0baff30033f
-- **Owner fingerprint:** sha256:33a4e4130af16ef8588feb05455293689b6a8f015b8ce371f8ab05278d0942c3
-- **Owner since:** 2026-09-13T19:33:14Z
-- **Owner until:** 2026-09-13T21:33:14Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T10:31:44Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:30:26Z, deltic:auto role=fix run=fix-20260913T182523Z-acac18d4 branch=task/bug-MM-BUG-KILN-00280-run-fix-20260913T182523Z-acac18d4 code=b4ba3f7af8b20b8fe7e7cc728b381981141b7f62 gate=manual)
+- **State history:** Open (2026-08-17T10:31:44Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:30:26Z, deltic:auto role=fix run=fix-20260913T182523Z-acac18d4 branch=task/bug-MM-BUG-KILN-00280-run-fix-20260913T182523Z-acac18d4 code=b4ba3f7af8b20b8fe7e7cc728b381981141b7f62 gate=manual) -> Closed (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: the recorded high-bit reset payload is reported as overlap plus unmatched note-on; removing the seven-bit check fails the control)
 
 ## Observation
 
@@ -47,6 +47,14 @@ Require every SysEx body byte before the terminating `F7` to be below `0x80` bef
 recognizing GM System On. Add a red-before-fix control with the exact high-bit payload
 between two same-pitch note-ons; assert that the audit reports the overlap and unmatched
 note-on.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `b4ba3f7a`) by an agent other than the fixer.
+
+**Original observation re-run.** Note-on 60, `F0 05 7E FF 09 01 F7`, note-on 60, note-off: the audit reports `overlaps: 1, unmatched_note_ons: 1`, matching production, which rejects any SysEx body byte `>= 0x80` (`midi.rs:100`).
+
+**Fails-before (method B).** Removing `body.iter().all(|&byte| byte < 0x80) &&` fails `high_bit_gm_system_on_device_does_not_reset_the_audit` (left overlaps 0, right 1). Restored; passes on HEAD.
 
 ## Notes
 

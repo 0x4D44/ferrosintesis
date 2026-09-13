@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00200 — Cross-crate WAV basename-collision oracle misses ALIASES logical names, so aliases can be silently shadowed
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** sampler embedded_wav / oracles
 - **Raised:** 2026-08-14T10:21:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T192838Z-c7455135
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00200-run-verify-20260913T192838Z-c7455135
-- **Owner base:** 14ed9e23f729921793a9ad7dd4adaec354dcf0ae
-- **Owner fingerprint:** sha256:020f1934f8501678a6a06892311bf29a2d6c0fbc829d00b0e14e476b809de840
-- **Owner since:** 2026-09-13T19:28:38Z
-- **Owner until:** 2026-09-13T21:28:38Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T10:21:10Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T16:43:29Z, deltic:auto role=fix run=fix-20260815T163920Z-p33716-n490348200-c1 branch=task/bug-MM-BUG-KILN-00200-run-fix-20260815T163920Z-p33716-n490348200-c1 code=5f41660 gate=manual)
+- **State history:** Open (2026-08-14T10:21:10Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T16:43:29Z, deltic:auto role=fix run=fix-20260815T163920Z-p33716-n490348200-c1 branch=task/bug-MM-BUG-KILN-00200-run-fix-20260815T163920Z-p33716-n490348200-c1 code=5f41660 gate=manual) -> Closed (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: a physical core file shadowing a Steinway alias fails the oracle, and passes with the ALIASES scan disabled)
 
 ## Observation
 
@@ -71,6 +71,14 @@ physical basenames use. That keeps the oracle derived-from-source (the committed
 ALIASES manifests) rather than adding a second hand list. Prove it by temporarily
 planting a colliding basename in a scratch copy and watching the strengthened test
 name both owners.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `5f416608`) by an agent other than the fixer.
+
+**Original observation re-run.** Planting `steinwayb_C2_f.flac` (a Steinway alias name) as a physical file in `ferrosintesis-samples-core/samples/` fails `no_two_asset_crates_ship_the_same_wav_basename` ("is an alias in ferrosintesis-samples-vcsl-steinway and a name in ferrosintesis-samples-core").
+
+**Fails-before (method B).** With the `ALIASES` read disabled, the same plant leaves the oracle green. Restored; plant removed; it passes on HEAD. Alias names come from each crate's committed `ALIASES` file, so the legacy `.wav` keys added later by `8244afb1` are covered too.
 
 ## Notes
 

@@ -105,6 +105,16 @@ this licensing-count fix. The shared licensing module also contains distinct ope
 records for packaged evidence, container wording, and container assertions; those concerns
 are separate from this NOTICE count defect.
 
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `d975f7bb`) by an agent other than the fixer.
+
+**Original observation re-derived.** NOTICE, `licensing.rs:7` and `lib.rs` no longer state "ten" or "twenty-five". A census gives 24 default sample crates: 15 CC0 and 9 attribution-bearing, and the NOTICE index names those 9.
+
+**Fails-before (method B).** Reversing the NOTICE hunk fails `parent_notice_is_packaged_and_names_every_attribution_bearing_bank` with "10 before `below are not` (expected 9)", and likewise for the other two phrases. Restored; both licensing regressions pass on HEAD.
+
+**Residual split to MM-BUG-CRU-00059.** `crates/ferrosintesis/README.md:252` still says "five of these ten" above a 9-row table, and the oracle reads only numbers immediately before three fixed phrases, so a stale count placed after them stays green.
+
 ## Notes
 
 - Three CC0 crates ship a courtesy `NOTICE` despite needing none — honkytonk, vcsl-kawai,

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00203 — Accent-cymbal audio oracle admits silent and click-only assets
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drumkit2 audio validation
 - **Raised:** 2026-08-16T07:17:00Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T193108Z-bb38e2b3
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00203-run-verify-20260913T193108Z-bb38e2b3
-- **Owner base:** 6179162b482f8b6da238e4ad5c91b935c64a096b
-- **Owner fingerprint:** sha256:6b554c7464256f7c3c97952e087e2a614f17d36edec65a768cf8ae7e8279e522
-- **Owner since:** 2026-09-13T19:31:08Z
-- **Owner until:** 2026-09-13T21:31:08Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T07:17:00Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:00:05Z, deltic:auto role=fix run=fix-20260913T145322Z-8da22b38 branch=task/bug-MM-BUG-KILN-00203-run-fix-20260913T145322Z-8da22b38 code=ba9b3ff224b19c6c786f705d52678b9d4eff2a7a gate=manual)
+- **State history:** Open (2026-08-16T07:17:00Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:00:05Z, deltic:auto role=fix run=fix-20260913T145322Z-8da22b38 branch=task/bug-MM-BUG-KILN-00203-run-fix-20260913T145322Z-8da22b38 code=ba9b3ff224b19c6c786f705d52678b9d4eff2a7a gate=manual) -> Closed (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: restoring the peak-only rule fails the silent/impulse controls; the hand-maintained per-bank duration table is split to MM-BUG-CRU-00073)
 
 ## Observation
 
@@ -58,6 +58,16 @@ every take, in addition to duration.
 Add adversarial negative controls for a same-length silent splash and a
 single-impulse crash or china so both holes are proven red before the fix and
 green afterward.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `ba9b3ff2`) by an agent other than the fixer.
+
+`decoded_banks_are_valid_audio` checks CRASH, SPLASH and CHINA with duration, a 0.85-0.92 peak band and RMS > 0.01; silent-splash and single-impulse controls are rejected.
+
+**Fails-before (method B).** Restoring the `peak > 16_000` predicate and disabling the RMS floor fails `decoded_audio_oracle_rejects_silent_and_impulse_controls` ("single-impulse crash PCM must be rejected"). Restored; both pass on HEAD.
+
+**Residual split to MM-BUG-CRU-00073.** Dropping SPLASH from the per-bank duration table leaves `decoded_banks_are_valid_audio` green: the table is hand-maintained beside `BANKS`, the same omission class.
 
 ## Notes
 

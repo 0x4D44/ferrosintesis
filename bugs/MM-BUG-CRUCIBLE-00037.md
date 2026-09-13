@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00037 — No guard stops an ungated test reading outside the published crate archive
 
-- **State:** Fixed
+- **State:** Open
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** packaging / test boundary
 - **Raised:** 2026-08-17T20:48:42Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T192358Z-3c170568
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00037-run-verify-20260913T192358Z-3c170568
-- **Owner base:** c61621e1305131602b0f9db620d973709b1bd0c6
-- **Owner fingerprint:** sha256:45958f509f8a5320d467cf5babbc09bf4c0deb6d6cabaa7c0d2cf7b1583b1558
-- **Owner since:** 2026-09-13T19:23:58Z
-- **Owner until:** 2026-09-13T21:23:58Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T20:48:42Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:45:20Z, deltic:auto role=fix run=fix-20260913T062844Z-33a2e38c branch=task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T062844Z-33a2e38c code=6a582ab29a74011e2e07d8059a3a6527fe0440d0 gate=manual)
+- **State history:** Open (2026-08-17T20:48:42Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:45:20Z, deltic:auto role=fix run=fix-20260913T062844Z-33a2e38c branch=task/bug-MM-BUG-CRUCIBLE-00037-run-fix-20260913T062844Z-33a2e38c code=6a582ab29a74011e2e07d8059a3a6527fe0440d0 gate=manual) -> Open (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: removing the cfg gate from the sax provenance test, the exact recorded escape, leaves repository_source_has_no_ungated_outside_reads green)
 
 ## Observation
 
@@ -88,3 +88,18 @@ Found during the 0.21.58 release preflight, working through `RELEASING.md`'s
 "Preflight on integrated trunk" section. The runbook already tells you to unpack and test
 the archive "if either boundary changes" — the gap is that a NEW ungated test changes the
 boundary without anyone realising it did.
+
+### Verification (reopen) (2026-09-13, Claude Opus 5, independent)
+
+Checked on trunk `8b6a6f86` (fix `6a582ab2`) by an agent other than the fixer. The four guard tests in `crates/ferrosintesis/tests/archive_boundary.rs` are selected and pass on HEAD, but the guard does not stop the escape this bug was raised for.
+
+**Original observation re-run.** Removing `#[cfg(ferrosintesis_repository_tests)]` from `sampler::tests::packaged_sax_takes_outside_the_zone_tables_are_documented` leaves `repository_source_has_no_ungated_outside_reads` green.
+
+**Why it misses (probed in scratch files, all removed).**
+1. The tokenizer has no char-literal handling: `'"'` opens a phantom string and desyncs the rest of the file. Such literals exist at `sampler.rs:6841`, inside the sax test at `:8273`, and `engine.rs:4599`. A sibling-read test reported on its own was hidden once a `s.rfind('"')` helper preceded it.
+2. The `.parent()`/`.ancestors()` rule looks for an identifier `CARGO_MANIFEST_DIR`, but in `env!("CARGO_MANIFEST_DIR")` it is a string token, so the rule never fires.
+3. Paths built with `concat!` or `format!` are not examined.
+
+Of six adversarial ungated escapes only `.join("..")` was caught; `concat!(env!(..), "/../...")`, `format!("{}/../../CLAUDE.md")`, `.parent().unwrap().parent()`, `.ancestors().nth(2)` and `crate::licensing::crates_dir()` all passed.
+
+**Needed to close.** Char-literal lexing, the `env!` string treated as the manifest-dir marker, `concat!`/`format!` path handling, and fixtures for each missed shape, including a `'"'` ahead of an escaping test.

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00281 — Catalog overlap oracle rejects production-valid long MIDI timelines
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/render-catalog / MIDI overlap oracle
 - **Raised:** 2026-08-17T10:31:46Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T193403Z-e9355a11
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00281-run-verify-20260913T193403Z-e9355a11
-- **Owner base:** 26bf8dc6ea58eaffa21ac0081f53712c3c0fa8a4
-- **Owner fingerprint:** sha256:bb5da0d6b658e93bf7bf25be418fb9fae44080e24250e8ab9b5120d4beb42c88
-- **Owner since:** 2026-09-13T19:34:03Z
-- **Owner until:** 2026-09-13T21:34:03Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T10:31:46Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:36:13Z, deltic:auto role=fix run=fix-20260913T183200Z-99b08c83 branch=task/bug-MM-BUG-KILN-00281-run-fix-20260913T183200Z-99b08c83 code=cca859fbfb85165b6aed05ecdf55699ebf445ca3 gate=manual)
+- **State history:** Open (2026-08-17T10:31:46Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:36:13Z, deltic:auto role=fix run=fix-20260913T183200Z-99b08c83 branch=task/bug-MM-BUG-KILN-00281-run-fix-20260913T183200Z-99b08c83 code=cca859fbfb85165b6aed05ecdf55699ebf445ca3 gate=manual) -> Closed (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: seventeen maximum VLQ deltas audit clean; reverting ticks to u32 reproduces absolute tick overflow)
 
 ## Observation
 
@@ -45,6 +45,14 @@ lifecycle.
 Use `u64` for `NoteEvent.tick` and the cumulative per-track tick, matching production.
 Add a red-before-fix boundary control with seventeen maximum deltas and a clean note
 lifecycle; assert that it audits successfully.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `cca859fb`) by an agent other than the fixer.
+
+**Original observation re-run.** Seventeen maximum four-byte deltas with a balanced note, crossing `u32::MAX` ticks, audit clean on HEAD.
+
+**Fails-before (method B).** Reverting both tick fields and the `checked_add` to `u32` fails `accepts_seventeen_maximum_vlq_deltas_before_note_off` with "absolute tick overflow", the recorded failure. Restored; passes on HEAD. The audit now matches the production parser's `u64` tick width.
 
 ## Notes
 

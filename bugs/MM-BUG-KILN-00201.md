@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00201 — Steinway/piano-family zone-root pins have no oracle; equal-size payloads make a swapped include_bytes silently mispitch
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Medium
 - **Area:** sampler zone tables / oracles
 - **Raised:** 2026-08-14T10:21:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T192942Z-dfb66426
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00201-run-verify-20260913T192942Z-dfb66426
-- **Owner base:** e08ef16c1e49be1951b7036abccb00ea2db6a191
-- **Owner fingerprint:** sha256:aae9e3b3c9b119e5afbcc557878af1cd527beec3049320f91bc9562f34089ed9
-- **Owner since:** 2026-09-13T19:29:42Z
-- **Owner until:** 2026-09-13T21:29:42Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T10:21:10Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T16:56:38Z, deltic:auto role=fix run=fix-20260815T164408Z-p20132-n151918200-c1 branch=task/bug-MM-BUG-KILN-00201-run-fix-20260815T164408Z-p20132-n151918200-c1 code=8bb77f8 gate=manual)
+- **State history:** Open (2026-08-14T10:21:10Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T16:56:38Z, deltic:auto role=fix run=fix-20260815T164408Z-p20132-n151918200-c1 branch=task/bug-MM-BUG-KILN-00201-run-fix-20260815T164408Z-p20132-n151918200-c1 code=8bb77f8 gate=manual) -> Closed (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: a transposed Steinway root and a 20 Hz bass root each fail the filename-pitch oracle)
 
 ## Observation
 
@@ -77,6 +77,14 @@ second catches scenario 2):
 
 Prove both the KILN-00073 way: transpose one pin / swap two `include_bytes!` paths in
 a scratch build and watch the new oracle go red.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `8bb77f8f`) by an agent other than the fixer.
+
+**Original observation re-run (mutation).** Changing `"steinwayb_C4_pp.flac" => 262.25` to `226.25` fails `every_note_named_zone_root_matches_its_filename` ("-251.5 cents from steinwayb's label"); a `fingerbass_C2` root of 20 Hz is also caught. Restored; it passes on HEAD and parses `.flac` names. The oracle is new, so there was no pre-fix assertion to run.
+
+It covers the mistyped-pin case (the record's scenario 1) across every note-named zone table, from source text. The record's layer 2, measured pitch against decoded payloads, was not built; `include_bytes!` path swaps are caught by the CRUCIBLE-00040 byte check, and on-disk file swaps remain MM-REQ-KILN-00211 scope.
 
 ## Notes
 

@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00041 — banks_parse sanity sweep is a hand-written chain that omits the bass banks and most other zone families
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sampler / bank oracles
 - **Raised:** 2026-08-18T00:08:33Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T192527Z-f9f52fd5
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00041-run-verify-20260913T192527Z-f9f52fd5
-- **Owner base:** e5b3e3232e695f0d3d6985c0151eede68156492e
-- **Owner fingerprint:** sha256:a6be101d68a7c8a638452bc3605db31c916fe77440a9282304d093bd6eeffe7e
-- **Owner since:** 2026-09-13T19:25:27Z
-- **Owner until:** 2026-09-13T21:25:27Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T00:08:33Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T08:01:07Z, deltic:auto role=fix run=fix-20260913T074331Z-6ce00098 branch=task/bug-MM-BUG-CRUCIBLE-00041-run-fix-20260913T074331Z-6ce00098 code=e0d68e7078df8cb44c25e48169e1f03f79bcac24 gate=manual)
+- **State history:** Open (2026-08-18T00:08:33Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T08:01:07Z, deltic:auto role=fix run=fix-20260913T074331Z-6ce00098 branch=task/bug-MM-BUG-CRUCIBLE-00041-run-fix-20260913T074331Z-6ce00098 code=e0d68e7078df8cb44c25e48169e1f03f79bcac24 gate=manual) -> Closed (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: derived sweep catches a corrupted fingerbass root the old chain could not see; its red on trunk is the later clavinet trim, tracked as MM-BUG-CRU-00064)
 
 ## Observation
 
@@ -101,6 +101,16 @@ accessor is absent from the sweep. Adding the entries alone repeats the defect.
 
 **Prove it fails first.** Zero out one bass zone's samples in a scratch tree and confirm
 the new coverage reports it; today it does not.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `e0d68e70`) by an agent other than the fixer.
+
+`banks_parse` now walks `for_each_public_bank`, covering finger/pick bass, pizzbass, rhodes and the rest, with an exception table that fails on stale entries.
+
+**Fails-before (method B).** With a temporary clavinet exception and `fingerbass_C2`'s root set to 20.0, `banks_parse` fails (`finger_bass_bank: odd root 20`); the pre-fix chain at `e0d68e70^` does not include that bank. With only the clavinet exception, `banks_parse` passes, so clavinet length is its only failure. Restored.
+
+**Gate note.** On trunk `banks_parse` is red (`clavinet_bank: zone too short: 19849 (minimum 20000)`). This fix landed first, when clavinet zones were 70,560 frames; `6ee2af43` (KILN-00219) later trimmed them to the runtime-reachable 19,849 frames, pinned by its own oracle. The generic floor needs a clavinet exception keyed to `CLAVINET_REACH_FRAMES`; tracked as MM-BUG-CRU-00064.
 
 ## Notes
 

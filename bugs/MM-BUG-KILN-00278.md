@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00278 — Crate rustdoc overstates the embedded payload and evades its size oracle
 
-- **State:** Fixed
+- **State:** Open
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** ferrosintesis / public payload documentation
 - **Raised:** 2026-08-17T09:42:03Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T193200Z-40f870e7
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00278-run-verify-20260913T193200Z-40f870e7
-- **Owner base:** 2ff2e45b5f038533db1dd099a4335150b5ade5ae
-- **Owner fingerprint:** sha256:bf004a46feef13613941880b63871d7ebfc569dbede77e4074857182d6de94f8
-- **Owner since:** 2026-09-13T19:32:00Z
-- **Owner until:** 2026-09-13T21:32:00Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T09:42:03Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:35:03Z, deltic:auto role=fix run=fix-20260913T181332Z-673057bf branch=task/bug-MM-BUG-KILN-00278-run-fix-20260913T181332Z-673057bf code=4a4df67d171fe46ed93a004de7fde5c2b9433bb1 gate=manual)
+- **State history:** Open (2026-08-17T09:42:03Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:35:03Z, deltic:auto role=fix run=fix-20260913T181332Z-673057bf branch=task/bug-MM-BUG-KILN-00278-run-fix-20260913T181332Z-673057bf code=4a4df67d171fe46ed93a004de7fde5c2b9433bb1 gate=manual) -> Open (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: the rewritten rustdoc still overstates the payload (1080 recordings against 1026 embedded, 54 MiB for 51.5 MiB) and the fix breaks the clippy gate)
 
 ## Observation
 
@@ -36,3 +36,16 @@ Static review only. File count and bytes were independently read from the curren
 <unfixed — raised only>
 
 ## Notes
+
+### Verification (reopen) (2026-09-13, Claude Opus 5, independent)
+
+Checked on trunk `8b6a6f86` (fix `4a4df67d`) by an agent other than the fixer.
+
+**What works.** The size oracle now joins wrapped lines: restoring the pre-fix wrapped "111 MiB" rustdoc fails `documented_payload_size_is_within_ten_percent` ("claims 111 MiB ... embeds 51.5 MiB (116% off)"), and making `size_claims_in` scan line by line again fails `size_oracle_rejects_a_wrapped_stale_claim`. Both pass on HEAD.
+
+**Why reopened.**
+1. The rewritten rustdoc still overstates the payload. `crates/ferrosintesis/src/lib.rs:51-52` says "roughly 54 MiB ... across 1080 WAV/FLAC recordings". Counting `samples/` WAV/FLAC files in the 24 crates of the `embedded-samples` feature on origin/main gives 1026, as `crates/ferrosintesis/README.md:85` already says. The payload is 53,996,157 bytes: 54.0 MB but 51.5 MiB. That is inside the oracle's 10% tolerance, so it is mislabelled rather than rejected.
+2. The fix breaks the required clippy gate: `filter_next` at `crates/ferrosintesis/src/payload.rs:429` (`.filter(|tok| !tok.is_empty()).next_back()`, blamed to `4a4df67d`) fails `cargo clippy --workspace --all-targets -D warnings` on clippy 1.95.0.
+3. No oracle checks the recording count, and `//!` blocks are never split into paragraphs, so the whole module doc is scanned as one.
+
+**Needed to close.** Use `.rfind(..)`, state 1026 recordings and 51.5 MiB (or derive both), and consider a recording-count claim oracle.

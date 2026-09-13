@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00199 — Generated ALIASES crate test is vacuously green on a dangling canonical target
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** samples gen_crate_lib / oracles
 - **Raised:** 2026-08-14T10:21:09Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T192720Z-0817588e
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00199-run-verify-20260913T192720Z-0817588e
-- **Owner base:** 7ef1413377d98b5bf2470e860c196b6d8c6c35c9
-- **Owner fingerprint:** sha256:3e701419d6daa040938c7777409e13ba0fa45d15573f0c97d232d56ef3ebcd5c
-- **Owner since:** 2026-09-13T19:27:20Z
-- **Owner until:** 2026-09-13T21:27:20Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T10:21:09Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T16:38:42Z, deltic:auto role=fix run=fix-20260815T163323Z-p32188-n779561800-c1 branch=task/bug-MM-BUG-KILN-00199-run-fix-20260815T163323Z-p32188-n779561800-c1 code=b2fe20f gate=manual)
+- **State history:** Open (2026-08-14T10:21:09Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T16:38:42Z, deltic:auto role=fix run=fix-20260815T163323Z-p32188-n779561800-c1 branch=task/bug-MM-BUG-KILN-00199-run-fix-20260815T163323Z-p32188-n779561800-c1 code=b2fe20f gate=manual) -> Closed (2026-09-13T19:35:03Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: a dangling canonical alias fails the strengthened test and passes the restored old assertion)
 
 ## Observation
 
@@ -85,6 +85,14 @@ for (alias, canonical) in ALIASES {
 then regenerate both crates' `lib.rs`. Prove it the KILN-00073 way: point one ALIASES
 row (in a scratch copy of both files) at a nonexistent canonical and watch the
 strengthened test go red where the current one stays green.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `b2fe20fd`) by an agent other than the fixer.
+
+**Original observation re-run.** Pointing one alias at a missing file, written the same way into both `ALIASES` and the `lib.rs` array, fails `aliases_resolve_without_duplicate_physical_payloads` ("alias steinwayb_C2_f.flac names steinwayb_MISSING.flac, which is not packaged").
+
+**Fails-before (method B).** On the same fixture, restoring the pre-fix `assert_eq!(get(alias), get(canonical))` makes the crate suite fully green (4 passed), the vacuity the record describes. Restored; the test passes on HEAD in vcsl-steinway, vcsl-kawai and headroom, and `gen_crate_lib.py` emits the strengthened form.
 
 ## Notes
 

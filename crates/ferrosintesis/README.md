@@ -83,7 +83,7 @@ allows `Options` to evolve without requiring callers to construct its fields.
 
 `embedded-samples` (default) compiles twenty-four first-party asset crates into
 the binary: 1026 recordings -- attack transients, sustain loops, whole-voice
-instruments and the sampled drum kit -- embedding ~52 MiB. The synth uses
+instruments and the sampled drum kit -- embedding ~51.5 MiB. The synth uses
 an LA-synthesis structure: recorded onset material adds attack detail before
 crossfading into a modeled body or sustain.
 

@@ -16,6 +16,9 @@ belong in `CLAUDE.md`, not here.
 - 2026.09.13 — **Audio oracle tables must cover derived BANKS** (`drumkit2/src/lib.rs`).
   - A hand-maintained duration list can silently omit a registered articulation; derive the sweep and assert exact coverage.
 
+- 2026.09.13 — **Rustdoc payload claims need count and size oracles** (`payload.rs::tests`).
+  - A size tolerance can accept stale prose, so derive both recording count and bytes and make wrapped claims fail.
+
 - 2026.09.13 — **Bake atomicity tests must drive the write-mode entry point** (`test_fretnoise_bake.py:FretNoiseBakeTests.test_main_late_encode_failure_preserves_published_bank`).
   - Testing staging or publication alone can leave a reverted direct-write `main()` green; inject the late failure through `main()` and compare the old bank byte-for-byte.
 

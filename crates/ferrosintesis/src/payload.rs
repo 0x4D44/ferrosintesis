@@ -433,8 +433,7 @@ mod tests {
                 for (unit_start, _) in lower.match_indices(unit) {
                     let Some(tok) = paragraph[..unit_start]
                         .split(|c: char| !(c.is_ascii_digit() || c == '.'))
-                        .filter(|tok| !tok.is_empty())
-                        .next_back()
+                        .rfind(|tok| !tok.is_empty())
                     else {
                         continue;
                     };
@@ -563,6 +562,73 @@ mod tests {
         out
     }
 
+    /// Counts package-wide recording claims, including a format list between the number and
+    /// noun: `(file, paragraph, count)`. Bank-specific prose such as "a recording" is not a
+    /// total and is deliberately ignored.
+    fn recording_count_claims_in(
+        file: &'static str,
+        text: &str,
+    ) -> Vec<(&'static str, String, usize)> {
+        const FORMAT_WORDS: &[&str] = &["wav", "flac", "audio", "sample", "samples"];
+        let mut out = Vec::new();
+        let mut paragraph = String::new();
+        let mut scan = |paragraph: &str| {
+            let lower = paragraph.to_lowercase();
+            if paragraph.trim_start().starts_with('|')
+                || !lower.contains("recording")
+                || !lower.contains("binary")
+                || !lower.contains("embed")
+            {
+                return;
+            }
+            let toks = number_tokens(&lower);
+            for (i, tok) in toks.iter().enumerate() {
+                if tok != "recordings" {
+                    continue;
+                }
+                let mut j = i;
+                let mut hops = 0;
+                while j > 0 && hops < 4 {
+                    j -= 1;
+                    hops += 1;
+                    if let Some(n) = as_number(&toks[j]) {
+                        out.push((file, paragraph.to_string(), n));
+                        break;
+                    }
+                    if !FORMAT_WORDS.contains(&toks[j].as_str()) {
+                        break;
+                    }
+                }
+            }
+        };
+
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                if !paragraph.is_empty() {
+                    scan(&paragraph);
+                    paragraph.clear();
+                }
+                continue;
+            }
+            if !paragraph.is_empty() {
+                paragraph.push(' ');
+            }
+            paragraph.push_str(trimmed);
+        }
+        if !paragraph.is_empty() {
+            scan(&paragraph);
+        }
+        out
+    }
+
+    fn recording_count_claims() -> Vec<(&'static str, String, usize)> {
+        ["README.md", "NOTICE", "src/lib.rs"]
+            .into_iter()
+            .flat_map(|file| recording_count_claims_in(file, &parent(file)))
+            .collect()
+    }
+
     const NUMBER_WORDS: &[&str] = &[
         "one",
         "two",
@@ -633,6 +699,39 @@ mod tests {
             "no document states the asset-crate count ({crates} / {})",
             spelled(crates),
         );
+    }
+
+    #[test]
+    fn no_document_states_a_stale_recording_count() {
+        let (_, recordings, _) = embedded_payload();
+        let claims = recording_count_claims();
+        assert!(
+            !claims.is_empty(),
+            "no document quotes the embedded recording count — either the wording changed \
+             and this oracle now scans nothing, or the figure was dropped."
+        );
+        for (file, paragraph, claimed) in &claims {
+            assert_eq!(
+                *claimed, recordings,
+                "{file} states {claimed} recordings, but a default build embeds {recordings} \
+                 recordings, in:\n  {paragraph}"
+            );
+        }
+    }
+
+    #[test]
+    fn recording_count_oracle_rejects_a_wrapped_stale_claim() {
+        let wrapped = "The default `embedded-samples` feature compiles roughly 51.5 MiB of\n\
+recorded audio across 1080 WAV/FLAC recordings from first-party asset crates into the binary.";
+        let claims = recording_count_claims_in("src/lib.rs", wrapped);
+        assert_eq!(
+            claims
+                .iter()
+                .map(|(_, _, count)| *count)
+                .collect::<Vec<_>>(),
+            vec![1080]
+        );
+        assert_ne!(claims[0].2, embedded_payload().1);
     }
 
     /// The stated payload size must be within 10% of the real one.

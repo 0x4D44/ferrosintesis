@@ -6,15 +6,15 @@
 - **Area:** sample generation / orchestral2 output inventory
 - **Raised:** 2026-08-13T22:54:22Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T204725Z-b4566835
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00191-run-verify-20260913T204725Z-b4566835
+- **Owner base:** 0f6de4fe4d31fc7f1145ff26447f38977caeb95a
+- **Owner fingerprint:** sha256:5a546f028e2e222c86f2c7f31d4ae02382220e9b34d61a6dfb7cfea11a012032
+- **Owner since:** 2026-09-13T20:47:25Z
+- **Owner until:** 2026-09-13T22:47:25Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00047 — Grand scoped regeneration recipe falsely claims to be pure stdlib despite mandatory ffmpeg
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** grand sample crate / regeneration prerequisites
 - **Raised:** 2026-08-20T11:08:24Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T144353Z-eb0a73f9
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00047-run-fix-20260913T144353Z-eb0a73f9
-- **Owner base:** 65737f4521bd0df78c24d2466a72c1cc81b90b06
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T14:43:53Z
-- **Owner until:** 2026-09-13T16:43:53Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T11:08:24Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-20T11:08:24Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T14:48:10Z, deltic:auto role=fix run=fix-20260913T144353Z-eb0a73f9 branch=task/bug-MM-BUG-CRU-00047-run-fix-20260913T144353Z-eb0a73f9 code=af6d2dbcb4c47a1f030370aaf87a61b16f922942 gate=manual)
 
 ## Observation
 

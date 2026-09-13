@@ -6,15 +6,15 @@
 - **Area:** Steinway sample crate / public lookup compatibility
 - **Raised:** 2026-08-17T08:39:21Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T172137Z-e299aa2e
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00272-run-fix-20260913T172137Z-e299aa2e
+- **Owner base:** 749984a9fe9cea8531528de6a6e853aca92d4ccb
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T17:21:37Z
+- **Owner until:** 2026-09-13T19:21:37Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

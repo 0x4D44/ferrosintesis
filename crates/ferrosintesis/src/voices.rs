@@ -15279,8 +15279,12 @@ mod tests {
         let _sampled = make_uncorrected_for_test(76, 60, 100, 44_100.0, 5, true);
         assert_eq!(
             constructions(),
-            0,
-            "sampled GM76 must not build its fallback"
+            if crate::embedded_samples_available() {
+                0
+            } else {
+                1
+            },
+            "sampled GM76 must build its fallback exactly when embedded samples are unavailable"
         );
 
         reset();

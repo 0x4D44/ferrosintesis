@@ -575,19 +575,24 @@ fn decode_frame(reader: &mut BitReader, info: &StreamInfo, block: &mut Vec<i64>)
         return Err("FLAC: frame block size exceeds the STREAMINFO maximum");
     }
 
-    match sample_rate_code {
-        // 0 = from STREAMINFO; 9 = 44.1 kHz. Anything else is out of subset.
-        0 | 9 => {}
-        12 => {
-            let _ = reader.read(8)?;
-            return Err("FLAC: frame declares a sample rate other than 44.1 kHz");
-        }
-        13 | 14 => {
-            let _ = reader.read(16)?;
-            return Err("FLAC: frame declares a sample rate other than 44.1 kHz");
-        }
+    let frame_sample_rate = match sample_rate_code {
+        // 0 = from STREAMINFO; 9 = 44.1 kHz.
+        0 | 9 => info.sample_rate,
+        // 12 = kHz, 13 = Hz, 14 = tens of Hz.
+        12 => reader
+            .read(8)?
+            .checked_mul(1_000)
+            .ok_or("FLAC: explicit sample rate overflows")?,
+        13 => reader.read(16)?,
+        14 => reader
+            .read(16)?
+            .checked_mul(10)
+            .ok_or("FLAC: explicit sample rate overflows")?,
         15 => return Err("FLAC: invalid sample rate code"),
         _ => return Err("FLAC: frame declares a sample rate other than 44.1 kHz"),
+    };
+    if frame_sample_rate != info.sample_rate || frame_sample_rate != EXPECTED_SAMPLE_RATE {
+        return Err("FLAC: frame declares a sample rate other than 44.1 kHz");
     }
 
     let crc8_position = reader.bit / 8;
@@ -893,6 +898,21 @@ mod tests {
         bytes
     }
 
+    fn zero_md5_stream_with_explicit_rate(code: u8, value: u16) -> Vec<u8> {
+        assert!(matches!(code, 13 | 14));
+        let mut frame = vec![0xff, 0xf8, 0x60 | code, 0x00, 0x00];
+        frame.push(0); // Block-size code 6: one sample.
+        frame.extend_from_slice(&value.to_be_bytes());
+        frame.push(crc8(&frame));
+        frame.push(0); // CONSTANT subframe, no wasted bits.
+        frame.extend_from_slice(&[0, 0]); // One zero 16-bit sample.
+        frame.extend_from_slice(&crc16(&frame).to_be_bytes());
+
+        let mut bytes = streaminfo_only(1);
+        bytes.extend_from_slice(&frame);
+        bytes
+    }
+
     struct BitWriter {
         bytes: Vec<u8>,
         bit: usize,
@@ -1001,6 +1021,30 @@ mod tests {
         assert_eq!(
             decode_mono16(&bad_footer_crc),
             Err("FLAC: frame footer CRC-16 mismatch")
+        );
+    }
+
+    #[test]
+    fn explicit_44100_frame_sample_rate_codes_are_accepted() {
+        assert_eq!(
+            decode_mono16(&zero_md5_stream_with_explicit_rate(13, 44_100)),
+            Ok(vec![0])
+        );
+        assert_eq!(
+            decode_mono16(&zero_md5_stream_with_explicit_rate(14, 4_410)),
+            Ok(vec![0])
+        );
+    }
+
+    #[test]
+    fn explicit_frame_sample_rate_codes_must_match_streaminfo() {
+        assert_eq!(
+            decode_mono16(&zero_md5_stream_with_explicit_rate(13, 44_101)),
+            Err("FLAC: frame declares a sample rate other than 44.1 kHz")
+        );
+        assert_eq!(
+            decode_mono16(&zero_md5_stream_with_explicit_rate(14, 4_411)),
+            Err("FLAC: frame declares a sample rate other than 44.1 kHz")
         );
     }
 

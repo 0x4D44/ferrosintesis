@@ -1,25 +1,25 @@
 # MM-BUG-NMI-00004 — b1 sustain-pilot output-dir validator false-positives when the user home directory is itself a Git working tree
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample tooling / test environment
 - **Raised:** 2026-08-15T21:41:47Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T190051Z-27367e2c
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-NMI-00004-run-verify-20260913T190051Z-27367e2c
-- **Owner base:** 8b6a6f86cab9d4c5bfd92b7d884521d7b2b11a58
-- **Owner fingerprint:** sha256:69896262fd92548c014b80d2b26c3b951b21bf08975cc45215ad4d3dd6f7d7de
-- **Owner since:** 2026-09-13T19:00:51Z
-- **Owner until:** 2026-09-13T21:00:51Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-15T21:41:47Z, raised via `deltic bugs new`) -> Fixed (2026-09-12T20:50:02Z, deltic:auto role=fix run=fix-20260912T204012Z-ee9a3612 branch=task/bug-MM-BUG-NMI-00004-run-fix-20260912T204012Z-ee9a3612 code=075b5251 gate=manual)
+- **State history:** Open (2026-08-15T21:41:47Z, raised via `deltic bugs new`) -> Fixed (2026-09-12T20:50:02Z, deltic:auto role=fix run=fix-20260912T204012Z-ee9a3612 branch=task/bug-MM-BUG-NMI-00004-run-fix-20260912T204012Z-ee9a3612 code=075b5251 gate=manual) -> Closed (2026-09-13, independently verified by Codex: focused regression and root-cause mutant evidence below; no residual gap)
 
 ## Observation
 
@@ -73,7 +73,20 @@ machine's home-directory layout, not repo content.
 
 ## Fix
 
-<unfixed — raised only>
+Fixed in `075b5251`: scope the output-directory rejection to this repository's
+registered Git worktrees instead of walking unrelated filesystem ancestors.
+
+### Verification summary (2026-09-13 — Codex)
+
+Independent verification used the current trunk fix `075b5251`. The renamed regression
+`test_b1_sustain_pilot_output_is_outside_registered_git_worktrees_and_empty` and the
+recorded cleanup regression `test_b1_sustain_pilot_preserves_assets_and_cleans_decode_temp`
+were selected and passed (`Ran 2 tests in 0.347s`). Reversing the root-cause hunk to the
+old ancestor `.git` walk selected the first regression and failed on its own assertion:
+`AssertionError: unrelated Git marker was rejected`. Restoring the hunk produced the same
+two-test green result and an empty source diff. The full sample-tooling sweep ran 262 tests;
+its one failure was the unrelated `SteinwayAliasDeduplicationTest` alias-manifest assertion,
+so that broader sweep is not reported as green.
 
 ## Notes
 

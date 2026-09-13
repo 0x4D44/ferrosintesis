@@ -6,15 +6,15 @@
 - **Area:** headroom sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T00:04:33Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T073537Z-248083dd
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00248-run-fix-20260913T073537Z-248083dd
+- **Owner base:** 05fc76fb677a2ba274a920caa0fd901ff18b19cb
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T07:35:37Z
+- **Owner until:** 2026-09-13T09:35:37Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

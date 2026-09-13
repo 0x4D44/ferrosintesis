@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00280 — Catalog overlap oracle accepts invalid high-bit GM reset
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/render-catalog / MIDI overlap oracle
 - **Raised:** 2026-08-17T10:31:44Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T182523Z-acac18d4
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00280-run-fix-20260913T182523Z-acac18d4
-- **Owner base:** 5cf180385b299acb639d373a8380198adbccc128
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T18:25:23Z
-- **Owner until:** 2026-09-13T20:25:23Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T10:31:44Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T10:31:44Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T18:30:26Z, deltic:auto role=fix run=fix-20260913T182523Z-acac18d4 branch=task/bug-MM-BUG-KILN-00280-run-fix-20260913T182523Z-acac18d4 code=b4ba3f7af8b20b8fe7e7cc728b381981141b7f62 gate=manual)
 
 ## Observation
 

@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00049 — Concurrent mandolin regenerations race the shared source staging directory
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** mandolin sample generation / concurrent source isolation
 - **Raised:** 2026-08-20T12:21:19Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T200250Z-ee0f9e55
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00049-run-verify-20260913T200250Z-ee0f9e55
-- **Owner base:** dac45daaaf96b8adf9b28f10ed5fdb498bd83e8d
-- **Owner fingerprint:** sha256:f94fc027f206ed5202a441a1dc4dbb77d9110df5cc12f65eecbefe4dafaefc28
-- **Owner since:** 2026-09-13T20:02:50Z
-- **Owner until:** 2026-09-13T22:02:50Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T12:21:19Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:06:45Z, deltic:auto role=fix run=fix-20260913T145951Z-e4d049c6 branch=task/bug-MM-BUG-CRU-00049-run-fix-20260913T145951Z-e4d049c6 code=0179cee76f348d6e4e84096a2891082b7687a05f gate=manual)
+- **State history:** Open (2026-08-20T12:21:19Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:06:45Z, deltic:auto role=fix run=fix-20260913T145951Z-e4d049c6 branch=task/bug-MM-BUG-CRU-00049-run-fix-20260913T145951Z-e4d049c6 code=0179cee76f348d6e4e84096a2891082b7687a05f gate=manual) -> Closed (2026-09-13, independently verified by Codex: mandolin source reads bypass shared staging and remain isolated; no residual gap)
 
 ## Observation
 
@@ -46,11 +46,23 @@ Estimated effort: Small-Medium.
 
 ## Fix
 
-<unfixed — raised only>
+Fixed by `0179cee76f348d6e4e84096a2891082b7687a05f`. `ensure_mandolin_sources` now returns
+the committed source directory, and the bake reads those immutable files directly instead of
+copying them into the host-global temporary source directory.
 
-Prefer reading the committed mandolin sources directly. If a copy is required, use a
-process-unique staging directory or a lock plus atomic publication. Add a two-process
-regression with different source bytes and a forced overlap between copy and read; neither
-run may fail or consume the peer's source.
+### Verification summary (2026-09-13 — Codex)
+
+`$null | deltic timeout 300 python -m unittest
+test_prepare.MandolinConcurrentSourceTest` passed the two-process overlap regression. Each
+worker consumed its own source bytes and completed without touching the peer's source.
+
+For the required mutation check, I temporarily restored the old shared-copy implementation.
+The same regression failed with `A: consumed another process's mandolin source`. I restored
+the direct-source implementation and verified its source diff is empty.
+
+The complete sample-tooling gate on this fix set ran 264 tests with one unrelated
+Steinway alias-manifest failure and an existing unclosed-file `ResourceWarning`. The shared
+publication/source helpers also have separate records for ffmpeg presence and bank
+atomicity; those do not duplicate this mandolin source-isolation defect.
 
 ## Notes

@@ -6,15 +6,15 @@
 - **Area:** sample generation / regeneration tooling
 - **Raised:** 2026-08-19T09:33:06Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T231646Z-75908282
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KIL-00303-run-fix-20260913T231646Z-75908282
+- **Owner base:** 4193c91029baf803f705d07b2d6f903b3cbeb044
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T23:16:46Z
+- **Owner until:** 2026-09-14T01:16:46Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

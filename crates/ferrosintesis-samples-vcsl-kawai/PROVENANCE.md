@@ -58,7 +58,7 @@ Per file: `read_wav` decode (16-bit stereo → mono 0.5/0.5); linear resample to
 44.1 kHz (no-op); `trim_to_onset` cuts to the onset (3% of peak, 8 ms lead-in
 pad), keeps **1.5 s** of body with a lead-bounded 2 ms fade-in and a 0.6 s squared
 fade-out, peak-normalized to 0.9; `measure_f0` records the autocorrelation root.
-Output: 16-bit mono WAV.
+Output: 16-bit mono 44.1 kHz PCM stored losslessly in FLAC.
 
 ## Regenerating
 
@@ -66,4 +66,6 @@ Output: 16-bit mono WAV.
 python3 tools/ferrosintesis-samples/prepare.py --only=kawai
 ```
 
-Pure stdlib (plain WAV, no ffmpeg).
+Python's stdlib handles WAV decoding and DSP. The recipe requires
+`ffmpeg 8.1.1` on `PATH` to encode the final FLAC bank; the
+generator checks its libavformat pin.

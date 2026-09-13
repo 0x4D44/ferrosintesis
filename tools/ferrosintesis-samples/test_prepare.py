@@ -5386,6 +5386,40 @@ class SteinwayOutputInventoryTest(unittest.TestCase):
             write_output.assert_not_called()
 
 
+class KawaiPackagedDocumentContractTest(unittest.TestCase):
+    """MM-BUG-CRU-00051: Kawai docs follow the live packaged bank and publisher."""
+
+    def test_docs_match_filesystem_container_and_encoder_prerequisites(self):
+        sample_dir = pathlib.Path(
+            prepare.sample_output_path(next(iter(prepare.KAWAI_SOURCES)))
+        ).parent
+        samples = [
+            path
+            for path in sample_dir.iterdir()
+            if path.is_file() and path.suffix in {".wav", ".flac"}
+        ]
+        suffixes = {path.suffix for path in samples}
+        self.assertTrue(samples)
+        self.assertEqual(suffixes, {prepare.PACKAGED_EXT})
+        container = next(iter(suffixes)).lstrip(".").upper()
+
+        crate = sample_dir.parent
+        documents = {
+            name: (crate / name).read_text(encoding="utf-8")
+            for name in ("README.md", "PROVENANCE.md")
+        }
+        for name, text in documents.items():
+            with self.subTest(document=name):
+                self.assertIn(container, text)
+                self.assertIn("--only=kawai", text)
+                self.assertRegex(text.lower(), r"ffmpeg.{0,100}path")
+
+        provenance = documents["PROVENANCE.md"]
+        self.assertIn("16-bit mono 44.1 kHz PCM stored losslessly in FLAC", provenance)
+        self.assertNotIn("Output: 16-bit mono WAV.", provenance)
+        self.assertNotIn("Pure stdlib (plain WAV, no ffmpeg)", provenance)
+
+
 class KawaiOutputInventoryTest(unittest.TestCase):
     """MM-BUG-KILN-00163: rebakes must reject retired Kawai outputs."""
 

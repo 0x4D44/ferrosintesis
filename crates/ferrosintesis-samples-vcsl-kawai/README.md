@@ -13,3 +13,5 @@ trap) are in `PROVENANCE.md`. Licence: CC0 1.0 (public domain); `NOTICE` carries
 courtesy credit to VCSL / Sam Gossner.
 
 Regenerate the FLACs with `python3 tools/ferrosintesis-samples/prepare.py --only=kawai`.
+The recipe requires `ffmpeg 8.1.1` on `PATH` to encode the packaged FLAC bank; the
+generator checks its libavformat pin.

@@ -4791,28 +4791,32 @@ def _bake_bagpipe(src):
     with open(os.path.join(src, "bagpipe.sfz"), encoding="utf-8",
               errors="replace") as f:
         loops = parse_sfz_loops(f.read())
+    logical_names = tuple(sorted(BAGPIPE_SOURCES))
+    output_dir = os.path.dirname(sample_output_path(logical_names[0]))
     rows = []
-    for fn, member in sorted(BAGPIPE_SOURCES.items()):
-        x, sr = read_wav(os.path.join(src, fn))
-        ls, _le = loops[os.path.basename(member)]
-        if sr != OUT_SR:
-            ls = int(ls * OUT_SR / sr)
-            x = resample(x, sr, OUT_SR)
-            sr = OUT_SR
-        note = next(p for p in fn[:-4].split("_")
-                    if p[0] in "ABCDEFG" and p[-1].isdigit())
-        nominal = NOTE_HZ[note]
-        # measure f0 from the steady loop region with a tight +/-2 semitone
-        # window (source is 30-50 cents flat) — never wide enough to lock onto a
-        # harmonic (a single chanter range can't: F4's 2nd harmonic < G5's f0)
-        f0, conf = measure_f0(x[ls:], sr, nominal * 2 ** (-2 / 12),
-                              nominal * 2 ** (2 / 12))
-        target_s = BAGPIPE_LOOP_S[fn.split("_")[0]]
-        seg, wrap_db = extract_loop(x, sr, ls, f0, target_s,
-                                    max_wrap_db=BAGPIPE_MAX_WRAP_DB)
-        write_wav_mono(sample_output_path(fn), seg, sr)
-        rows.append((fn, f0, f0, nominal, 1200 * math.log2(f0 / nominal),
-                     wrap_db, len(seg) / sr))
+    with tempfile.TemporaryDirectory(prefix=".bagpipe-bank-") as staging:
+        for fn, member in sorted(BAGPIPE_SOURCES.items()):
+            x, sr = read_wav(os.path.join(src, fn))
+            ls, _le = loops[os.path.basename(member)]
+            if sr != OUT_SR:
+                ls = int(ls * OUT_SR / sr)
+                x = resample(x, sr, OUT_SR)
+                sr = OUT_SR
+            note = next(p for p in fn[:-4].split("_")
+                        if p[0] in "ABCDEFG" and p[-1].isdigit())
+            nominal = NOTE_HZ[note]
+            # measure f0 from the steady loop region with a tight +/-2 semitone
+            # window (source is 30-50 cents flat) — never wide enough to lock onto a
+            # harmonic (a single chanter range can't: F4's 2nd harmonic < G5's f0)
+            f0, conf = measure_f0(x[ls:], sr, nominal * 2 ** (-2 / 12),
+                                  nominal * 2 ** (2 / 12))
+            target_s = BAGPIPE_LOOP_S[fn.split("_")[0]]
+            seg, wrap_db = extract_loop(x, sr, ls, f0, target_s,
+                                        max_wrap_db=BAGPIPE_MAX_WRAP_DB)
+            write_wav_mono(os.path.join(staging, fn), seg, sr)
+            rows.append((fn, f0, f0, nominal, 1200 * math.log2(f0 / nominal),
+                         wrap_db, len(seg) / sr))
+        _publish_staged_flac_bank(staging, output_dir, logical_names, "bagpipe")
     return rows
 
 
@@ -5549,25 +5553,28 @@ def _bake_honkytonk(src):
     out_dir = os.path.join(REPO_ROOT, "crates",
                            "ferrosintesis-samples-honkytonk", "samples")
     os.makedirs(out_dir, exist_ok=True)
+    logical_names = tuple(f"honkytonk_{n}.wav" for n in HONKYTONK_NOTES)
     rows = []
-    with tempfile.TemporaryDirectory(prefix="honkytonk-decode-") as decode_dir:
-        for n in HONKYTONK_NOTES:
-            flac = os.path.join(src, f"htsrc_{n}.flac")
-            # The source FLAC cache is shared, but each bake must own its decoded WAV.
-            wav = os.path.join(decode_dir, f"htsrc_{n}.wav")
-            subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-                            "-i", flac, "-acodec", "pcm_s16le", wav], check=True)
-            x, wsr = read_wav(wav)
-            if wsr != OUT_SR:
-                x = resample(x, wsr, OUT_SR)
-                wsr = OUT_SR
-            seg = trim_to_onset(x, wsr, 1.5, 0.6)
-            nominal = NOTE_HZ[n]
-            f0, conf = measure_f0(seg, wsr, nominal * 0.8, nominal * 1.4)
-            cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
-            out_name = f"honkytonk_{n}.wav"
-            write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
-            rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+    with tempfile.TemporaryDirectory(prefix=".honkytonk-bank-") as staging:
+        with tempfile.TemporaryDirectory(prefix="honkytonk-decode-") as decode_dir:
+            for n in HONKYTONK_NOTES:
+                flac = os.path.join(src, f"htsrc_{n}.flac")
+                # The source FLAC cache is shared, but each bake must own its decoded WAV.
+                wav = os.path.join(decode_dir, f"htsrc_{n}.wav")
+                subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                                "-i", flac, "-acodec", "pcm_s16le", wav], check=True)
+                x, wsr = read_wav(wav)
+                if wsr != OUT_SR:
+                    x = resample(x, wsr, OUT_SR)
+                    wsr = OUT_SR
+                seg = trim_to_onset(x, wsr, 1.5, 0.6)
+                nominal = NOTE_HZ[n]
+                f0, conf = measure_f0(seg, wsr, nominal * 0.8, nominal * 1.4)
+                cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+                out_name = f"honkytonk_{n}.wav"
+                write_wav_mono(os.path.join(staging, out_name), seg, wsr)
+                rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+        _publish_staged_flac_bank(staging, out_dir, logical_names, "honkytonk")
     return rows
 
 
@@ -6402,14 +6409,26 @@ def _bake_gong_bank():
             expected,
             output_dir=os.path.join(REPO_ROOT, "crates", package, "samples"))
     rows = []
-    for out_name, (src_fn, package, end_fade_s) in sorted(LOCAL_SOURCES.items()):
-        x, sr = read_wav(os.path.join(GONG_SRC, src_fn))
-        x = resample(x, sr, OUT_SR)
-        sr = OUT_SR
-        seg = trim_lead_and_ring(x, sr, PRE_S, end_fade_s)
-        output = os.path.join(REPO_ROOT, "crates", package, "samples", out_name)
-        write_wav_mono(output, seg, sr)
-        rows.append((out_name, None, None, None, None, None, len(seg) / sr))
+    with tempfile.TemporaryDirectory(prefix=".gong-bank-") as staging_root:
+        staging_dirs = {}
+        for package in expected_by_package:
+            staging = os.path.join(staging_root, package)
+            os.makedirs(staging)
+            staging_dirs[package] = staging
+        for out_name, (src_fn, package, end_fade_s) in sorted(LOCAL_SOURCES.items()):
+            x, sr = read_wav(os.path.join(GONG_SRC, src_fn))
+            x = resample(x, sr, OUT_SR)
+            sr = OUT_SR
+            seg = trim_lead_and_ring(x, sr, PRE_S, end_fade_s)
+            write_wav_mono(os.path.join(staging_dirs[package], out_name), seg, sr)
+            rows.append((out_name, None, None, None, None, None, len(seg) / sr))
+        for package, expected in sorted(expected_by_package.items()):
+            _publish_staged_flac_bank(
+                staging_dirs[package],
+                os.path.join(REPO_ROOT, "crates", package, "samples"),
+                tuple(sorted(expected)),
+                f"gong-{package}",
+            )
     return rows
 
 

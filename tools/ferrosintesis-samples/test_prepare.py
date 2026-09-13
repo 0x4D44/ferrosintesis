@@ -4663,6 +4663,7 @@ class HonkytonkConcurrentExtractionTest(unittest.TestCase):
                 ),
                 mock.patch.object(prepare, "measure_f0", return_value=(440.0, 1.0)),
                 mock.patch.object(prepare, "write_wav_mono"),
+                mock.patch.object(prepare, "_publish_staged_flac_bank"),
                 mock.patch.object(prepare, "_validate_generated_output_inventory"),
             ):
                 prepare._bake_honkytonk(src)
@@ -7471,6 +7472,152 @@ class GongRegenerationWorkflowTest(unittest.TestCase):
                 payload = pathlib.Path(os.path.join(isolated_sample_dir, name)).read_bytes()
                 self.assertNotEqual(payload, before[name], name)
                 self.assertEqual(payload[:4], b"fLaC", name)
+
+
+class LocalWholeBankAtomicityTest(unittest.TestCase):
+    """MM-BUG-CRU-00070: local multi-file bakes publish all-or-nothing."""
+
+    def setUp(self):
+        prepare._PENDING_BANK_DIRS.clear()
+
+    def tearDown(self):
+        prepare._PENDING_BANK_DIRS.clear()
+
+    @staticmethod
+    def snapshot(directory):
+        return {
+            name: pathlib.Path(directory, name).read_bytes()
+            for name in os.listdir(directory)
+        }
+
+    @staticmethod
+    def old_bank(directory, names):
+        os.makedirs(directory)
+        for name in names:
+            pathlib.Path(directory, prepare.packaged_name(name)).write_bytes(
+                f"old bank: {name}".encode("ascii")
+            )
+
+    def test_honkytonk_late_failure_never_touches_the_previous_bank(self):
+        with tempfile.TemporaryDirectory() as root:
+            repo_root = os.path.join(root, "repo")
+            src = os.path.join(root, "honkytonk-cache")
+            sample_dir = os.path.join(
+                repo_root, "crates", "ferrosintesis-samples-honkytonk", "samples"
+            )
+            os.makedirs(src)
+            names = ("honkytonk_C2.wav", "honkytonk_C3.wav")
+            self.old_bank(sample_dir, names)
+            before = self.snapshot(sample_dir)
+            calls = 0
+
+            def fake_decode(command, check):
+                pathlib.Path(command[-1]).write_bytes(b"decoded")
+
+            def fail_on_second_read(_path):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError("late honky-tonk decode")
+                return [0.0, 0.25], prepare.OUT_SR
+
+            with (
+                mock.patch.object(prepare, "REPO_ROOT", repo_root),
+                mock.patch.object(prepare, "HONKYTONK_NOTES", ("C2", "C3")),
+                mock.patch.object(prepare, "ensure_archive_sources"),
+                mock.patch.object(
+                    prepare.subprocess, "run", side_effect=fake_decode
+                ),
+                mock.patch.object(
+                    prepare, "read_wav", side_effect=fail_on_second_read
+                ),
+                mock.patch.object(
+                    prepare, "trim_to_onset", return_value=[0.0, 0.25]
+                ),
+                mock.patch.object(prepare, "measure_f0", return_value=(440.0, 1.0)),
+            ):
+                with self.assertRaisesRegex(OSError, "late honky-tonk decode"):
+                    prepare._bake_honkytonk(src)
+
+            self.assertEqual(self.snapshot(sample_dir), before)
+
+    def test_bagpipe_late_failure_never_touches_the_previous_bank(self):
+        with tempfile.TemporaryDirectory() as root:
+            repo_root = os.path.join(root, "repo")
+            src = os.path.join(root, "bagpipe-cache")
+            sample_dir = os.path.join(
+                repo_root, "crates", "ferrosintesis-samples-orchestral", "samples"
+            )
+            os.makedirs(src)
+            pathlib.Path(src, "bagpipe.sfz").write_text("fixture", encoding="utf-8")
+            sources = {
+                "drone_G2.wav": "members/drone.wav",
+                "chanter_F4.wav": "members/F4.wav",
+            }
+            self.old_bank(sample_dir, tuple(sources))
+            before = self.snapshot(sample_dir)
+            loops = {"drone.wav": (0, 4), "F4.wav": (0, 4)}
+            calls = 0
+
+            def fail_on_second_read(_path):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError("late bagpipe decode")
+                return [0.0, 0.25], prepare.OUT_SR
+
+            with (
+                mock.patch.object(prepare, "REPO_ROOT", repo_root),
+                mock.patch.object(prepare, "BAGPIPE_SOURCES", sources),
+                mock.patch.object(prepare, "parse_sfz_loops", return_value=loops),
+                mock.patch.object(prepare, "read_wav", side_effect=fail_on_second_read),
+                mock.patch.object(prepare, "measure_f0", return_value=(440.0, 1.0)),
+                mock.patch.object(
+                    prepare, "extract_loop", return_value=([0.0, 0.25], -40.0)
+                ),
+            ):
+                with self.assertRaisesRegex(OSError, "late bagpipe decode"):
+                    prepare._bake_bagpipe(src)
+
+            self.assertEqual(self.snapshot(sample_dir), before)
+
+    def test_gong_late_failure_never_touches_the_previous_bank(self):
+        with tempfile.TemporaryDirectory() as root:
+            repo_root = os.path.join(root, "repo")
+            gong_src = os.path.join(root, "gong-src")
+            sample_dir = os.path.join(
+                repo_root, "crates", "ferrosintesis-samples-gong", "samples"
+            )
+            os.makedirs(gong_src)
+            sources = {
+                "gong_first.wav": ("first.wav", "ferrosintesis-samples-gong", 0.3),
+                "gong_second.wav": ("second.wav", "ferrosintesis-samples-gong", 0.3),
+            }
+            self.old_bank(sample_dir, tuple(sources))
+            before = self.snapshot(sample_dir)
+            calls = 0
+
+            def fail_on_second_read(_path):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError("late gong decode")
+                return [0.0, 0.25], prepare.OUT_SR
+
+            with (
+                mock.patch.object(prepare, "REPO_ROOT", repo_root),
+                mock.patch.object(prepare, "GONG_SRC", gong_src),
+                mock.patch.object(prepare, "LOCAL_SOURCES", sources),
+                mock.patch.object(prepare, "read_wav", side_effect=fail_on_second_read),
+                mock.patch.object(prepare, "resample", side_effect=lambda x, *_: x),
+                mock.patch.object(
+                    prepare, "trim_lead_and_ring", return_value=[0.0, 0.25]
+                ),
+            ):
+                with self.assertRaisesRegex(OSError, "late gong decode"):
+                    prepare._bake_gong_bank()
+
+            self.assertEqual(self.snapshot(sample_dir), before)
 
 
 class BottleMeasuredRootMetadataTest(unittest.TestCase):

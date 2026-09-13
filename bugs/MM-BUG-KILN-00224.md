@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00224 — Core sample crate has no safe complete documented regeneration path
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** core sample crate / regeneration workflow
 - **Raised:** 2026-08-16T14:46:46Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T205807Z-341dd32e
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00224-run-verify-20260913T205807Z-341dd32e
-- **Owner base:** 44da704c98638a87c3b0a5b3adddfb9c28d2a07c
-- **Owner fingerprint:** sha256:de29fd7a7d2c41d5f2cd35a8f3ae9f10306ef56563d5cdfc39dfa8c674609d9e
-- **Owner since:** 2026-09-13T20:58:07Z
-- **Owner until:** 2026-09-13T22:58:07Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T14:46:46Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:13:15Z, deltic:auto role=fix run=fix-20260913T155527Z-2efca14b branch=task/bug-MM-BUG-KILN-00224-run-fix-20260913T155527Z-2efca14b code=fcc9d1080d357ab2d8533b5381bd6f0adc52e2ed gate=manual)
+- **State history:** Open (2026-08-16T14:46:46Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:13:15Z, deltic:auto role=fix run=fix-20260913T155527Z-2efca14b branch=task/bug-MM-BUG-KILN-00224-run-fix-20260913T155527Z-2efca14b code=fcc9d1080d357ab2d8533b5381bd6f0adc52e2ed gate=manual) -> Closed (2026-09-13T21:00:07Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: documented core refresh reproduces lib.rs byte-for-byte and gen_crate_lib refuses core; generator still deletes the drum-kit API, split to MM-BUG-CRU-00067)
 
 ## Observation
 
@@ -28,5 +28,15 @@ The core provenance recipe names only python3 tools/ferrosintesis-samples/prepar
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `fcc9d108`) by an agent other than the fixer.
+
+**Original observation re-run.** Running the documented `regen_samples_table.py` step on a TEMP copy of the core crate reproduces the committed `lib.rs` byte-for-byte, keeping the aliases and `PIANO_SINGLE_TAKE_CELLS`; `gen_crate_lib.py` on a second copy refuses with exit 1 and leaves the file intact.
+
+**Fails-before (method B).** Removing the refusal fails `test_generic_generator_refuses_core_custom_api` (SystemExit not raised); restoring the WAV-only filter errors the refresh test. Restored; both pass on HEAD.
+
+**Residual split to MM-BUG-CRU-00067.** The record also asked that the generic generator reject custom crates. The refusal is keyed on one core-only token, and running `gen_crate_lib.py` on a TEMP copy of `-drumkit` exits 0 and silently removes its hand-written bank API.
 
 ## Notes

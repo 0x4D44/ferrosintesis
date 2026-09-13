@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00197 — Sample-crate rustdoc headers carry a dangling 'ferrosintesis.' sentence fragment left by the legal-header sync
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** samples crates / published rustdoc
 - **Raised:** 2026-08-14T08:07:50Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T195421Z-aff8fab5
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00197-run-verify-20260913T195421Z-aff8fab5
-- **Owner base:** b1e009d4aea03d87da81c0e38ae35528b66fecfa
-- **Owner fingerprint:** sha256:58c1749807e7537b88ea51399fb697712ee9017b0cb8759773809d5030cff765
-- **Owner since:** 2026-09-13T19:54:21Z
-- **Owner until:** 2026-09-13T21:54:21Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T08:07:50Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T15:56:06Z, deltic:auto role=fix run=fix-20260815T155002Z-p29528-n450830600-c1 branch=task/bug-MM-BUG-KILN-00197-run-fix-20260815T155002Z-p29528-n450830600-c1 code=02fd273 gate=manual)
+- **State history:** Open (2026-08-14T08:07:50Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T15:56:06Z, deltic:auto role=fix run=fix-20260815T155002Z-p29528-n450830600-c1 branch=task/bug-MM-BUG-KILN-00197-run-fix-20260815T155002Z-p29528-n450830600-c1 code=02fd273 gate=manual) -> Closed (2026-09-13T21:01:16Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: no sample-crate header carries the dangling ferrosintesis fragment; reinserting it fails the header-parity test)
 
 ## Observation
 
@@ -73,6 +73,16 @@ and avoid the stale phrases asserted by
 "`ferrosintesis`. " prefix stays part of the generated-header wrap only — that removes
 the trap for future hand-maintained headers at the cost of touching generator + oracle
 + 25 headers.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `02fd2738`, with later `gen_crate_lib` header refinements) by an agent other than the fixer.
+
+**Original observation re-derived.** No sample crate `lib.rs` has a `` //! `ferrosintesis`. Licence/provenance `` line; in all 24 headers the pointer is a standalone "Licence/provenance: see ..." sentence after a complete sentence. `legal_doc_line` returns a complete sentence and the generator ends the preceding line with "`ferrosintesis`.".
+
+**Fails-before (method B).** Putting the fragment back on the sax legal line fails `GeneratedCrateDocHeaderTest.test_every_sample_crate_header_matches_the_generator`. Restored; passes on HEAD. That test was already green when the bug was raised; the root fix is the generator no longer emitting the continuation fragment. A separate, hand-inserted dangling line above the legal line would still pass, but the generator no longer produces one.
+
+**Gates.** Causes no gate failure; trunk `8b6a6f86` is red for other recorded reasons.
 
 ## Notes
 

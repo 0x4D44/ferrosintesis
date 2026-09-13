@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00206 — Sample-crate Rust generator writes directly over lib.rs
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample crate generation / output durability
 - **Raised:** 2026-08-16T08:41:07Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T205340Z-bcabef12
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00206-run-verify-20260913T205340Z-bcabef12
-- **Owner base:** 4999b06948267942cbd3f553434f7b84511465aa
-- **Owner fingerprint:** sha256:0df19c36e9b909a58a4e311133a7b92b5044d662dc75d47e5f844560786a247d
-- **Owner since:** 2026-09-13T20:53:40Z
-- **Owner until:** 2026-09-13T22:53:40Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T08:41:07Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T15:11:08Z, deltic:auto role=fix run=fix-20260913T150200Z-99fda007 branch=task/bug-MM-BUG-KILN-00206-run-fix-20260913T150200Z-99fda007 code=9a28305b82c66689effa1f06abd0677a0ebad0ea gate=manual)
+- **State history:** Open (2026-08-16T08:41:07Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T15:11:08Z, deltic:auto role=fix run=fix-20260913T150200Z-99fda007 branch=task/bug-MM-BUG-KILN-00206-run-fix-20260913T150200Z-99fda007 code=9a28305b82c66689effa1f06abd0677a0ebad0ea gate=manual) -> Closed (2026-09-13T21:00:07Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: writing straight over lib.rs again fails both write-failure and rustfmt-failure regressions)
 
 ## Observation
 
@@ -59,6 +59,16 @@ exploratory harness ran. Estimated effort: Small.
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `9a28305b`) by an agent other than the fixer.
+
+Injected write and rustfmt failures leave the existing `lib.rs` byte-identical and remove the temp file.
+
+**Fails-before (method B).** Making the generator write directly over `lib.rs` fails `test_write_failure_preserves_existing_lib_and_cleans_temp` (`b'' != b'previous lib bytes...'`) and `test_rustfmt_failure_preserves_existing_lib_and_cleans_temp`. Restored; both pass on HEAD. A hard kill can still leave a stray sibling temp file, but the tracked file survives.
+
+**Gates.** Causes no gate failure; trunk `8b6a6f86` is red for other recorded reasons.
 
 ## Notes
 

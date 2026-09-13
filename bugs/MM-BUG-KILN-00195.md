@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00195 — B1 upright crate-side asset validator never checks fmt/data/pad, so a consumer-panicking asset publishes green
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** samples-b1-upright / oracles
 - **Raised:** 2026-08-14T07:06:13Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T204903Z-ce086c56
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00195-run-verify-20260913T204903Z-ce086c56
-- **Owner base:** e539dbb574a56cf71e41f9e0b39cc2a7c2773c49
-- **Owner fingerprint:** sha256:852e1892e747738c8c2070daeaffcf017eafed91593bff0703cb731d83c3b855
-- **Owner since:** 2026-09-13T20:49:03Z
-- **Owner until:** 2026-09-13T22:49:03Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T07:06:13Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T03:52:56Z, deltic:auto role=fix run=fix-20260815T034422Z-p27896-n097946200-c1 branch=task/bug-MM-BUG-KILN-00195-run-fix-20260815T034422Z-p27896-n097946200-c1 code=6a0bf6c133000da3b93422df16305306ebebb562 gate=manual)
+- **State history:** Open (2026-08-14T07:06:13Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T03:52:56Z, deltic:auto role=fix run=fix-20260815T034422Z-p27896-n097946200-c1 branch=task/bug-MM-BUG-KILN-00195-run-fix-20260815T034422Z-p27896-n097946200-c1 code=6a0bf6c133000da3b93422df16305306ebebb562 gate=manual) -> Closed (2026-09-13T21:00:07Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: disabling the fmt check reddens both the Rust and Python defeat suites)
 
 ## Observation
 
@@ -72,6 +72,16 @@ frame count the tail entry must fall inside, zero pad bytes — or, better, deri
 from one shared strict predicate so they cannot drift apart again. Prove it the
 KILN-00073 way: mutate one embedded WAV in each defeated direction and watch the
 strengthened crate test go red before trusting it.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `6a0bf6c1`) by an agent other than the fixer.
+
+The crate-side defeat suite mutates a real packaged B1 asset in every direction the record names, and each mutation is rejected.
+
+**Fails-before (method B), both sides.** Disabling the `fmt ` rejection in `parse_b1_strict` panics `strict_validator_rejects_each_defeat` ("strict validator accepted a defeated asset: fmt says stereo"); disabling it in `regen_samples_table` fails five `B1StrictPredicateTest` subtests (stereo, 8-bit, 22.05 kHz, non-PCM, truncated). Restored; `cargo test -p ferrosintesis-samples-b1-upright` 3/3 and the Python tests pass; that crate's clippy is clean.
+
+**Gates.** Causes no gate failure; trunk `8b6a6f86` is red for other recorded reasons.
 
 ## Notes
 

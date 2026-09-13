@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00207 — Selective bass rebakes no longer validate the complete shared crate
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** electric-bass sample generation / shared-crate inventory
 - **Raised:** 2026-08-16T09:39:30Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T205525Z-47203da9
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00207-run-verify-20260913T205525Z-47203da9
-- **Owner base:** 57e3b1ae456e6b0ae4a683651db8f949fbd66c04
-- **Owner fingerprint:** sha256:b523ba6ab2f1554bf6b1e494aa28b99b5685b7382ac296d9034a27fc1c8f1c89
-- **Owner since:** 2026-09-13T20:55:25Z
-- **Owner until:** 2026-09-13T22:55:25Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T09:39:30Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:51:49Z, deltic:auto role=fix run=fix-20260913T044356Z-c69e05a7 branch=task/bug-MM-BUG-KILN-00207-run-fix-20260913T044356Z-c69e05a7 code=2c65490ffa7114931842ecd19b06b765c9de0491 gate=manual)
+- **State history:** Open (2026-08-16T09:39:30Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:51:49Z, deltic:auto role=fix run=fix-20260913T044356Z-c69e05a7 branch=task/bug-MM-BUG-KILN-00207-run-fix-20260913T044356Z-c69e05a7 code=2c65490ffa7114931842ecd19b06b765c9de0491 gate=manual) -> Closed (2026-09-13T21:00:07Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: pre-fix loop fails both stale-sibling bass tests; this landing turned the bake-inventory Rust oracle red, split to MM-BUG-CRU-00065)
 
 ## Observation
 
@@ -47,6 +47,16 @@ defect is the live false-negative on a later removal or rename.
 ## Fix
 
 Unfixed. Raised for the fix-open-bugs loop; this review did not change code.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `2c65490f`) by an agent other than the fixer.
+
+**Original observation re-run.** Selecting fingerbass rejects a stale pickbass sibling, and the reverse, before any fetch.
+
+**Fails-before (method B).** Restoring the pre-fix per-family loop in `main()` fails `test_finger_selection_rejects_stale_pick_sibling` and `test_pick_selection_rejects_stale_finger_sibling` ("inventory must be checked before fetching"). Restored; both pass on HEAD, and the KILN-00182/00191 per-family sweep still passes.
+
+**Residual split to MM-BUG-CRU-00065 (Must).** Under the same mutation, `inventory::tests::every_generated_bake_output_family_is_inventory_validated` goes from FAILED to ok: this landing regrouped `main()`'s validation without updating the Rust oracle that pins the old literal text, turning the required `cargo test -p ferrosintesis` step red.
 
 ## Notes
 

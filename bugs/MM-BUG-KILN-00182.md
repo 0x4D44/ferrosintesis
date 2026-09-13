@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00182 — Grand regeneration silently retains obsolete packaged WAVs
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample generation / grand output inventory
 - **Raised:** 2026-08-13T17:58:21Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T204248Z-bf2dbb12
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00182-run-verify-20260913T204248Z-bf2dbb12
-- **Owner base:** 5c82da9a12b7e426cf76cbc3cadb9185c9a4c1bc
-- **Owner fingerprint:** sha256:fcd46869059c7014692bd4ee498c54fe15e2cd3bd148b5d05d9598adce7b41cd
-- **Owner since:** 2026-09-13T20:42:48Z
-- **Owner until:** 2026-09-13T22:42:48Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T17:58:21Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T13:05:03Z, deltic:auto role=fix run=fix-20260815T120824Z-p31472-n188684700-c1 branch=task/bug-MM-BUG-KILN-00182-run-fix-20260815T120824Z-p31472-n188684700-c1 code=291ab66 gate=manual)
+- **State history:** Open (2026-08-13T17:58:21Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T13:05:03Z, deltic:auto role=fix run=fix-20260815T120824Z-p31472-n188684700-c1 branch=task/bug-MM-BUG-KILN-00182-run-fix-20260815T120824Z-p31472-n188684700-c1 code=291ab66 gate=manual) -> Closed (2026-09-13T21:00:07Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: restoring the hand-written family list fails the per-family preflight sweep; its Rust source-scan oracle is red from KILN-00207, split to MM-BUG-CRU-00065)
 
 ## Observation
 
@@ -28,5 +28,15 @@ Source-level reproduction: leave or introduce a valid extra grand_*.wav under cr
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `291ab66f`; loop later reshaped by `2c65490f`) by an agent other than the fixer.
+
+**Original observation re-run.** Driving `main()` per family proves selecting `grand` (and every other source-backed family) validates its outputs before any fetch or write.
+
+**Fails-before (method B).** Restoring the old steinwayb/kawai/headroom/bass hand list fails the per-family sweep, e.g. "(family='bassoon') wrote bassoon_A#0_f.wav before validating the output set". Restored; `SelectedFamilyPreflightTest` passes on HEAD.
+
+**Gate note.** The Rust half of this fix, `inventory::tests::every_generated_bake_output_family_is_inventory_validated`, is red on trunk because it pins the literal loop text that `2c65490f` (KILN-00207) correctly regrouped. Restoring the old loop turns it green. Tracked as MM-BUG-CRU-00065; this fix's behaviour is intact.
 
 ## Notes

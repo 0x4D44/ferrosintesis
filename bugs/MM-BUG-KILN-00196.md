@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00196 — b1-upright packages samples/** but its inventory oracle counts only lowercase top-level .wav, so junk ships unvetted
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** samples-b1-upright / packaging
 - **Raised:** 2026-08-14T07:06:14Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T205130Z-4674aaea
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00196-run-verify-20260913T205130Z-4674aaea
-- **Owner base:** ac55039493ee1c4c5b29889c69d6458f10788bea
-- **Owner fingerprint:** sha256:e43fb0299b043a3857efa2dd4aa84507514658c5d0e942daf0296e2331be86e4
-- **Owner since:** 2026-09-13T20:51:30Z
-- **Owner until:** 2026-09-13T22:51:30Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T07:06:14Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T15:49:24Z, deltic:auto role=fix run=fix-20260815T154441Z-p20220-n322888900-c1 branch=task/bug-MM-BUG-KILN-00196-run-fix-20260815T154441Z-p20220-n322888900-c1 code=5ca3a8f gate=manual)
+- **State history:** Open (2026-08-14T07:06:14Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-08-15T15:49:24Z, deltic:auto role=fix run=fix-20260815T154441Z-p20220-n322888900-c1 branch=task/bug-MM-BUG-KILN-00196-run-fix-20260815T154441Z-p20220-n322888900-c1 code=5ca3a8f gate=manual) -> Closed (2026-09-13T21:00:07Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: planted junk.txt, EXTRA.WAV and a raw/ subdirectory in the gong crate were each named by the oracle)
 
 ## Observation
 
@@ -64,6 +64,16 @@ embedded set (fail on anything else) — or narrow the manifest include to
 `samples/*.wav`. Either closes the set difference; doing both is cheapest to reason
 about. Prove it by dropping a `samples/junk.txt` into a scratch copy and watching the
 strengthened test go red.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `5ca3a8fe`, later extended for FLAC) by an agent other than the fixer.
+
+**Adversarial check (as the record asks).** Planting `junk.txt`, `EXTRA.WAV` and a `raw/` subdirectory under `crates/ferrosintesis-samples-gong/samples/` makes `inventory::tests::packaged_sample_directories_hold_only_top_level_lowercase_wavs` fail, naming all three. Removed; the tree is clean and the oracle passes.
+
+One workspace sweep now enumerates what every sample crate's `samples/**` packages, not only what it embeds.
+
+**Gates.** Causes no gate failure; trunk `8b6a6f86` is red for other recorded reasons.
 
 ## Notes
 

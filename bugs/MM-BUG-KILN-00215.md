@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00215 — Two dulcimer onsets jump from silence
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** CC-BY dulcimer samples / onset continuity
 - **Raised:** 2026-08-16T12:38:51Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T205718Z-51171bcd
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00215-run-verify-20260913T205718Z-51171bcd
-- **Owner base:** a6a04b3efe6f38423a3a2f3f48d3a865f43e05c3
-- **Owner fingerprint:** sha256:7e2808e1d2fdf714e9b3cce95edf4fb163780cde03b9f3065d3a0ac57a2dd04f
-- **Owner since:** 2026-09-13T20:57:18Z
-- **Owner until:** 2026-09-13T22:57:18Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T12:38:51Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T05:00:53Z, deltic:auto role=fix run=fix-20260913T045256Z-6fa24f72 branch=task/bug-MM-BUG-KILN-00215-run-fix-20260913T045256Z-6fa24f72 code=248076795ef6b043001f73dfe7d70936a80be737 gate=manual)
+- **State history:** Open (2026-08-16T12:38:51Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T05:00:53Z, deltic:auto role=fix run=fix-20260913T045256Z-6fa24f72 branch=task/bug-MM-BUG-KILN-00215-run-fix-20260913T045256Z-6fa24f72 code=248076795ef6b043001f73dfe7d70936a80be737 gate=manual) -> Closed (2026-09-13T21:00:07Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: dulcimer D5 and F#4 frame0 were -1272 and +2120 and are 0 now; a census found five more such one-shots, split to MM-BUG-CRU-00066)
 
 ## Observation
 
@@ -43,6 +43,16 @@ perception is unverified because this was a static review and ran no render.
 ## Fix
 
 Unfixed; raised only.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `24807679`) by an agent other than the fixer.
+
+**Original observation re-run.** Decoding the committed FLACs: before the fix `dulcimer_D5` frame0 = -1272 and `dulcimer_F#4` = +2120 (peak 29490), exactly as recorded, and the old 10 ms sweep predicate passed them; at HEAD both are 0.
+
+**Fails-before (method A).** The `24807679^` blobs fail `test_dulcimer_assets_enter_from_silence`'s own predicate (|frame0| <= 1 LSB). It passes on HEAD.
+
+**Residual split to MM-BUG-CRU-00066.** The new oracle covers only dulcimer, and the general sweep still lets a large attack mask a frame-zero step. A census of 1015 packaged one-shots found five more starting far from silence (headroom C4/F#3 pp, orchestral steel_E4, strings cellosolo A3/C4 f).
 
 ## Notes
 

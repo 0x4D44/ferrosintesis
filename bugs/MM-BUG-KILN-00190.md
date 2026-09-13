@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00190 — MuseScore sample regeneration rewrites the separate bottle bank
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** MuseScore sample package / regeneration scope
 - **Raised:** 2026-08-13T22:31:45Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T204611Z-e539bda7
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00190-run-verify-20260913T204611Z-e539bda7
-- **Owner base:** 25a14b4601b9355ecc00c4fde5bd6da86c9df30b
-- **Owner fingerprint:** sha256:308db0175143aa704b5a5cd8839870307e241f49ce82380d115642eeb4836591
-- **Owner since:** 2026-09-13T20:46:11Z
-- **Owner until:** 2026-09-13T22:46:11Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T22:31:45Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-08-15T15:34:36Z, deltic:auto role=fix run=fix-20260815T152809Z-p11220-n214089500-c1 branch=task/bug-MM-BUG-KILN-00190-run-fix-20260815T152809Z-p11220-n214089500-c1 code=1ceb2bc gate=manual)
+- **State history:** Open (2026-08-13T22:31:45Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-08-15T15:34:36Z, deltic:auto role=fix run=fix-20260815T152809Z-p11220-n214089500-c1 branch=task/bug-MM-BUG-KILN-00190-run-fix-20260815T152809Z-p11220-n214089500-c1 code=1ceb2bc gate=manual) -> Closed (2026-09-13T21:00:07Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: --only=bottle no longer bakes the loop; the old shared selector fails the dispatcher regression)
 
 ## Observation
 
@@ -28,5 +28,15 @@ Static review of crates/ferrosintesis-samples-musescore/PROVENANCE.md line 7 fou
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `1ceb2bc8`) by an agent other than the fixer.
+
+`_bake_selected_local_banks({"bottle"})` no longer bakes the loop; `{"bottleloop"}` does.
+
+**Fails-before (method B).** Setting the loop selector back to `"bottle"` fails `test_only_bottle_does_not_reach_the_separate_loop_crate` ("Expected 'bake_bottle_loop' to not have been called. Called 1 times."). Restored; the three `PackagedRecipeRoutingTest` regressions pass on HEAD, including the sweep that every documented `--only=` selector is supported.
+
+**Gates.** Causes no gate failure; trunk `8b6a6f86` is red for other recorded reasons.
 
 ## Notes

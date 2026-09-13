@@ -6,15 +6,15 @@
 - **Area:** orchestral2 banjo regeneration / required test gate
 - **Raised:** 2026-08-17T04:26:00Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T042001Z-467ac0e7
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00263-run-fix-20260913T042001Z-467ac0e7
+- **Owner base:** fdbc7826f1ff6559c629dd4f36b831191486ce76
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T04:20:01Z
+- **Owner until:** 2026-09-13T06:20:01Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

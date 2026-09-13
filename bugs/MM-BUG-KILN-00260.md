@@ -6,15 +6,15 @@
 - **Area:** MuseScore onset sample generation / failure atomicity
 - **Raised:** 2026-08-17T03:29:18Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T142332Z-e86c6e05
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00260-run-fix-20260913T142332Z-e86c6e05
+- **Owner base:** e938a4a2ada203afd666eac7962aaef838fd5e36
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T14:23:32Z
+- **Owner until:** 2026-09-13T16:23:32Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

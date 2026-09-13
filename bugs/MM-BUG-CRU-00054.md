@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00054 — Concurrent YDP regenerations race one shared manifest staging file
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** YDP sample generation / shared cache concurrency
 - **Raised:** 2026-08-20T15:51:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T152903Z-774f5e0c
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00054-run-fix-20260913T152903Z-774f5e0c
-- **Owner base:** c071c7e8ce14fd83fa2232d96acf728cc433ec18
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:29:03Z
-- **Owner until:** 2026-09-13T17:29:03Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T15:51:10Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-20T15:51:10Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:35:22Z, deltic:auto role=fix run=fix-20260913T152903Z-774f5e0c branch=task/bug-MM-BUG-CRU-00054-run-fix-20260913T152903Z-774f5e0c code=e60b130b978b1a553f033ea50f7b1a8eca11ad5d gate=manual)
 
 ## Observation
 

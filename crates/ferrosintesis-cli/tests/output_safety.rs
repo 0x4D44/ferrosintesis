@@ -161,3 +161,91 @@ fn exclusively_held_distinct_output_is_not_reported_as_an_input_alias() {
         "rejected command changed the held output"
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn read_shared_distinct_input_does_not_abort_render() {
+    use std::fs::OpenOptions;
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let dir = TestDir::new("read-shared-input");
+    let input = dir.join("score.mid");
+    let output = dir.join("score.wav");
+    fs::write(&input, SHORT_MIDI).expect("write MIDI fixture");
+    fs::write(&output, vec![b'P'; SHORT_MIDI.len()]).expect("write prior output");
+    let input_guard = OpenOptions::new()
+        .read(true)
+        .share_mode(1)
+        .open(&input)
+        .expect("hold input with ordinary read sharing");
+
+    let result = Command::new(env!("CARGO_BIN_EXE_ferrosintesis"))
+        .arg(&input)
+        .args(["-o"])
+        .arg(&output)
+        .args(["--tail", "0", "--no-samples", "-q"])
+        .output()
+        .expect("run ferrosintesis");
+
+    assert!(
+        result.status.success(),
+        "distinct output failed with a read-shared input: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(
+        fs::read(&output)
+            .expect("read rendered output")
+            .starts_with(b"RIFF"),
+        "output is not a WAV"
+    );
+    assert_eq!(
+        fs::read(&input).expect("read source after render"),
+        SHORT_MIDI,
+        "successful render changed its input"
+    );
+
+    drop(input_guard);
+}
+
+#[cfg(windows)]
+#[test]
+fn hard_link_alias_is_rejected_with_a_permissive_input_reader() {
+    use std::fs::OpenOptions;
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let dir = TestDir::new("hard-link-read-sharing");
+    let input = dir.join("score.mid");
+    let output = dir.join("alias.wav");
+    fs::write(&input, SHORT_MIDI).expect("write MIDI fixture");
+    fs::hard_link(&input, &output).expect("create hard link");
+    let input_guard = OpenOptions::new()
+        .read(true)
+        .share_mode(7)
+        .open(&input)
+        .expect("hold input with permissive sharing");
+
+    let result = Command::new(env!("CARGO_BIN_EXE_ferrosintesis"))
+        .arg(&input)
+        .args(["-o"])
+        .arg(&output)
+        .args(["--tail", "0", "--no-samples", "-q"])
+        .output()
+        .expect("run ferrosintesis");
+
+    assert!(
+        !result.status.success(),
+        "renderer unexpectedly replaced a hard-link alias"
+    );
+    assert!(
+        String::from_utf8_lossy(&result.stderr).contains("aliases the input"),
+        "stderr did not explain the alias rejection: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(
+        fs::read(&input).expect("read input after rejection"),
+        SHORT_MIDI,
+        "rejected command changed its input"
+    );
+
+    drop(input_guard);
+}

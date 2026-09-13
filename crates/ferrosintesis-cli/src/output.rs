@@ -7,7 +7,7 @@ use std::path::Path;
 // every unix host, which `-D warnings` promotes to a hard error and so failed the repo's
 // own clippy gate everywhere except Windows.
 #[cfg(windows)]
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 
 pub(crate) fn reject_input_alias(input: &Path, output: &Path) -> io::Result<()> {
     if paths_refer_to_same_file(input, output)? {
@@ -53,16 +53,22 @@ fn platform_same_file(input: &Path, output: &Path) -> io::Result<bool> {
 
     const ERROR_SHARING_VIOLATION: i32 = 32;
 
-    // Stable Rust does not expose Windows' volume/file-index identity. Hold the input
-    // with no sharing, then probe the output. A sharing violation is identity evidence
-    // only if it disappears after releasing our guard; a third-party exclusive handle
-    // can produce the same error for an unrelated output.
-    let input_guard = OpenOptions::new().read(true).share_mode(0).open(input)?;
-    match File::open(output) {
+    // Hold the input for reading while allowing other readers. A write-only probe then conflicts
+    // with this guard only when the output name resolves to the same file.
+    let input_guard = OpenOptions::new().read(true).share_mode(1).open(input)?;
+    let probe_output = || {
+        OpenOptions::new()
+            .write(true)
+            .create(false)
+            .truncate(false)
+            .share_mode(7)
+            .open(output)
+    };
+    match probe_output() {
         Ok(_) => Ok(false),
         Err(error) if error.raw_os_error() == Some(ERROR_SHARING_VIOLATION) => {
             drop(input_guard);
-            match File::open(output) {
+            match probe_output() {
                 Ok(_) => Ok(true),
                 Err(retry_error) => Err(retry_error),
             }

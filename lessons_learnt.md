@@ -12,6 +12,8 @@ belong in `CLAUDE.md`, not here.
 
 - 2026.09.13 — **CLI default oracles must parse the user-visible usage text beside each flag** (`render_profile.rs`).
   - Scanning module docs for values let swapped flags and missing help defaults pass.
+- 2026.09.13 — **Windows alias probes must never treat input sharing failure as distinct** (`cli/output.rs`).
+  - Allow readers on the input, then use a write-only output probe; only a post-guard retry proves aliasing.
 
 - 2026.09.13 — **Public sample summaries may delegate to packaged `PROVENANCE.md`** (`inventory.rs`).
 

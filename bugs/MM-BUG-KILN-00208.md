@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00208 — Bass family selector fetches the unselected source archive
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** electric-bass sample generation / selective fetch
 - **Raised:** 2026-08-16T09:39:37Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T151318Z-eb397982
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00208-run-fix-20260913T151318Z-eb397982
-- **Owner base:** 2cab4d0075b774949b89fe65e3b2c91470984e5a
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:13:18Z
-- **Owner until:** 2026-09-13T17:13:18Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T09:39:37Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T09:39:37Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:22:45Z, deltic:auto role=fix run=fix-20260913T151318Z-eb397982 branch=task/bug-MM-BUG-KILN-00208-run-fix-20260913T151318Z-eb397982 code=c8e00f53bb76609292179743f7d2a5f4aad20755 gate=manual)
 
 ## Observation
 

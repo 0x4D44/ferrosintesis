@@ -6,15 +6,15 @@
 - **Area:** core drum-kit sample crate / public package contract
 - **Raised:** 2026-08-17T11:39:51Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T183617Z-401f80e3
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00282-run-fix-20260913T183617Z-401f80e3
+- **Owner base:** cca859fbfb85165b6aed05ecdf55699ebf445ca3
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T18:36:17Z
+- **Owner until:** 2026-09-13T20:36:17Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

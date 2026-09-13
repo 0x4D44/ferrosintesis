@@ -668,12 +668,27 @@ fn decode_fixed(
         let p = match order {
             0 => 0,
             1 => out[i - 1],
-            2 => 2 * out[i - 1] - out[i - 2],
-            3 => 3 * out[i - 1] - 3 * out[i - 2] + out[i - 3],
-            4 => 4 * out[i - 1] - 6 * out[i - 2] + 4 * out[i - 3] - out[i - 4],
+            2 => out[i - 1]
+                .checked_mul(2)
+                .and_then(|value| value.checked_sub(out[i - 2]))
+                .ok_or("FLAC: FIXED predictor arithmetic overflow")?,
+            3 => out[i - 1]
+                .checked_mul(3)
+                .and_then(|value| value.checked_sub(out[i - 2].checked_mul(3)?))
+                .and_then(|value| value.checked_add(out[i - 3]))
+                .ok_or("FLAC: FIXED predictor arithmetic overflow")?,
+            4 => out[i - 1]
+                .checked_mul(4)
+                .and_then(|value| value.checked_sub(out[i - 2].checked_mul(6)?))
+                .and_then(|value| value.checked_add(out[i - 3].checked_mul(4)?))
+                .and_then(|value| value.checked_sub(out[i - 4]))
+                .ok_or("FLAC: FIXED predictor arithmetic overflow")?,
             _ => return Err("FLAC: invalid FIXED order"),
         };
-        out[i] += p;
+        let sample = out[i]
+            .checked_add(p)
+            .ok_or("FLAC: FIXED reconstruction arithmetic overflow")?;
+        out[i] = checked_sample_depth(sample, bit_depth)?;
     }
     Ok(())
 }
@@ -707,15 +722,43 @@ fn decode_lpc(reader: &mut BitReader, out: &mut [i64], bit_depth: u32, order: us
     decode_residual(reader, out, order)?;
 
     for i in order..out.len() {
-        // i64 accumulator: 16-bit samples against at most 32 coefficients of at
-        // most 15 bits cannot overflow it.
         let mut accumulator: i64 = 0;
         for (j, coefficient) in coefficients.iter().enumerate().take(order) {
-            accumulator += coefficient * out[i - 1 - j];
+            let product = coefficient
+                .checked_mul(out[i - 1 - j])
+                .ok_or("FLAC: LPC predictor multiplication overflow")?;
+            accumulator = accumulator
+                .checked_add(product)
+                .ok_or("FLAC: LPC predictor arithmetic overflow")?;
         }
-        out[i] += accumulator >> shift;
+        let sample = out[i]
+            .checked_add(accumulator >> shift)
+            .ok_or("FLAC: LPC reconstruction arithmetic overflow")?;
+        out[i] = checked_sample_depth(sample, bit_depth)?;
     }
     Ok(())
+}
+
+fn checked_sample_depth(sample: i64, bit_depth: u32) -> Result<i64> {
+    if !(1..=32).contains(&bit_depth) {
+        return Err("FLAC: invalid subframe bit depth");
+    }
+    let limit = 1i64 << (bit_depth - 1);
+    if sample < -limit || sample >= limit {
+        return Err("FLAC: reconstructed sample exceeds subframe bit depth");
+    }
+    Ok(sample)
+}
+
+fn unzigzag_residual(folded: u64) -> Result<i64> {
+    if folded > u64::from(u32::MAX) {
+        return Err("FLAC: residual exceeds signed 32-bit range");
+    }
+    if folded & 1 == 1 {
+        Ok(-((folded >> 1) as i64) - 1)
+    } else {
+        Ok((folded >> 1) as i64)
+    }
 }
 
 /// Decode the partitioned Rice residual into `out[predictor_order..]`.
@@ -752,7 +795,11 @@ fn decode_residual(reader: &mut BitReader, out: &mut [i64], predictor_order: usi
             // legal and means every sample in the partition is zero.
             let raw_bits = reader.read(5)?;
             for _ in 0..count {
-                out[index] = reader.read_signed(raw_bits)?;
+                let residual = reader.read_signed(raw_bits)?;
+                if residual < i64::from(i32::MIN) || residual > i64::from(i32::MAX) {
+                    return Err("FLAC: residual exceeds signed 32-bit range");
+                }
+                out[index] = residual;
                 index += 1;
             }
         } else {
@@ -761,11 +808,7 @@ fn decode_residual(reader: &mut BitReader, out: &mut [i64], predictor_order: usi
                 let remainder = reader.read(param)?;
                 let folded = (u64::from(quotient) << param) | u64::from(remainder);
                 // Zigzag: even -> positive, odd -> negative.
-                out[index] = if folded & 1 == 1 {
-                    -((folded >> 1) as i64) - 1
-                } else {
-                    (folded >> 1) as i64
-                };
+                out[index] = unzigzag_residual(folded)?;
                 index += 1;
             }
         }
@@ -793,6 +836,49 @@ mod tests {
         streaminfo[10..18].copy_from_slice(&packed.to_be_bytes());
         bytes.extend_from_slice(&streaminfo);
         bytes
+    }
+
+    struct BitWriter {
+        bytes: Vec<u8>,
+        bit: usize,
+    }
+
+    impl BitWriter {
+        fn new() -> Self {
+            Self {
+                bytes: Vec::new(),
+                bit: 0,
+            }
+        }
+
+        fn write(&mut self, value: u64, bits: u32) {
+            for shift in (0..bits).rev() {
+                if self.bit.is_multiple_of(8) {
+                    self.bytes.push(0);
+                }
+                let bit = ((value >> shift) & 1) as u8;
+                *self.bytes.last_mut().unwrap() |= bit << (7 - (self.bit & 7));
+                self.bit += 1;
+            }
+        }
+
+        fn write_signed(&mut self, value: i64, bits: u32) {
+            let mask = (1u64 << bits) - 1;
+            self.write((value as u64) & mask, bits);
+        }
+
+        fn finish(self) -> Vec<u8> {
+            self.bytes
+        }
+    }
+
+    fn append_zero_residuals(writer: &mut BitWriter, count: usize) {
+        writer.write(0, 2); // Rice coding method.
+        writer.write(0, 4); // One partition.
+        writer.write(0, 4); // Rice parameter zero.
+        for _ in 0..count {
+            writer.write(1, 1); // Unary quotient zero, remainder is empty.
+        }
     }
 
     // NOTE: the truncation oracle that matters — "every strict prefix of a
@@ -898,6 +984,69 @@ mod tests {
         assert_eq!(
             reader.read_unary().unwrap_err(),
             "FLAC: truncated unary code"
+        );
+    }
+
+    #[test]
+    fn residual_zigzag_rejects_values_outside_signed_32_bit_range() {
+        assert_eq!(unzigzag_residual(0), Ok(0));
+        assert_eq!(
+            unzigzag_residual(u64::from(u32::MAX - 1)),
+            Ok(i64::from(i32::MAX))
+        );
+        assert_eq!(
+            unzigzag_residual(u64::from(u32::MAX)),
+            Ok(i64::from(i32::MIN))
+        );
+        assert_eq!(
+            unzigzag_residual(u64::from(u32::MAX) + 1),
+            Err("FLAC: residual exceeds signed 32-bit range")
+        );
+    }
+
+    #[test]
+    fn fixed_reconstruction_rejects_overflow_before_it_feeds_the_predictor() {
+        let max = i64::from(i32::MAX);
+        let order = 4;
+        let block_size = 1_480;
+        let mut writer = BitWriter::new();
+        for value in [max, -max, max, -max] {
+            writer.write_signed(value, 32);
+        }
+        append_zero_residuals(&mut writer, block_size - order);
+
+        let bytes = writer.finish();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut reader = BitReader::new(&bytes);
+            let mut out = vec![0; block_size];
+            decode_fixed(&mut reader, &mut out, 32, order)
+        }));
+        assert!(result.is_ok(), "malformed FIXED data must not panic");
+        assert_eq!(
+            result.unwrap(),
+            Err("FLAC: reconstructed sample exceeds subframe bit depth")
+        );
+    }
+
+    #[test]
+    fn lpc_reconstruction_rejects_overflow_before_it_feeds_the_predictor() {
+        let mut writer = BitWriter::new();
+        writer.write_signed(i64::from(i32::MAX), 32);
+        writer.write(14, 4); // Precision 15.
+        writer.write_signed(0, 5); // Shift zero.
+        writer.write_signed(16_383, 15); // Largest signed 15-bit coefficient.
+        append_zero_residuals(&mut writer, 7);
+
+        let bytes = writer.finish();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut reader = BitReader::new(&bytes);
+            let mut out = vec![0; 8];
+            decode_lpc(&mut reader, &mut out, 32, 1)
+        }));
+        assert!(result.is_ok(), "malformed LPC data must not panic");
+        assert_eq!(
+            result.unwrap(),
+            Err("FLAC: reconstructed sample exceeds subframe bit depth")
         );
     }
 }

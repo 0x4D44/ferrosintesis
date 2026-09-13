@@ -6028,7 +6028,11 @@ mod tests {
     /// Hand-maintained by necessity — Rust cannot enumerate functions — which is
     /// exactly the drift this bug was about, so
     /// `every_public_bank_accessor_is_exercised` pins it against the source.
-    fn exercise_every_public_bank() {
+    ///
+    /// Keep the callback here rather than duplicating the call list in each oracle. A
+    /// new public bank must then appear in both the prewarm exercise and every structural
+    /// sanity check that consumes this enumeration.
+    fn for_each_public_bank(mut visit: impl FnMut(&'static str, &'static [Zone])) {
         for &(vel, rr2) in &[
             (1u8, false),
             (1, true),
@@ -6037,68 +6041,72 @@ mod tests {
             (127, false),
             (127, true),
         ] {
-            let _ = piano_bank(vel, rr2);
-            let _ = grand_bank(vel, rr2);
-            let _ = steinwayb_bank(vel, rr2);
-            let _ = kawai_bank(vel, rr2);
-            let _ = headroom_bank(vel, rr2);
-            let _ = musescoregrand_bank(vel, rr2);
-            let _ = ydpgrand_bank(vel, rr2);
-            let _ = honkytonk_bank(vel, rr2);
-            let _ = b1upright_bank(vel, rr2);
+            visit("piano_bank", piano_bank(vel, rr2));
+            visit("grand_bank", grand_bank(vel, rr2));
+            visit("steinwayb_bank", steinwayb_bank(vel, rr2));
+            visit("kawai_bank", kawai_bank(vel, rr2));
+            visit("headroom_bank", headroom_bank(vel, rr2));
+            visit("musescoregrand_bank", musescoregrand_bank(vel, rr2));
+            visit("ydpgrand_bank", ydpgrand_bank(vel, rr2));
+            visit("honkytonk_bank", honkytonk_bank(vel, rr2));
+            visit("b1upright_bank", b1upright_bank(vel, rr2));
         }
         for vel in 0u8..=127 {
-            let _ = violin_bank(vel);
-            let _ = viola_bank(vel);
-            let _ = cello_bank(vel);
-            let _ = contrabass_bank(vel);
-            let _ = strings_bank(vel);
+            visit("violin_bank", violin_bank(vel));
+            visit("viola_bank", viola_bank(vel));
+            visit("cello_bank", cello_bank(vel));
+            visit("contrabass_bank", contrabass_bank(vel));
+            visit("strings_bank", strings_bank(vel));
         }
         // The mandolin fans out on ROUND ROBIN rather than velocity (it is a
         // single-dynamic bank). Sweep past the wrap so the modulo is exercised —
         // the engine feeds this a strike counter that grows without bound.
         for rr in 0..(MANDOLIN_ROUND_ROBINS * 2 + 1) {
-            let _ = mandolin_bank(rr);
+            visit("mandolin_bank", mandolin_bank(rr));
         }
         for program in 0u8..=127 {
             for vel in [0u8, 64, 127] {
-                let _ = brass_bank(program, vel);
-                let _ = reed_bank(program, vel);
-                let _ = sax_bank(program, vel);
+                visit("brass_bank", brass_bank(program, vel));
+                visit("reed_bank", reed_bank(program, vel));
+                visit("sax_bank", sax_bank(program, vel));
             }
         }
-        let _ = banjo_bank();
-        let _ = bottle_bank();
-        let _ = brass_section_bank();
-        let _ = celesta_bank();
-        let _ = chanter_bank();
-        let _ = clavinet_bank();
-        let _ = drone_g2_bank();
-        let _ = drone_g3_bank();
-        let _ = dulcimer_bank();
-        let _ = finger_bass_bank();
-        let _ = flute_bank();
-        let _ = glock_bank();
-        let _ = guitar_bank();
-        let _ = harp_bank();
-        let _ = harpsichord_bank();
-        let _ = marimba_bank();
-        let _ = musicbox_bank();
-        let _ = ocarina_bank();
-        let _ = panflute_bank();
-        let _ = pick_bass_bank();
-        let _ = pizzbass_bank();
-        let _ = recorder_bank();
-        let _ = eastman_picked_bank();
-        let _ = eastman_plucked_bank();
-        let _ = rhodes_bank();
-        let _ = shakuhachi_bank();
-        let _ = sitar_bank();
-        let _ = steel_bank();
-        let _ = timpani_bank();
-        let _ = tubular_bank();
-        let _ = vibraphone_bank();
-        let _ = xylo_bank();
+        visit("banjo_bank", banjo_bank());
+        visit("bottle_bank", bottle_bank());
+        visit("brass_section_bank", brass_section_bank());
+        visit("celesta_bank", celesta_bank());
+        visit("chanter_bank", chanter_bank());
+        visit("clavinet_bank", clavinet_bank());
+        visit("drone_g2_bank", drone_g2_bank());
+        visit("drone_g3_bank", drone_g3_bank());
+        visit("dulcimer_bank", dulcimer_bank());
+        visit("finger_bass_bank", finger_bass_bank());
+        visit("flute_bank", flute_bank());
+        visit("glock_bank", glock_bank());
+        visit("guitar_bank", guitar_bank());
+        visit("harp_bank", harp_bank());
+        visit("harpsichord_bank", harpsichord_bank());
+        visit("marimba_bank", marimba_bank());
+        visit("musicbox_bank", musicbox_bank());
+        visit("ocarina_bank", ocarina_bank());
+        visit("panflute_bank", panflute_bank());
+        visit("pick_bass_bank", pick_bass_bank());
+        visit("pizzbass_bank", pizzbass_bank());
+        visit("recorder_bank", recorder_bank());
+        visit("eastman_picked_bank", eastman_picked_bank());
+        visit("eastman_plucked_bank", eastman_plucked_bank());
+        visit("rhodes_bank", rhodes_bank());
+        visit("shakuhachi_bank", shakuhachi_bank());
+        visit("sitar_bank", sitar_bank());
+        visit("steel_bank", steel_bank());
+        visit("timpani_bank", timpani_bank());
+        visit("tubular_bank", tubular_bank());
+        visit("vibraphone_bank", vibraphone_bank());
+        visit("xylo_bank", xylo_bank());
+    }
+
+    fn exercise_every_public_bank() {
+        for_each_public_bank(|_, _| {});
     }
 
     /// Every lazy cache in the module, not only the ones behind a `pub *_bank`.
@@ -6343,10 +6351,10 @@ mod tests {
             declared.len()
         );
 
-        // The body of the exercise fn, so a mention in this comment cannot count.
+        // The body of the shared enumeration, so a mention in this comment cannot count.
         let body = src
-            .split_once("fn exercise_every_public_bank() {")
-            .expect("exercise_every_public_bank must exist")
+            .split_once("fn for_each_public_bank(")
+            .expect("for_each_public_bank must exist")
             .1;
         let body = body
             .split_once("\n    }")
@@ -6362,7 +6370,7 @@ mod tests {
             missing.is_empty(),
             "{} public bank accessor(s) are not exercised, so the prewarm-coverage \
              oracle silently does not cover them:\n  {}\n\nAdd each to \
-             exercise_every_public_bank().",
+             for_each_public_bank().",
             missing.len(),
             missing
                 .iter()
@@ -7438,62 +7446,142 @@ mod tests {
 
     #[test]
     fn banks_parse() {
-        for z in violin_f()
-            .iter()
-            .chain(violin_p())
-            .chain(flute())
-            .chain(grand_pp())
-            .chain(grand_mf())
-            .chain(grand_f())
-            .chain(grand_pp_rr2())
-            .chain(grand_mf_rr2())
-            .chain(grand_f_rr2())
-            .chain(trumpet_p())
-            .chain(trumpet_f())
-            .chain(mutetpt_p())
-            .chain(mutetpt_f())
-            .chain(trombone_p())
-            .chain(trombone_f())
-            .chain(tuba_p())
-            .chain(tuba_f())
-            .chain(horn_p())
-            .chain(horn_f())
-            .chain(oboe_p())
-            .chain(oboe_f())
-            .chain(bassoon_p())
-            .chain(bassoon_f())
-            .chain(clarinet_p())
-            .chain(clarinet_f())
-            .chain(nylon())
-            .chain(strsec_p())
-            .chain(strsec_f())
-        {
-            assert!(z.data.len() > 20_000, "zone too short: {}", z.data.len());
-            // the tuba bank reaches A#0 (~29 Hz), hence the low floor
-            assert!((25.0..2500.0).contains(&z.root), "odd root {}", z.root);
-            let peak = z.data.iter().fold(0f32, |m, &v| m.max(v.abs()));
-            assert!(peak > 0.5, "zone not normalised: peak {peak}");
+        #[derive(Clone, Copy)]
+        struct Rule {
+            min_len: usize,
+            min_root: f32,
+            max_root: f32,
+            min_peak: f32,
+            max_peak: f32,
         }
-        // The conditioned GM0 upright preserves one smooth absolute body-level
-        // trend across keys, so its quieter high-register zones no longer all
-        // peak above the legacy per-file-normalisation floor.
-        for z in piano_pp()
-            .iter()
-            .chain(piano_mf())
-            .chain(piano_f())
-            .chain(piano_pp_rr2())
-            .chain(piano_mf_rr2())
-            .chain(piano_f_rr2())
-        {
-            assert!(z.data.len() > 20_000, "zone too short: {}", z.data.len());
-            assert!((25.0..2500.0).contains(&z.root), "odd root {}", z.root);
-            let peak = z.data.iter().fold(0f32, |m, &v| m.max(v.abs()));
+
+        const DEFAULT: Rule = Rule {
+            min_len: 20_000,
+            min_root: 25.0,
+            max_root: 2500.0,
+            min_peak: 0.5,
+            max_peak: f32::INFINITY,
+        };
+        // Keep the exceptions keyed by the same family labels emitted by the shared
+        // public-bank sweep. The stale-name assertion below makes this table fail closed
+        // if a family is renamed or removed instead of silently becoming dead policy.
+        const EXCEPTIONS: &[(&str, Rule)] = &[
+            (
+                "piano_bank",
+                Rule {
+                    min_peak: 0.12,
+                    max_peak: 0.91,
+                    ..DEFAULT
+                },
+            ),
+            (
+                "b1upright_bank",
+                Rule {
+                    max_root: 5000.0,
+                    ..DEFAULT
+                },
+            ),
+            (
+                "celesta_bank",
+                Rule {
+                    min_len: 8_000,
+                    ..DEFAULT
+                },
+            ),
+            (
+                "chanter_bank",
+                Rule {
+                    min_len: 2_000,
+                    min_peak: 0.25,
+                    ..DEFAULT
+                },
+            ),
+            (
+                "drone_g2_bank",
+                Rule {
+                    min_len: 2_000,
+                    min_peak: 0.25,
+                    ..DEFAULT
+                },
+            ),
+            (
+                "drone_g3_bank",
+                Rule {
+                    min_len: 2_000,
+                    min_peak: 0.25,
+                    ..DEFAULT
+                },
+            ),
+            (
+                "harp_bank",
+                Rule {
+                    max_root: 3000.0,
+                    ..DEFAULT
+                },
+            ),
+            (
+                "panflute_bank",
+                Rule {
+                    min_len: 10_000,
+                    ..DEFAULT
+                },
+            ),
+            (
+                "sitar_bank",
+                Rule {
+                    min_len: 5_000,
+                    ..DEFAULT
+                },
+            ),
+        ];
+
+        let mut seen = std::collections::BTreeSet::new();
+        let mut exception_names = std::collections::BTreeSet::new();
+        for (name, _) in EXCEPTIONS {
             assert!(
-                (0.12..=0.91).contains(&peak),
-                "conditioned piano zone outside its shared-headroom range: peak {peak}"
+                exception_names.insert(*name),
+                "duplicate sanity-rule exception for bank family {name}"
             );
         }
-        // (the drum-kit bank's own asset crate tests guard the sampled kit)
+        for_each_public_bank(|name, bank| {
+            seen.insert(name);
+            let rule = EXCEPTIONS
+                .iter()
+                .find_map(|(family, rule)| (*family == name).then_some(*rule))
+                .unwrap_or(DEFAULT);
+            for z in bank {
+                assert!(
+                    z.data.len() > rule.min_len,
+                    "{name}: zone too short: {} (minimum {})",
+                    z.data.len(),
+                    rule.min_len
+                );
+                // Keep a conservative low default floor for the lowest sampled bank roots.
+                assert!(
+                    (rule.min_root..rule.max_root).contains(&z.root),
+                    "{name}: odd root {}",
+                    z.root
+                );
+                let peak = z.data.iter().fold(0f32, |m, &v| m.max(v.abs()));
+                assert!(
+                    (rule.min_peak..=rule.max_peak).contains(&peak),
+                    "{name}: zone outside its peak range [{}, {}]: {peak}",
+                    rule.min_peak,
+                    rule.max_peak
+                );
+            }
+        });
+
+        let stale: Vec<&str> = EXCEPTIONS
+            .iter()
+            .map(|(name, _)| *name)
+            .filter(|name| !seen.contains(name))
+            .collect();
+        assert!(
+            stale.is_empty(),
+            "sanity-rule exception(s) name a bank family that the public sweep no longer \
+             emits: {stale:?}"
+        );
     }
 
     #[test]

@@ -6,15 +6,15 @@
 - **Area:** CC-BY dulcimer samples / onset continuity
 - **Raised:** 2026-08-16T12:38:51Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T045256Z-6fa24f72
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00215-run-fix-20260913T045256Z-6fa24f72
+- **Owner base:** 5c44454c46e62f55f044b2d65d387b8ff7ee92eb
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T04:52:56Z
+- **Owner until:** 2026-09-13T06:52:56Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

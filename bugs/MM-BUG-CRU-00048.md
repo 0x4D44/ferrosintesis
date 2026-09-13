@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00048 — Mandolin regeneration can publish a partial mixed bank after a late failure
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** mandolin sample generation / failure atomicity
 - **Raised:** 2026-08-20T12:21:13Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T144902Z-b45c3bda
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00048-run-fix-20260913T144902Z-b45c3bda
-- **Owner base:** 53402efa92d6e828ee2406bba0c5ab70d4caf586
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T14:49:02Z
-- **Owner until:** 2026-09-13T16:49:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T12:21:13Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-20T12:21:13Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T14:57:33Z, deltic:auto role=fix run=fix-20260913T144902Z-b45c3bda branch=task/bug-MM-BUG-CRU-00048-run-fix-20260913T144902Z-b45c3bda code=53a2586d8f7fb8eae1db081556a0bf9d5df1a371 gate=manual)
 
 ## Observation
 

@@ -10,6 +10,9 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.14 — **Pre-load alias checks must attach the path to I/O failures** (`output.rs:path_error`).
+  - `canonicalize` reports only the OS error, so wrap each input/output probe with its path.
+
 - 2026.09.13 — **CLI parsers need separate help success from usage errors** (`main.rs:help`, `main.rs:usage_error`).
   - Treat `--help`, `--version`, unknown flags, and `--` as distinct parser outcomes.
 

@@ -23,12 +23,16 @@ pub(crate) fn reject_input_alias(input: &Path, output: &Path) -> io::Result<()> 
     Ok(())
 }
 
+fn path_error(path: &Path, error: io::Error) -> io::Error {
+    io::Error::new(error.kind(), format!("{}: {error}", path.display()))
+}
+
 fn paths_refer_to_same_file(input: &Path, output: &Path) -> io::Result<bool> {
-    let input_canonical = fs::canonicalize(input)?;
+    let input_canonical = fs::canonicalize(input).map_err(|error| path_error(input, error))?;
     let output_canonical = match fs::canonicalize(output) {
         Ok(path) => path,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error),
+        Err(error) => return Err(path_error(output, error)),
     };
 
     if input_canonical == output_canonical {
@@ -42,9 +46,10 @@ fn paths_refer_to_same_file(input: &Path, output: &Path) -> io::Result<bool> {
 fn platform_same_file(input: &Path, output: &Path) -> io::Result<bool> {
     use std::os::unix::fs::MetadataExt;
 
-    let input = fs::metadata(input)?;
-    let output = fs::metadata(output)?;
-    Ok(input.dev() == output.dev() && input.ino() == output.ino())
+    let input_metadata = fs::metadata(input).map_err(|error| path_error(input, error))?;
+    let output_metadata = fs::metadata(output).map_err(|error| path_error(output, error))?;
+    Ok(input_metadata.dev() == output_metadata.dev()
+        && input_metadata.ino() == output_metadata.ino())
 }
 
 #[cfg(windows)]
@@ -55,7 +60,11 @@ fn platform_same_file(input: &Path, output: &Path) -> io::Result<bool> {
 
     // Hold the input for reading while allowing other readers. A write-only probe then conflicts
     // with this guard only when the output name resolves to the same file.
-    let input_guard = OpenOptions::new().read(true).share_mode(1).open(input)?;
+    let input_guard = OpenOptions::new()
+        .read(true)
+        .share_mode(1)
+        .open(input)
+        .map_err(|error| path_error(input, error))?;
     let probe_output = || {
         OpenOptions::new()
             .write(true)
@@ -70,10 +79,10 @@ fn platform_same_file(input: &Path, output: &Path) -> io::Result<bool> {
             drop(input_guard);
             match probe_output() {
                 Ok(_) => Ok(true),
-                Err(retry_error) => Err(retry_error),
+                Err(retry_error) => Err(path_error(output, retry_error)),
             }
         }
-        Err(error) => Err(error),
+        Err(error) => Err(path_error(output, error)),
     }
 }
 

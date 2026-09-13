@@ -80,6 +80,28 @@ fn default_output_cannot_replace_midi_named_wav() {
 }
 
 #[test]
+fn missing_input_error_names_the_input_path() {
+    let dir = TestDir::new("missing-input");
+    let input = dir.join("missing.mid");
+
+    let result = Command::new(env!("CARGO_BIN_EXE_ferrosintesis"))
+        .arg(&input)
+        .output()
+        .expect("run ferrosintesis");
+
+    assert_eq!(
+        result.status.code(),
+        Some(1),
+        "missing input did not produce an I/O error: {result:?}"
+    );
+    assert!(
+        String::from_utf8_lossy(&result.stderr).contains("missing.mid"),
+        "missing input path was dropped: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+}
+
+#[test]
 fn distinct_output_still_replaces_an_existing_wav() {
     let dir = TestDir::new("distinct-output");
     let input = dir.join("score.mid");

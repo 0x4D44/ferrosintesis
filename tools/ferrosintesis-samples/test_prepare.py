@@ -4522,6 +4522,78 @@ class Orchestral2RegenerationRecipeTest(unittest.TestCase):
         self.assertNotIn("packaged WAV", readme)
 
 
+class OrchestralPackagedContractTest(unittest.TestCase):
+    """MM-BUG-KILN-00289: the orchestral package docs follow its live routes."""
+
+    def test_docs_manifest_and_routes_match_packaged_inventory(self):
+        crate = pathlib.Path(prepare.REPO_ROOT) / "crates" / "ferrosintesis-samples-orchestral"
+        sample_dir = crate / "samples"
+        packaged = sorted(
+            path.name
+            for path in sample_dir.iterdir()
+            if path.is_file() and path.suffix in {".wav", ".flac"}
+        )
+        self.assertEqual(len(packaged), 158)
+        self.assertEqual({pathlib.Path(name).suffix for name in packaged}, {".flac"})
+
+        family_counts = {}
+        for name in packaged:
+            family = name.split("_", 1)[0]
+            family_counts[family] = family_counts.get(family, 0) + 1
+        self.assertEqual(
+            family_counts,
+            {
+                "bassoon": 12,
+                "celens": 12,
+                "chanter": 15,
+                "clarinet": 12,
+                "drone": 2,
+                "harpsi": 10,
+                "horn": 12,
+                "mutetpt": 10,
+                "nylon": 7,
+                "oboe": 12,
+                "steel": 8,
+                "trombone": 12,
+                "trumpet": 10,
+                "tuba": 12,
+                "vlnens": 12,
+            },
+        )
+
+        readme = (crate / "README.md").read_text(encoding="utf-8")
+        provenance = (crate / "PROVENANCE.md").read_text(encoding="utf-8")
+        manifest = (crate / "Cargo.toml").read_text(encoding="utf-8")
+        lib = (crate / "src" / "lib.rs").read_text(encoding="utf-8")
+        sampler = (
+            pathlib.Path(prepare.REPO_ROOT) / "crates" / "ferrosintesis" / "src" / "sampler.rs"
+        ).read_text(encoding="utf-8")
+
+        rust_keys = set(re.findall(r'"([A-Za-z0-9_#]+\.flac)"', lib))
+        self.assertEqual(rust_keys, set(packaged))
+        self.assertIn("158 mono, 16-bit, 44.1 kHz FLAC", readme)
+        self.assertIn('get("trumpet_C3_f.flac")', readme)
+        self.assertIn('b"fLaC"', readme)
+        self.assertIn("two `drone_*` and fifteen `chanter_*`", readme)
+        self.assertIn("LoopVoice` plays each whole file as an endless loop", readme)
+        self.assertIn("ten `harpsi_*`", readme)
+        self.assertIn(prepare.VCSL_REV, readme)
+
+        self.assertIn("physical payloads in this crate are FLAC files", provenance)
+        self.assertIn("| `celens_*` | 12 | Cello section (GM 48–49", provenance)
+        self.assertNotIn("Cello section (GM 42 ensemble)", provenance)
+        self.assertIn("| `harpsi_*` | 10 | Harpsichord (GM 6)", provenance)
+        self.assertIn(prepare.VCSL_REV, provenance)
+
+        self.assertIn("harpsichord", manifest.lower())
+        self.assertIn("bagpipe", manifest.lower())
+        self.assertIn("onset and looped-sustain samples", lib)
+        self.assertIn("exact (case-sensitive) `.flac` name", lib)
+        self.assertIn("String sections for GM 48-49", sampler)
+        self.assertIn('"celens_C1_p.flac"', sampler)
+        self.assertIn("GM 42 cello LA attack", sampler)
+
+
 class GenericFamilyWholeBankPublicationTest(unittest.TestCase):
     """MM-BUG-KILN-00265: generic family bakes preserve the previous bank."""
 

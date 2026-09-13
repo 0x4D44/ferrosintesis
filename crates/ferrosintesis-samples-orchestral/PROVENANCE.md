@@ -5,12 +5,13 @@ by `crates/ferrosintesis/src/inventory.rs`: a family that ships without a row he
 the build (MM-BUG-KILN-00069).
 
 Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=<family>` from the repository
-root.
+root. The physical payloads in this crate are FLAC files; source inputs named below are WAVs
+where the bake starts from WAV material.
 
 | Family | Files | Instrument | Source | Licence |
 |--------|------:|------------|--------|---------|
 | `bassoon_*` | 12 | Bassoon (GM 70) sustains | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
-| `celens_*` | 12 | Cello section (GM 42 ensemble) sustains | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
+| `celens_*` | 12 | Cello section (GM 48–49 string sections, low split) sustains | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 | `chanter_*` | 15 | Bagpipe chanter (GM 109) loops | FreePats Bagpipe-SFZ-20221204 archive, SHA-256 pinned in `prepare.py` | CC0-1.0 |
 | `clarinet_*` | 12 | Clarinet (GM 71) long sustains | VSCO-2 Community Edition, pinned `440300901dfe9275fd84e0b7763af1f8443ae62e` | CC0-1.0 |
 | `drone_*` | 2 | Bagpipe drones (GM 109), G2 + G3 | FreePats Bagpipe-SFZ-20221204 archive, SHA-256 pinned in `prepare.py` | CC0-1.0 |

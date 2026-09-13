@@ -12,8 +12,10 @@ Compile-time sample payload for
 - 8 steel-string acoustic-guitar plucks for the GM 25 voice;
 - 17 looped bagpipe recordings (2 drones, 15 chanter takes) for the GM 109 voice.
 
-`ferrosintesis` uses these recordings for the onset of a note, then crossfades
-into its modeled sustain. Cargo retrieves this package at build time and
+The onset banks supply the attack of a note, then `ferrosintesis` crossfades
+them into each voice's modeled sustain. The 17 bagpipe payloads are the
+exception: `LoopVoice` plays each whole file as an endless loop, without a
+modeled sustain or onset crossfade. Cargo retrieves this package at build time and
 `include_bytes!` places the selected FLAC data in the final binary. There is no
 runtime filesystem or network access.
 
@@ -72,6 +74,11 @@ The generator therefore fetches from a pinned revision and must never track
 ```text
 05d5ed8befa042fd9d99a6d159dfc3673d3f8edc
 ```
+
+The ten `harpsi_*` source WAVs are from VCSL's "Harpsichord, Unk" (Harpsi4)
+bank, a CC0 plucked keyboard. The source is pinned to VCSL revision
+`c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e`; the packaged keys use sounding
+pitch names after the bake measures each source's real fundamental.
 
 The two `drone_*` and fifteen `chanter_*` source WAVs are looped sustains (not attack
 transients) for the GM 109 bagpipe, trimmed from the

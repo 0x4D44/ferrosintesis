@@ -302,10 +302,11 @@ impl RealtimeSynth {
     /// a live stream can select any program or alternate bank at any moment, so a
     /// partial prewarm leaves exactly the dropout this call exists to prevent. That is
     /// the trade you are opting into: it costs setup time and holds the decoded PCM
-    /// resident for the process lifetime. Ordinary PCM16 banks expand to roughly twice
-    /// their embedded bytes. The B1's 3.35 MB byte-companded natural tails expand to
-    /// about 13.4 MB. If you would rather pay in occasional first-use stalls, simply do
-    /// not call it.
+    /// resident for the process lifetime. For ordinary FLAC banks, budget four bytes per
+    /// decoded mono PCM frame, plus small allocation overhead; the ratio to compressed
+    /// embedded bytes varies with the material and is not a fixed multiplier. The B1's
+    /// 3.35 MB byte-companded natural tails expand to about 13.4 MB. If you would rather
+    /// pay in occasional first-use stalls, simply do not call it.
     pub fn prewarm_samples(&self) {
         sampler::prewarm();
     }

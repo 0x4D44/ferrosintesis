@@ -5420,6 +5420,28 @@ class KawaiPackagedDocumentContractTest(unittest.TestCase):
         self.assertNotIn("Pure stdlib (plain WAV, no ffmpeg)", provenance)
 
 
+class RealtimePrewarmMemoryDocumentationTest(unittest.TestCase):
+    """MM-BUG-CRU-00052: prewarm guidance must describe decoded f32 storage."""
+
+    def test_prewarm_docs_use_decoded_frame_storage_not_a_wav_multiplier(self):
+        live = (
+            pathlib.Path(prepare.REPO_ROOT)
+            / "crates"
+            / "ferrosintesis"
+            / "src"
+            / "live.rs"
+        )
+        source = live.read_text(encoding="utf-8")
+        start = source.index("    /// Decode the embedded attack-sample banks now")
+        end = source.index("    pub fn prewarm_samples", start)
+        docs = source[start:end]
+        normalized = re.sub(r"\s+", " ", docs.replace("///", ""))
+
+        self.assertIn("four bytes per decoded mono PCM frame", normalized)
+        self.assertIn("ratio to compressed embedded bytes varies", normalized)
+        self.assertNotIn("Ordinary PCM16 banks expand to roughly twice", normalized)
+
+
 class KawaiOutputInventoryTest(unittest.TestCase):
     """MM-BUG-KILN-00163: rebakes must reject retired Kawai outputs."""
 

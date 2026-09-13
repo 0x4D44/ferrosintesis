@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00289 — Orchestral package publishes stale inventory, routing, and FLAC contracts
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** orchestral sample crate / public package contract
 - **Raised:** 2026-08-17T13:41:05Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T191728Z-96ba64bb
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00289-run-fix-20260913T191728Z-96ba64bb
-- **Owner base:** 8c00fd87cafed92ec6a4fd3fd54e8ae2ca5351e9
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T19:17:28Z
-- **Owner until:** 2026-09-13T21:17:28Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T13:41:05Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T13:41:05Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:27:08Z, deltic:auto role=fix run=fix-20260913T191728Z-96ba64bb branch=task/bug-MM-BUG-KILN-00289-run-fix-20260913T191728Z-96ba64bb code=900d8cd2f2e9d3cdf15e5fee038d2666a7c7fcc6 gate=manual)
 
 ## Observation
 

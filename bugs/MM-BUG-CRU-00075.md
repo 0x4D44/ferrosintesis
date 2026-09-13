@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis render-profile test gate
 - **Raised:** 2026-09-13T23:02:32Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T230358Z-a0d5d160
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00075-run-fix-20260913T230358Z-a0d5d160
+- **Owner base:** 6001dd38c24c24a4e62ea18e9c4ca2b3118523a4
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T23:03:58Z
+- **Owner until:** 2026-09-14T01:03:58Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -6,15 +6,15 @@
 - **Area:** strings sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T07:29:12Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T202726Z-2b7da5ea
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00271-run-verify-20260913T202726Z-2b7da5ea
+- **Owner base:** d453a21b394a146fb124f2c7b50e12580d434116
+- **Owner fingerprint:** sha256:dde141898f77c8d5d0b1f95ea5a3816ad0c92f6da27a02968525f7116a17f1e7
+- **Owner since:** 2026-09-13T20:27:26Z
+- **Owner until:** 2026-09-13T22:27:26Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

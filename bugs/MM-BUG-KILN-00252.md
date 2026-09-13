@@ -6,15 +6,15 @@
 - **Area:** sample tooling / FLAC conversion failure atomicity
 - **Raised:** 2026-08-17T01:05:27Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T201553Z-a4ce4163
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00252-run-verify-20260913T201553Z-a4ce4163
+- **Owner base:** 9e0b79dda7ed08d7862ba00381b3dbd6e22ac1f6
+- **Owner fingerprint:** sha256:71aaaaae1479043c5f33d8d804acfb2e878a529b90e07397ccdcd86fbcbda07a
+- **Owner since:** 2026-09-13T20:15:53Z
+- **Owner until:** 2026-09-13T22:15:53Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

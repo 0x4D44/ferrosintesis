@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00214 — Bottle sample name says G3 while its measured root is 205 Hz
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample package / bottle pitch metadata
 - **Raised:** 2026-08-16T11:38:37Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T153622Z-8d72e8db
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00214-run-fix-20260913T153622Z-8d72e8db
-- **Owner base:** dca5fd1ec1cddb261ec5b7790be40d1b5054da87
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:36:22Z
-- **Owner until:** 2026-09-13T17:36:22Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T11:38:37Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T11:38:37Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:41:57Z, deltic:auto role=fix run=fix-20260913T153622Z-8d72e8db branch=task/bug-MM-BUG-KILN-00214-run-fix-20260913T153622Z-8d72e8db code=1f1892c98b12eb5270d5d4b7adbe978afbecd5b3 gate=manual)
 
 ## Observation
 

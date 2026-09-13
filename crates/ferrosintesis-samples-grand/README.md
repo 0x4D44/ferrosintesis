@@ -24,6 +24,8 @@ python3 tools/ferrosintesis-samples/prepare.py --only=grand
 ```
 
 That scoped path fetches and SHA-256-verifies the pinned Salamander `.tar.bz2`,
-decoded with Python's stdlib. A bare `prepare.py` invocation is the full
+decoded with Python's stdlib. It requires `ffmpeg 8.1.1` on `PATH` to encode the
+packaged FLAC bank; the generator checks its libavformat pin. A bare `prepare.py`
+invocation is the full
 multi-bank workflow; it rewrites unrelated sample crates and needs their
 additional tools.

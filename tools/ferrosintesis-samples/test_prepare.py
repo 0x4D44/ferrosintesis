@@ -4008,6 +4008,16 @@ class GrandRegenerationRecipeTest(unittest.TestCase):
                 block.append(line)
         return commands
 
+    @classmethod
+    def first_paragraph_after_scoped_command(cls, text):
+        marker = text.index(cls.COMMAND)
+        closing_fence = text.index("```", marker)
+        paragraphs = (
+            paragraph.strip()
+            for paragraph in re.split(r"\n\s*\n", text[closing_fence + 3 :])
+        )
+        return next(paragraph for paragraph in paragraphs if paragraph)
+
     def test_packaged_grand_docs_use_the_scoped_command(self):
         crate = os.path.join(
             prepare.REPO_ROOT, "crates", "ferrosintesis-samples-grand")
@@ -4016,6 +4026,17 @@ class GrandRegenerationRecipeTest(unittest.TestCase):
                 with open(os.path.join(crate, name), encoding="utf-8") as f:
                     commands = self.fenced_prepare_commands(f.read())
                 self.assertEqual(commands, [self.COMMAND])
+
+    def test_scoped_grand_recipe_names_the_ffmpeg_prerequisite(self):
+        crate = os.path.join(
+            prepare.REPO_ROOT, "crates", "ferrosintesis-samples-grand")
+        for name in ("README.md", "PROVENANCE.md"):
+            with self.subTest(name=name):
+                with open(os.path.join(crate, name), encoding="utf-8") as f:
+                    paragraph = self.first_paragraph_after_scoped_command(f.read())
+                lower = paragraph.lower()
+                self.assertIn("ffmpeg", lower)
+                self.assertRegex(lower, r"ffmpeg.{0,80}path")
 
     def test_wrong_fenced_command_is_not_redeemed_by_correct_prose(self):
         adversarial = f"""

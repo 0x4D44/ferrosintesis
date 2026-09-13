@@ -69,9 +69,10 @@ output is 16-bit mono WAV; the committed package bank is encoded as FLAC.
 python3 tools/ferrosintesis-samples/prepare.py --only=grand
 ```
 
-The scoped grand path is pure stdlib (no 7z — the archive is `.tar.bz2`). The
-Salamander tarball is fetched once and cached under the system temp dir, then
-SHA-256-verified before extraction.
+The scoped grand path uses Python's stdlib for the `.tar.bz2` extraction (no 7z),
+but requires `ffmpeg 8.1.1` on `PATH` to encode the packaged FLAC bank; the
+generator checks its libavformat pin. The Salamander tarball is fetched once and
+cached under the system temp dir, then SHA-256-verified before extraction.
 
 A bare `python3 tools/ferrosintesis-samples/prepare.py` invocation is the
 full multi-bank workflow. It also rewrites unrelated sample crates and needs

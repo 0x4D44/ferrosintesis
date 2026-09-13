@@ -6,15 +6,15 @@
 - **Area:** orchestral2 sample generation / final-format regeneration
 - **Raised:** 2026-08-17T04:25:53Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T203024Z-cd09d866
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00262-run-verify-20260913T203024Z-cd09d866
+- **Owner base:** d80165ff792121cce074ef9bcb0daf4062cb52f9
+- **Owner fingerprint:** sha256:3c9ce21f49d3e8901b39e7bc1ce9e98c9751bdc45d4814572913a33e9274b41d
+- **Owner since:** 2026-09-13T20:30:24Z
+- **Owner until:** 2026-09-13T22:30:24Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

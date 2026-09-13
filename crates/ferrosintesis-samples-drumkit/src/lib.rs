@@ -1153,6 +1153,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn inherited_probe_marker_still_runs_the_isolated_child() {
+        let initializer = std::thread::spawn(|| {
+            let _ = pcm(SAMPLES[0].0);
+        });
+        let output = std::process::Command::new(
+            std::env::current_exe().expect("the test binary's own path"),
+        )
+        .args([
+            "tests::lookup_misses_do_not_initialize_pcm_cache",
+            "--exact",
+            "--nocapture",
+        ])
+        .env("FERRO_DRUMKIT_PCM_MISS_PROBE", "inherited")
+        .output()
+        .expect("run the outer PCM lookup probe with an inherited marker");
+        initializer.join().expect("cache initializer must finish");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("FERRO_DRUMKIT_PCM_MISS_CHILD_RAN"),
+            "the inherited-marker probe did not run an isolated child:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+    }
+
     /// MM-BUG-CRUCIBLE-00023: a failed lookup must leave the cache cold.
     ///
     /// Ported from the companion `-drumkit2` crate, which got this fix as
@@ -1166,34 +1191,37 @@ mod tests {
     #[test]
     fn lookup_misses_do_not_initialize_pcm_cache() {
         const PROBE: &str = "FERRO_DRUMKIT_PCM_MISS_PROBE";
-        const NAME: &str = "tests::lookup_misses_do_not_initialize_pcm_cache";
+        let output = std::process::Command::new(
+            std::env::current_exe().expect("the test binary's own path"),
+        )
+        .args([
+            "tests::lookup_misses_do_not_initialize_pcm_cache_child",
+            "--ignored",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(PROBE, "child")
+        .output()
+        .expect("re-exec this test in a pristine process");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("FERRO_DRUMKIT_PCM_MISS_CHILD_RAN"),
+            "the isolated PCM lookup probe did not provide child evidence:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        println!("FERRO_DRUMKIT_PCM_MISS_CHILD_RAN");
+    }
 
-        // Re-exec unless this process is BOTH marked and actually pristine
-        // (MM-BUG-CRUCIBLE-00035). Keying only on the marker made an inherited value
-        // — from the caller's shell or a CI environment — select child mode, so the
-        // cold-cache assertions would run in the shared libtest process and fail or
-        // pass on scheduling rather than on the code.
-        //
-        // The cache state is the real precondition, so it is what decides. A fresh
-        // child cannot loop: it runs with `--exact`, so nothing else in it touches
-        // `PCM_CACHE`, and it therefore starts cold and proceeds.
-        let pristine = std::env::var_os(PROBE).is_some() && pcm_cache_initializations() == 0;
-        if !pristine {
-            let output = std::process::Command::new(
-                std::env::current_exe().expect("the test binary's own path"),
-            )
-            .args([NAME, "--exact", "--nocapture", "--test-threads=1"])
-            .env(PROBE, "1")
-            .output()
-            .expect("re-exec this test in a pristine process");
-            assert!(
-                output.status.success(),
-                "the pristine-process PCM lookup probe failed:\n{}\n{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr),
-            );
-            return;
-        }
+    #[test]
+    #[ignore]
+    fn lookup_misses_do_not_initialize_pcm_cache_child() {
+        assert_eq!(
+            std::env::var("FERRO_DRUMKIT_PCM_MISS_PROBE").as_deref(),
+            Ok("child"),
+            "only the explicitly configured child may run cold-cache assertions",
+        );
+        println!("FERRO_DRUMKIT_PCM_MISS_CHILD_RAN");
 
         assert_eq!(pcm_cache_initializations(), 0);
         assert_eq!(pcm("missing.flac"), None);

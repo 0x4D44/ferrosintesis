@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis-flac / frame integrity
 - **Raised:** 2026-08-16T20:59:26Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T192034Z-c510ecfa
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00234-run-verify-20260913T192034Z-c510ecfa
+- **Owner base:** 63a80669e39b359450f41b454778e333719d594f
+- **Owner fingerprint:** sha256:86f50fff1f1e12bb9178ff2f69d797391e54d2726eaf92b8e67e215544c7cbd9
+- **Owner since:** 2026-09-13T19:20:34Z
+- **Owner until:** 2026-09-13T21:20:34Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

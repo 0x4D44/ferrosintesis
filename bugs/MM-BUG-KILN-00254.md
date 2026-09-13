@@ -6,15 +6,15 @@
 - **Area:** MuseScore grand sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T02:30:02Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T081029Z-2fd3bf02
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00254-run-fix-20260913T081029Z-2fd3bf02
+- **Owner base:** 2ee88fee57622b177c45d6a14ae09310f63aca09
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T08:10:29Z
+- **Owner until:** 2026-09-13T10:10:29Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

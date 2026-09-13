@@ -6,15 +6,15 @@
 - **Area:** dark-Salamander sample generation / FLAC source migration
 - **Raised:** 2026-08-16T22:56:45Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T073033Z-29246d79
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00246-run-fix-20260913T073033Z-29246d79
-- **Owner base:** 03c3b938890fb1aa5a6482ce1ffc8bde9b760316
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T07:30:33Z
-- **Owner until:** 2026-09-13T09:30:33Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

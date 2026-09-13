@@ -6,15 +6,15 @@
 - **Area:** sample assets / gong onset conditioning
 - **Raised:** 2026-08-12T08:47:34Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T191404Z-2706d940
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00024-run-verify-20260913T191404Z-2706d940
+- **Owner base:** 31eb54d242b6bb38a40ede86ad8ac64c7c90110b
+- **Owner fingerprint:** sha256:90ef3076f1a09dbad94d8625436abeb1cacd189d686e53f89e1101c6f4ca9d10
+- **Owner since:** 2026-09-13T19:14:04Z
+- **Owner until:** 2026-09-13T21:14:04Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

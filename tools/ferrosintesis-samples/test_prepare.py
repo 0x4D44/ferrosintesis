@@ -4413,6 +4413,61 @@ class HonkytonkSampleApiContractTest(unittest.TestCase):
         self.assertIn(".find(|(candidate, _)| *candidate == name)", lib)
 
 
+class MuseScoreSampleApiContractTest(unittest.TestCase):
+    """MM-BUG-KILN-00258: MuseScore docs and generated lookup keys match FLAC."""
+
+    def test_docs_and_get_semantics_match_packaged_flac_inventory(self):
+        crate = pathlib.Path(prepare.REPO_ROOT) / "crates" / "ferrosintesis-samples-musescore"
+        samples = sorted(
+            path for path in (crate / "samples").iterdir() if path.is_file()
+        )
+        names = {path.name for path in samples}
+        self.assertTrue(names)
+        self.assertEqual({path.suffix for path in samples}, {".flac"})
+
+        readme = (crate / "README.md").read_text(encoding="utf-8")
+        provenance = (crate / "PROVENANCE.md").read_text(encoding="utf-8")
+        lib = (crate / "src" / "lib.rs").read_text(encoding="utf-8")
+
+        for document in (readme, provenance):
+            self.assertIn("FLAC", document)
+            self.assertNotIn("WAV bytes", document)
+        self.assertIn("FLAC", lib)
+        self.assertNotIn("WAV bytes", lib)
+        self.assertNotIn("`.wav` suffix", lib)
+
+        documented = set(re.findall(r"[A-Za-z0-9_#]+\.flac", readme + provenance))
+        self.assertEqual(documented, names)
+        documented_key = sorted(documented)[0]
+
+        samples_start = lib.index("static SAMPLES")
+        samples_end = lib.index("\n];", samples_start)
+        table = lib[samples_start:samples_end]
+        embedded_pairs = re.findall(
+            r'"([^"\\]+\.flac)"\s*,\s*include_bytes!\("\.\./samples/([^"\\]+)"\)',
+            table,
+            re.S,
+        )
+        self.assertEqual(
+            {name for name, _ in embedded_pairs},
+            names,
+            "SAMPLES must enumerate every packaged sample with its real key",
+        )
+        self.assertEqual(
+            {path for _, path in embedded_pairs},
+            names,
+            "include_bytes! paths must match the SAMPLES lookup keys",
+        )
+        self.assertIn(f'"{documented_key}"', lib)
+
+        get_start = lib.index("pub fn get(name: &str)")
+        get_body = lib[get_start : lib.index("\n}", get_start) + 2]
+        self.assertIn("SAMPLES", get_body)
+        self.assertIn(".iter()", get_body)
+        self.assertIn(".find(|(candidate, _)| *candidate == name)", get_body)
+        self.assertIn(".map(|(_, bytes)| *bytes)", get_body)
+
+
 class ObsoleteOwnedOutputTest(unittest.TestCase):
     """MM-BUG-KILN-00123: a rebake must reject obsolete owned outputs.
 

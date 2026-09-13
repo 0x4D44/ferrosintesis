@@ -13,8 +13,9 @@
 
 #![forbid(unsafe_code)]
 
-/// Embedded (file-name, bytes) pairs. Names include the `.wav` suffix and are
-/// case-sensitive. Kept as a slice so families can be added without a count constant.
+/// Embedded (file-name, bytes) pairs. Names are the exact, case-sensitive `.flac`
+/// keys listed in the crate README. Kept as a slice so families can be added
+/// without a count constant.
 static SAMPLES: &[(&str, &[u8])] = &[
     (
         "bottle_C6.flac",
@@ -138,12 +139,13 @@ static SAMPLES: &[(&str, &[u8])] = &[
     ),
 ];
 
-/// Number of embedded WAV files.
+/// Number of embedded FLAC files.
 pub const FILE_COUNT: usize = SAMPLES.len();
 
-/// Returns the embedded WAV bytes for an exact file name.
+/// Returns the embedded FLAC bytes for an exact file name.
 ///
-/// Names include the `.wav` suffix and are case-sensitive.
+/// Names include the `.flac` suffix and are case-sensitive. WAV aliases are not
+/// provided.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
         .iter()
@@ -201,11 +203,12 @@ mod tests {
     fn every_sample_is_a_nonempty_bank_file() {
         for (name, bytes) in SAMPLES {
             assert!(bytes.len() >= 12, "{name} is too short to be a sample");
-            let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
-            let flac = &bytes[..4] == b"fLaC";
-            assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
+            assert_eq!(&bytes[..4], b"fLaC", "{name} is not a FLAC sample");
         }
-        assert_eq!(get("missing.wav"), None);
+        assert_eq!(get("missing.flac"), None);
+        assert_eq!(get("sitar_E3.wav"), None);
+        let sitar = get("sitar_E3.flac").expect("a documented FLAC key must resolve");
+        assert_eq!(&sitar[..4], b"fLaC");
     }
 
     #[test]

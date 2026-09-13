@@ -1,8 +1,8 @@
 # Provenance - ferrosintesis-samples-musescore
 
-Every recording this crate packages, with the pinned source it was baked from. Machine-checked
-by `crates/ferrosintesis/src/inventory.rs`: a family that ships without a row here fails
-the build (MM-BUG-KILN-00069).
+Every recording this crate packages is a mono 16-bit 44.1 kHz FLAC, with the pinned source
+it was baked from. Machine-checked by `crates/ferrosintesis/src/inventory.rs`: a family that
+ships without a row here fails the build (MM-BUG-KILN-00069).
 
 Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=brasssection,sitar,panflute,bottle,shakuhachi,celesta` from the repository
 root.
@@ -15,6 +15,10 @@ root.
 | `bottle_*` | 1 | Blown bottle (GM 76) onset - retired, superseded by `ferrosintesis-samples-bottle` | MuseScore "MS Basic" SF3 | MIT |
 | `shakuhachi_*` | 1 | Shakuhachi (GM 77) onset | MuseScore "MS Basic" SF3 | MIT |
 | `celesta_*` | 8 | Celesta (GM 8) onsets | MuseScore "MS Basic" SF3 | MIT |
+
+The exact, case-sensitive lookup keys are the packaged filenames listed in the
+README's [lookup-key list](README.md#lookup-keys). `get` returns their raw FLAC
+bytes; no `.wav` aliases are provided.
 
 **Source pin.** MuseScore `MS Basic.sf3`, revision `d307a2bd899f15bf650efc3c2891211af5cb78b5`
 (<https://raw.githubusercontent.com/musescore/MuseScore/d307a2bd899f15bf650efc3c2891211af5cb78b5/share/sound/MS%20Basic.sf3>),

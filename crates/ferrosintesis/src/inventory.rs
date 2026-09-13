@@ -953,18 +953,25 @@ mod tests {
         packaged: &BTreeMap<String, usize>,
         family_programs: &BTreeMap<String, BTreeSet<u8>>,
         include_family_prefixes: bool,
+        allow_empty_summary: bool,
     ) -> Option<String> {
-        if packaged.len() > 8 {
-            return None;
-        }
         let mut mentions: BTreeSet<String> = family_gm_mentions(text, family_programs)
             .into_iter()
             .collect();
         if include_family_prefixes {
             mentions.extend(family_prefix_mentions(text, packaged));
         }
-        if mentions.is_empty() || mentions.len() == packaged.len() {
+        if mentions.len() == packaged.len() {
             return None;
+        }
+        if mentions.is_empty() && (packaged.len() <= 8 || allow_empty_summary) {
+            return None;
+        }
+        if mentions.is_empty() {
+            return Some(format!(
+                "{surface} summary names no packaged families (omits {})",
+                family_list(&packaged.keys().cloned().collect::<Vec<_>>())
+            ));
         }
         let missing: BTreeSet<String> = packaged
             .keys()
@@ -1063,6 +1070,7 @@ mod tests {
                     packaged,
                     &family_programs,
                     true,
+                    description.contains("PROVENANCE.md"),
                 ) {
                     errors.push(error);
                 }
@@ -1076,6 +1084,7 @@ mod tests {
             packaged,
             &family_programs,
             false,
+            readme_table_is_complete || readme.contains("PROVENANCE.md"),
         ) {
             errors.push(error);
         }
@@ -1085,6 +1094,7 @@ mod tests {
             packaged,
             &family_programs,
             false,
+            lib.contains("PROVENANCE.md"),
         ) {
             errors.push(error);
         }
@@ -1531,6 +1541,86 @@ description = \"Embedded samples for GM 42 cello and GM 43 double bass\"\n";
         assert!(errors
             .iter()
             .any(|error| error.contains("module docs summary")));
+    }
+
+    fn large_summary_errors(description: &str) -> Vec<String> {
+        let families = [
+            ("family01", 10),
+            ("family02", 11),
+            ("family03", 12),
+            ("family04", 13),
+            ("family05", 14),
+            ("family06", 15),
+            ("family07", 16),
+            ("family08", 17),
+            ("family09", 18),
+            ("family10", 19),
+            ("family11", 20),
+            ("family12", 21),
+            ("family13", 22),
+            ("family14", 23),
+            ("family15", 24),
+        ];
+        let packaged = families
+            .into_iter()
+            .map(|(family, _)| (family.to_owned(), 1))
+            .collect::<BTreeMap<_, _>>();
+        let mut intro = String::from("Embedded samples for ");
+        let mut table = String::from("| Prefix | GM | Instrument |\n| --- | ---: | --- |\n");
+        for (index, (family, program)) in families.into_iter().enumerate() {
+            if index > 0 {
+                intro.push_str(", ");
+            }
+            intro.push_str(&format!("GM {program} {family}"));
+            table.push_str(&format!("| `{family}_*` | {program} | instrument |\n"));
+        }
+        let readme = format!("{intro}.\n\n{table}");
+        let manifest = format!("[package]\ndescription = \"{description}\"\n");
+        let lib = "//! Source provenance is in packaged `PROVENANCE.md`.\n";
+
+        public_inventory_surface_errors(&packaged, &readme, &table, &manifest, lib)
+    }
+
+    #[test]
+    fn public_inventory_oracle_accepts_large_provenance_delegation() {
+        let packaged = (1..=15)
+            .map(|index| (format!("family{index:02}"), 1))
+            .collect::<BTreeMap<_, _>>();
+        let readme =
+            "## Contents & provenance\n\nThe canonical packaged inventory is `PROVENANCE.md`.\n";
+        let provenance = "| Family | Files | Instrument |\n| --- | ---: | --- |\n";
+        let manifest = "[package]\ndescription = \"Embedded samples; packaged PROVENANCE.md lists the full inventory\"\n";
+        let lib = "//! Source provenance is in packaged `PROVENANCE.md`.\n";
+
+        let errors = public_inventory_surface_errors(&packaged, readme, provenance, manifest, lib);
+        assert!(
+            errors.is_empty(),
+            "large packaged PROVENANCE delegation was rejected: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn public_inventory_oracle_rejects_partial_large_summary() {
+        let errors = large_summary_errors(
+            "Embedded samples for GM 10 family01, GM 11 family02, GM 12 family03, and GM 13 family04",
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("manifest description summary")),
+            "partial large-package summary was accepted: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn public_inventory_oracle_rejects_empty_large_summary() {
+        let errors = large_summary_errors("Embedded samples for ferrosintesis");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("manifest description summary")),
+            "empty large-package summary was accepted: {errors:?}"
+        );
     }
 
     #[test]

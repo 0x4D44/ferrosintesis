@@ -6,15 +6,15 @@
 - **Area:** crates/ferrosintesis-samples-core
 - **Raised:** 2026-08-18T22:27:49Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T143701Z-2acd888a
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00046-run-fix-20260913T143701Z-2acd888a
+- **Owner base:** be365e4024cf85d25ef3d66813cae890edb06abf
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T14:37:01Z
+- **Owner until:** 2026-09-13T16:37:01Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

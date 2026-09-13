@@ -4935,6 +4935,22 @@ class GrandSampleApiContractTest(unittest.TestCase):
         self.assertNotIn("inventory_matches_packaged_wavs", provenance)
 
 
+class MandolinProvenanceContainerTest(unittest.TestCase):
+    """MM-BUG-CRU-00050: provenance names logical WAV inputs and physical FLAC outputs."""
+
+    def test_provenance_and_generator_doc_describe_physical_containers(self):
+        crate = pathlib.Path(prepare.REPO_ROOT) / "crates" / "ferrosintesis-samples-mandolin"
+        provenance = (crate / "PROVENANCE.md").read_text(encoding="utf-8")
+
+        self.assertIn("committed logical WAV inputs", provenance)
+        self.assertIn("physical FLAC files under `samples/*.flac`", provenance)
+        self.assertNotIn("`samples/*.wav` here is", provenance)
+        self.assertIn(
+            "packaged WAV or FLAC sample files",
+            gen_crate_lib.__doc__,
+        )
+
+
 class MuseScoreGrandSampleApiContractTest(unittest.TestCase):
     """MM-BUG-KILN-00253: MuseScore-grand docs match its FLAC package."""
 

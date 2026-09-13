@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a `src/lib.rs` for a ferrosintesis sample crate from its WAV/FLAC samples.
+"""Generate a `src/lib.rs` for a ferrosintesis sample crate from its packaged WAV or FLAC sample files.
 
 Every sample crate ships the same shape: a static `SAMPLES` table of
 `(name, include_bytes!(...))`, a `get()` lookup, and two parity tests

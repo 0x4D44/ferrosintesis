@@ -16,8 +16,8 @@ One continuous take, `DR0000_0202.wav` (24-bit / 48 kHz stereo, 2:40, 44.1 MB), 
 samples**. Ten fretboard positions, four takes each. Where a note was fluffed the owner replayed
 all four, so **the last four takes of each note are the keepers**. The raw take is not committed
 (44 MB, owner-personal); the trimmed per-note cuts in
-`tools/ferrosintesis-samples/mandolin-src/` are the committed input, and `samples/*.flac` here is
-the baked output.
+`tools/ferrosintesis-samples/mandolin-src/` are the committed logical WAV inputs; the baked
+outputs are physical FLAC files under `samples/*.flac`.
 
 A first session (`DR0000_0198`, 2026-07-23) captured three dynamic passes instead. It was
 superseded: see "Why round robins and not dynamics" below.

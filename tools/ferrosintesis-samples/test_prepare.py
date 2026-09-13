@@ -2553,6 +2553,52 @@ class YdpArchiveCacheTest(unittest.TestCase):
         self.assertEqual(self.fetches, 2)
 
 
+class MemberManifestConcurrencyTest(unittest.TestCase):
+    """MM-BUG-CRU-00054: concurrent cache writers need private manifest staging."""
+
+    def test_two_manifest_writers_publish_without_colliding_staging_files(self):
+        with tempfile.TemporaryDirectory() as src:
+            member = os.path.join(src, "YDP-GrandPiano.sf2")
+            with open(member, "wb") as output:
+                output.write(b"PINNED-SF2")
+            url = "https://example.invalid/ydp.tar.bz2"
+            manifest = prepare.member_manifest_path(src, url)
+            member_map = {"YDP-GrandPiano.sf2": None}
+            writers_ready = threading.Barrier(2)
+            real_replace = os.replace
+            sources = []
+            errors = []
+
+            def synchronized_replace(source, destination):
+                if destination == manifest:
+                    sources.append(source)
+                real_replace(source, destination)
+
+            def write_manifest():
+                try:
+                    writers_ready.wait(2)
+                    prepare.write_member_manifest(src, url, "a" * 64, member_map)
+                except Exception as exc:  # capture worker failure for the assertion below
+                    errors.append(exc)
+
+            with mock.patch.object(prepare.os, "replace", side_effect=synchronized_replace):
+                writers = [threading.Thread(target=write_manifest) for _ in range(2)]
+                for writer in writers:
+                    writer.start()
+                for writer in writers:
+                    writer.join(2)
+
+            self.assertFalse(any(writer.is_alive() for writer in writers))
+            self.assertEqual(errors, [])
+            self.assertEqual(len(sources), 2)
+            self.assertEqual(len(set(sources)), 2)
+            with open(manifest, "r", encoding="utf-8") as source:
+                self.assertEqual(json.load(source)["archive_sha256"], "a" * 64)
+            self.assertEqual(
+                [name for name in os.listdir(src) if name.endswith(".part")], []
+            )
+
+
 class PinnedWarmCacheAuthenticationTest(unittest.TestCase):
     """Every pinned ensure helper must authenticate an already-present cache."""
 

@@ -13,6 +13,7 @@ Pure stdlib; run from the repository root:
 python tools/ferrosintesis-samples/prepare.py
 """
 
+import contextlib
 import hashlib
 import io
 import json
@@ -31,6 +32,16 @@ import time
 import urllib.parse
 import urllib.request
 import wave
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None
+
+try:
+    import msvcrt
+except ImportError:  # POSIX
+    msvcrt = None
 
 VSCO_REV = "440300901dfe9275fd84e0b7763af1f8443ae62e"
 BASE = f"https://raw.githubusercontent.com/sgossner/VSCO-2-CE/{VSCO_REV}"
@@ -1598,24 +1609,62 @@ def rebuild_archive_cache(src, url, sha256, member_map, extract_subdir):
             atomic_replace(os.path.join(selected, fn), destination)
 
 
+@contextlib.contextmanager
+def _manifest_lock(path):
+    """Serialize writers for one shared cache manifest across threads/processes."""
+    with open(path + ".lock", "a+b") as lock:
+        if fcntl is not None:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        else:
+            if msvcrt is None:
+                raise RuntimeError("no platform file-lock implementation available")
+            lock.seek(0, os.SEEK_END)
+            if lock.tell() == 0:
+                lock.write(b"\0")
+                lock.flush()
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+        try:
+            yield
+        finally:
+            if fcntl is not None:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+            else:
+                lock.seek(0)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+
+
 def write_member_manifest(src, url, sha256, member_map):
     """Bind each cached destination to its archive pin, source path and bytes."""
-    manifest = {
-        "version": MEMBER_MANIFEST_VERSION,
-        "archive_sha256": sha256,
-        "members": {
-            fn: {
-                "archive_member": archive_member,
-                "sha256": sha256_file(os.path.join(src, fn)),
-            }
-            for fn, archive_member in member_map.items()
-        },
-    }
     path = member_manifest_path(src, url)
-    tmp = path + ".part"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, sort_keys=True)
-    os.replace(tmp, path)
+    with _manifest_lock(path):
+        manifest = {
+            "version": MEMBER_MANIFEST_VERSION,
+            "archive_sha256": sha256,
+            "members": {
+                fn: {
+                    "archive_member": archive_member,
+                    "sha256": sha256_file(os.path.join(src, fn)),
+                }
+                for fn, archive_member in member_map.items()
+            },
+        }
+        tmp = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", dir=os.path.dirname(path) or ".",
+                    prefix=f".{os.path.basename(path)}.", suffix=".part",
+                    delete=False) as f:
+                tmp = f.name
+                json.dump(manifest, f, indent=2, sort_keys=True)
+            os.replace(tmp, path)
+            tmp = None
+        finally:
+            if tmp is not None:
+                try:
+                    os.remove(tmp)
+                except FileNotFoundError:
+                    pass
 
 
 def ensure_archive_sources(src, url, sha256, member_map, extract_subdir):

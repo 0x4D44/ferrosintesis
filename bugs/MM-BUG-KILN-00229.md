@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00229 — Fret-noise regeneration can publish a partial mixed bank after a late write failure
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** fret-noise sample generation / failure atomicity
 - **Raised:** 2026-08-16T16:53:19Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T220044Z-d005d852
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00229-run-fix-20260913T220044Z-d005d852
-- **Owner base:** f46f5e575dc5c45190bbcdaf02f108dd2ee92f57
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:00:44Z
-- **Owner until:** 2026-09-14T00:00:44Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T16:53:19Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T05:41:55Z, deltic:auto role=fix run=fix-20260913T053018Z-56ab7513 branch=task/bug-MM-BUG-KILN-00229-run-fix-20260913T053018Z-56ab7513 code=b30f9fc89a0488fcd825b7ad71312de48789700a gate=manual) -> Open (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: the code fix works, but reverting main() to its direct-to-out_dir loop leaves all seven committed tests green, so the regression does not cover the fix)
+- **State history:** Open (2026-08-16T16:53:19Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T05:41:55Z, deltic:auto role=fix run=fix-20260913T053018Z-56ab7513 branch=task/bug-MM-BUG-KILN-00229-run-fix-20260913T053018Z-56ab7513 code=b30f9fc89a0488fcd825b7ad71312de48789700a gate=manual) -> Open (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: the code fix works, but reverting main() to its direct-to-out_dir loop leaves all seven committed tests green, so the regression does not cover the fix) -> Fixed (2026-09-13T22:05:46Z, deltic:auto role=fix run=fix-20260913T220044Z-d005d852 branch=task/bug-MM-BUG-KILN-00229-run-fix-20260913T220044Z-d005d852 code=e71819f98707814bbcbe536c2a37d8cea3ad6ab5 gate=manual)
 
 ## Observation
 

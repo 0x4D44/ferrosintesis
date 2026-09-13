@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00309 — Realtime accent-cymbal prewarm guard is tautological and schedule-dependent
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** realtime synth / prewarm contract tests
 - **Raised:** 2026-08-19T09:33:21Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T233904Z-b6938618
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00309-run-fix-20260913T233904Z-b6938618
-- **Owner base:** eeeca14764f65e1998c83d96926f3257b75edffd
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T23:39:04Z
-- **Owner until:** 2026-09-14T01:39:04Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:21Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-19T09:33:21Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T23:52:20Z, deltic:auto role=fix run=fix-20260913T233904Z-b6938618 branch=task/bug-MM-BUG-KIL-00309-run-fix-20260913T233904Z-b6938618 code=8fa7b197b9bcfae40a62a5e0b7f5cb726a2026eb gate=manual)
 
 ## Observation
 

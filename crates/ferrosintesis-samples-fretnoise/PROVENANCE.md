@@ -75,6 +75,10 @@ level, rasp spectrum, pitch independence, and one-shot lifetime even when a
 future canonical environment is deliberately changed and the hashes are
 reviewed.
 
+The public `get` API uses each packaged `.flac` filename as its exact lookup key
+and returns the embedded FLAC bytes; `fretnoise_rr01.flac` is the first key in
+the canonical round-robin order.
+
 ## Why sampled
 
 The modeled GM 120 (a band-passed white-noise burst) measured ~12 dB quieter than the

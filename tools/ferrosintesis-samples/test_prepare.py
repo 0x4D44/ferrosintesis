@@ -4594,6 +4594,38 @@ class OrchestralPackagedContractTest(unittest.TestCase):
         self.assertIn("GM 42 cello LA attack", sampler)
 
 
+class FretnoisePackagedContractTest(unittest.TestCase):
+    """MM-BUG-KILN-00291: public fret-noise lookup names follow the FLAC bank."""
+
+    def test_docs_and_generated_lookup_keys_match_packaged_flac_inventory(self):
+        crate = pathlib.Path(prepare.REPO_ROOT) / "crates" / "ferrosintesis-samples-fretnoise"
+        sample_dir = crate / "samples"
+        packaged = sorted(
+            path.name
+            for path in sample_dir.iterdir()
+            if path.is_file() and path.suffix in {".wav", ".flac"}
+        )
+        self.assertEqual(len(packaged), 12)
+        self.assertEqual({pathlib.Path(name).suffix for name in packaged}, {".flac"})
+
+        readme = (crate / "README.md").read_text(encoding="utf-8")
+        provenance = (crate / "PROVENANCE.md").read_text(encoding="utf-8")
+        lib = (crate / "src" / "lib.rs").read_text(encoding="utf-8")
+        rust_keys = set(re.findall(r'"(fretnoise_rr\d+\.flac)"', lib))
+
+        self.assertEqual(rust_keys, set(packaged))
+        self.assertIn('get("fretnoise_rr01.flac")', readme)
+        self.assertIn('b"fLaC"', readme)
+        self.assertIn("exact FLAC name", readme)
+        self.assertIn("embedded FLACs", provenance)
+        self.assertIn(
+            "Returns the embedded FLAC bytes for an exact (case-sensitive) `.flac` name.",
+            lib,
+        )
+        self.assertNotIn("get(\"fretnoise_rr01.wav\")", readme)
+        self.assertNotIn("WAV bytes", lib)
+
+
 class GenericFamilyWholeBankPublicationTest(unittest.TestCase):
     """MM-BUG-KILN-00265: generic family bakes preserve the previous bank."""
 

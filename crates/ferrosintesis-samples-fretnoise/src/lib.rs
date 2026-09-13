@@ -1,4 +1,4 @@
-//! Embedded CC0 owner-recorded fret-noise one-shots for GM 120 (Guitar Fret Noise).
+//! Embedded CC0 owner-recorded FLAC fret-noise one-shots for GM 120 (Guitar Fret Noise).
 //!
 //! Finger-slide takes on Arthur's Eastman E1D (all strings damped at the nut), played
 //! as a round-robin one-shot bank by `ferrosintesis` — [`ROUND_ROBINS`] is the bank
@@ -9,7 +9,7 @@
 
 #![forbid(unsafe_code)]
 
-/// Embedded (file-name, bytes) pairs, in the bank's canonical round-robin order —
+/// Embedded (FLAC file-name, FLAC bytes) pairs, in the bank's canonical round-robin order —
 /// the ascending `fretnoise_rrNN` ordinal order `fretnoise_bake.py` writes them in.
 /// [`take_name`] indexes this table POSITIONALLY, so the row order is part of the
 /// contract, not an implementation detail; `samples_are_in_canonical_round_robin_order`
@@ -75,7 +75,7 @@ pub const FILE_COUNT: usize = SAMPLES.len();
 /// consecutive fret-noise events do not repeat the same sample.
 pub const ROUND_ROBINS: usize = FILE_COUNT;
 
-/// Returns the embedded sample bytes for an exact (case-sensitive) name.
+/// Returns the embedded FLAC bytes for an exact (case-sensitive) `.flac` name.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
         .iter()
@@ -217,6 +217,13 @@ mod tests {
             assert_eq!(&bytes[..4], b"fLaC", "{name} is not a FLAC sample");
         }
         assert_eq!(get("missing.wav"), None);
+    }
+
+    #[test]
+    fn public_lookup_accepts_the_documented_flac_name() {
+        let bytes = get("fretnoise_rr01.flac").expect("the documented key must resolve");
+        assert_eq!(&bytes[..4], b"fLaC");
+        assert_eq!(get("fretnoise_rr01.wav"), None);
     }
 
     #[test]

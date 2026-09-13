@@ -13,6 +13,11 @@ specifies for the sound-effects block.
 The public API exposes `get` for lookup by exact FLAC name, plus `take_name` and
 `ROUND_ROBINS` for the wrapping 0-based round-robin sequence.
 
+```rust
+let flac = ferrosintesis_samples_fretnoise::get("fretnoise_rr01.flac").unwrap();
+assert_eq!(&flac[..4], b"fLaC");
+```
+
 It is the **default** GM 120 voice. The modeled band-passed noise burst it replaced is retained
 as the `--no-samples` (and `default-features = false`) fallback — that burst measured ~12 dB
 quieter than the Roland SC-55mkII and Yamaha S-YXG50 references relative to their own steel

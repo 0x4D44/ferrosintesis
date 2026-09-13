@@ -5534,9 +5534,9 @@ const CLAVINET_SOURCE_SR: f32 = 44_100.0;
 const CLAVINET_LOOP_START_HI_S: f32 = 0.34;
 #[cfg(feature = "embedded-samples")]
 const CLAVINET_LOOP_MAX_LEN_S: f32 = 0.11;
-#[cfg(feature = "embedded-samples")]
+#[cfg(all(test, feature = "embedded-samples"))]
 const CLAVINET_RUNTIME_GUARD_FRAMES: usize = 4;
-#[cfg(feature = "embedded-samples")]
+#[cfg(all(test, feature = "embedded-samples"))]
 const CLAVINET_REACH_FRAMES: usize = ((CLAVINET_LOOP_START_HI_S + CLAVINET_LOOP_MAX_LEN_S)
     * CLAVINET_SOURCE_SR) as usize
     + CLAVINET_RUNTIME_GUARD_FRAMES;
@@ -7628,6 +7628,13 @@ mod tests {
                 "b1upright_bank",
                 Rule {
                     max_root: 5000.0,
+                    ..DEFAULT
+                },
+            ),
+            (
+                "clavinet_bank",
+                Rule {
+                    min_len: CLAVINET_REACH_FRAMES - 1,
                     ..DEFAULT
                 },
             ),

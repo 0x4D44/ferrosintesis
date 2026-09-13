@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Refresh a sample crate's generated inventory and size pins from `samples/*.wav`.
+"""Refresh a sample crate's generated inventory and size pins from sample files.
 
 `gen_crate_lib.py` emits a whole `lib.rs` for the plain sample crates. The drum-kit
 and B1 crates carry hand-written extras on top of that shape, so regenerating the file
@@ -152,9 +152,11 @@ def main():
     crate = sys.argv[1]
     lib = os.path.join(crate, "src", "lib.rs")
     samples_dir = os.path.join(crate, "samples")
-    names = sorted(f for f in os.listdir(samples_dir) if f.endswith(".wav"))
+    names = sorted(
+        f for f in os.listdir(samples_dir) if f.endswith((".wav", ".flac"))
+    )
     if not names:
-        raise SystemExit(f"no .wav files in {samples_dir}")
+        raise SystemExit(f"no .wav/.flac files in {samples_dir}")
 
     body = "".join(f'    ("{n}", include_bytes!("../samples/{n}")),\n' for n in names)
 
@@ -163,6 +165,10 @@ def main():
 
     has_tail_pin = "const EXPECTED_TAIL_BYTES:" in src
     if has_tail_pin:
+        if any(not name.endswith(".wav") for name in names):
+            raise SystemExit(
+                f"{lib}: B1 tail-pinned inventory must contain only WAV files"
+            )
         if src.count(GENERATED_START) != 1 or src.count(GENERATED_END) != 1:
             raise SystemExit(
                 f"{lib}: B1 inventory must be bounded by the generated-region markers"

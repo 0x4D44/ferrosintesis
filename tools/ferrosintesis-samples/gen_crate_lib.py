@@ -105,6 +105,15 @@ def main():
         else:
             raise SystemExit(f"unknown arg {a[i]}")
     samples_dir = os.path.join(crate, "samples")
+    lib = os.path.join(crate, "src", "lib.rs")
+    if os.path.exists(lib):
+        with open(lib, encoding="utf-8") as fh:
+            existing = fh.read()
+        if "PIANO_SINGLE_TAKE_CELLS" in existing:
+            raise SystemExit(
+                f"{lib}: refusing whole-file generation for the custom core inventory; "
+                "use regen_samples_table.py"
+            )
     names = sorted(
         f for f in os.listdir(samples_dir) if f.endswith((".wav", ".flac"))
     )

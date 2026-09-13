@@ -6,11 +6,12 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
-/// Number of sample files embedded in this package.
-pub const FILE_COUNT: usize = 69;
-
 /// Upright-piano pitch/dynamic cells with only one take in the pinned source.
 pub const PIANO_SINGLE_TAKE_CELLS: [(&str, &str); 2] = [("C2", "pp"), ("G2", "pp")];
+
+// BEGIN GENERATED SAMPLE INVENTORY
+/// Number of sample files embedded in this package.
+pub const FILE_COUNT: usize = 69;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     ("flute_A4.flac", include_bytes!("../samples/flute_A4.flac")),
@@ -275,6 +276,7 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
         include_bytes!("../samples/violin_G5_p.flac"),
     ),
 ];
+// END GENERATED SAMPLE INVENTORY
 
 /// Returns the embedded sample bytes for an exact (case-sensitive) name.
 pub fn get(name: &str) -> Option<&'static [u8]> {

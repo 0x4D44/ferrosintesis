@@ -5933,6 +5933,75 @@ class GenCrateLibMixedContainerTest(unittest.TestCase):
         self.assertIn("FAILED", result.stdout)
 
 
+class CoreInventoryRegenerationTest(unittest.TestCase):
+    """The core crate's FLAC inventory refresh preserves its handwritten API."""
+
+    def test_refreshes_flac_inventory_and_size_pin_without_deleting_custom_code(self):
+        source = """pub const PIANO_SINGLE_TAKE_CELLS: [(&str, &str); 2] = [(\"C2\", \"pp\"), (\"G2\", \"pp\")];
+// BEGIN GENERATED SAMPLE INVENTORY
+pub const FILE_COUNT: usize = 1;
+static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
+    (\"retired.flac\", include_bytes!(\"../samples/retired.flac\")),
+];
+// END GENERATED SAMPLE INVENTORY
+const EXPECTED_BYTES: usize = 1;
+pub fn get(name: &str) -> Option<&'static [u8]> { match name { \"alias.wav\" => get(\"current.flac\"), _ => SAMPLES.iter().find(|(n, _)| *n == name).map(|(_, b)| *b) } }
+"""
+        with tempfile.TemporaryDirectory() as crate:
+            crate_path = pathlib.Path(crate)
+            (crate_path / "src").mkdir()
+            samples = crate_path / "samples"
+            samples.mkdir()
+            payload = b"fLaC" + b"current"
+            second_payload = b"fLaC" + b"second"
+            (samples / "current.flac").write_bytes(payload)
+            (samples / "second.flac").write_bytes(second_payload)
+            (crate_path / "src" / "lib.rs").write_text(source, encoding="utf-8")
+
+            with mock.patch.object(
+                regen_samples_table.sys,
+                "argv",
+                ["regen_samples_table.py", crate],
+            ), mock.patch.object(regen_samples_table.subprocess, "run"):
+                regen_samples_table.main()
+
+            refreshed = (crate_path / "src" / "lib.rs").read_text(encoding="utf-8")
+
+        self.assertIn('"current.flac"', refreshed)
+        self.assertIn('"second.flac"', refreshed)
+        self.assertNotIn('"retired.flac"', refreshed)
+        self.assertIn("pub const FILE_COUNT: usize = 2;", refreshed)
+        self.assertIn(
+            f"const EXPECTED_BYTES: usize = {len(payload) + len(second_payload)};",
+            refreshed,
+        )
+        self.assertIn("PIANO_SINGLE_TAKE_CELLS", refreshed)
+        self.assertIn('"alias.wav"', refreshed)
+
+    def test_generic_generator_refuses_core_custom_api(self):
+        with tempfile.TemporaryDirectory() as crate:
+            crate_path = pathlib.Path(crate)
+            (crate_path / "src").mkdir()
+            (crate_path / "samples").mkdir()
+            (crate_path / "samples" / "current.flac").write_bytes(b"fLaC\0")
+            (crate_path / "Cargo.toml").write_text(
+                '[package]\ninclude = ["LICENSE-MIT"]\n', encoding="utf-8"
+            )
+            (crate_path / "LICENSE-MIT").write_text("fixture license\n", encoding="utf-8")
+            lib = crate_path / "src" / "lib.rs"
+            before = "pub const PIANO_SINGLE_TAKE_CELLS: [(&str, &str); 0] = [];\n"
+            lib.write_text(before, encoding="utf-8")
+
+            with mock.patch.object(
+                gen_crate_lib.sys,
+                "argv",
+                ["gen_crate_lib.py", crate, "--doc", "Core fixture."],
+            ), self.assertRaisesRegex(SystemExit, "refusing whole-file generation"):
+                gen_crate_lib.main()
+
+            self.assertEqual(lib.read_text(encoding="utf-8"), before)
+
+
 class B1InventoryRegenerationTest(unittest.TestCase):
     """MM-BUG-KILN-00169: B1 regeneration must preserve its natural-tail oracle."""
 

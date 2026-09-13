@@ -6,15 +6,15 @@
 - **Area:** sample tooling / committed onset continuity oracle
 - **Raised:** 2026-08-16T21:54:31Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T193456Z-77a5e058
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00240-run-verify-20260913T193456Z-77a5e058
+- **Owner base:** dcd6e91ab982e27c7c977d71104e231cd81c6626
+- **Owner fingerprint:** sha256:097e88206e5c7e4052dcb30d0ecef2eec6f230d3dc8d61d3a2858662ff0e87a0
+- **Owner since:** 2026-09-13T19:34:56Z
+- **Owner until:** 2026-09-13T21:34:56Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

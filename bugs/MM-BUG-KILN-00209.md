@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00209 — Bass regeneration can publish a mixed bank after a late failure
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** electric-bass sample generation / failure atomicity
 - **Raised:** 2026-08-16T09:39:44Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T044533Z-298b1291
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00209-run-fix-20260913T044533Z-298b1291
-- **Owner base:** db44e30fe029d2b7fe3e7b2d0e1ccb46b4ce3d44
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T04:45:33Z
-- **Owner until:** 2026-09-13T06:45:33Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T09:39:44Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T09:39:44Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T05:10:23Z, deltic:auto role=fix run=fix-20260913T044533Z-298b1291 branch=task/bug-MM-BUG-KILN-00209-run-fix-20260913T044533Z-298b1291 code=fd8cead81ec76a070a9300ce13a5e097003177fb gate=manual)
 
 ## Observation
 

@@ -6,15 +6,15 @@
 - **Area:** fret-noise package documentation / provenance
 - **Raised:** 2026-08-16T16:53:13Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T161451Z-b2335558
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00228-run-fix-20260913T161451Z-b2335558
+- **Owner base:** b0d665f67c50750d018545e32cbe24704d484c70
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T16:14:51Z
+- **Owner until:** 2026-09-13T18:14:51Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

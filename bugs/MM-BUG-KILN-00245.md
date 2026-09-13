@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00245 — Grand regeneration can publish a partial mixed bank after a late failure
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** grand sample generation / failure atomicity
 - **Raised:** 2026-08-16T22:56:42Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T071216Z-bc95a17e
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00245-run-fix-20260913T071216Z-bc95a17e
-- **Owner base:** 77f2f723f359725ee34f0a26603c3606d45eb60a
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T07:12:16Z
-- **Owner until:** 2026-09-13T09:12:16Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T22:56:42Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T22:56:42Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:28:39Z, deltic:auto role=fix run=fix-20260913T071216Z-bc95a17e branch=task/bug-MM-BUG-KILN-00245-run-fix-20260913T071216Z-bc95a17e code=d7283e3d gate=manual)
 
 ## Observation
 

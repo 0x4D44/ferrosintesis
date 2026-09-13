@@ -16,7 +16,9 @@ This crate is **CC BY 4.0 AND CC BY 3.0**, not CC0 — it lives in its own packa
 the default `embedded-samples` feature; a `--no-default-features` build renders the
 saxophones from the modeled reed voice alone and does not link this crate.
 
-Public API: `get(name: &str) -> Option<&'static [u8]>` and `FILE_COUNT`.
+Public API: `get(name: &str) -> Option<&'static [u8]>` and `FILE_COUNT`. Pass an
+exact, case-sensitive `.flac` filename such as `sax_alt_A3_f.flac` to `get`; it
+returns that packaged sample's FLAC bytes. WAV aliases are not provided.
 
 Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --sax-only` (needs
 `ffmpeg`).

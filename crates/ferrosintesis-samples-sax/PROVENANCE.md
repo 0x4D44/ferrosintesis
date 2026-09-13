@@ -65,7 +65,7 @@ consumer of this crate should expect 74 packaged samples and 72 reachable zones.
 
 ## Inventory
 
-Aggregate: 4,101,968 bytes (74 files). Pinned by the `EXPECTED_BYTES` constant in
+Aggregate: 2,470,849 bytes (74 files). Pinned by the `EXPECTED_BYTES` constant in
 `src/lib.rs` and the `inventory_matches_packaged_samples` parity test.
 
 ## Processing (deterministic, `prepare.py` `_bake_mtg_sax`)
@@ -75,9 +75,9 @@ Per note: FLAC → mono 24-bit WAV via **ffmpeg**; linear resample to 44.1 kHz;
 baritone attack; a zone whose root can't be measured at confidence ≥ 0.85 is
 dropped); `trim_to_onset` cuts to the onset (3% of peak, 8 ms lead-in pad) keeping
 **0.62 s** of recorded attack plus early loopable sustain with a lead-bounded 2 ms
-fade-in and 0.20 s squared fade-out, peak-normalized to 0.9. Output: 16-bit mono
-WAV. The synth finds a short pitch-synchronous loop inside that recorded sustain
-for the held default voice.
+fade-in and 0.20 s squared fade-out, peak-normalized to 0.9. The final 16-bit mono
+PCM is stored losslessly as FLAC under `samples/`; the synth finds a short
+pitch-synchronous loop inside that recorded sustain for the held default voice.
 
 ## Regenerating
 

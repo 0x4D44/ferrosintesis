@@ -6,6 +6,8 @@
 //! `--no-samples` or unusable-loop fallback. Consumers normally access this crate
 //! through `ferrosintesis`. Attribution obligations are in `NOTICE`.
 //! Licence/provenance: see `NOTICE` / `PROVENANCE.md`.
+//! The public lookup names are the exact case-sensitive `.flac` filenames, and
+//! `get` returns the corresponding packaged FLAC bytes; no WAV aliases exist.
 
 #![forbid(unsafe_code)]
 
@@ -311,7 +313,9 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     ),
 ];
 
-/// Returns the embedded sample bytes for an exact (case-sensitive) name.
+/// Returns packaged FLAC bytes for an exact, case-sensitive `.flac` filename.
+///
+/// The lookup does not provide WAV aliases or other filename normalization.
 pub fn get(name: &str) -> Option<&'static [u8]> {
     SAMPLES
         .iter()
@@ -381,6 +385,7 @@ mod tests {
             assert!(bytes.len() >= 12, "{name} is too short to be a sample");
             assert_eq!(&bytes[..4], b"fLaC", "{name} is not a FLAC sample");
         }
-        assert_eq!(get("missing.wav"), None);
+        assert!(get("sax_alt_A3_f.flac").is_some());
+        assert_eq!(get("sax_alt_A3_f.wav"), None);
     }
 }

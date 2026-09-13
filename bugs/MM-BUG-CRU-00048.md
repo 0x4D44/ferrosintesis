@@ -6,15 +6,15 @@
 - **Area:** mandolin sample generation / failure atomicity
 - **Raised:** 2026-08-20T12:21:13Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T195344Z-9a8bbe6e
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00048-run-verify-20260913T195344Z-9a8bbe6e
+- **Owner base:** 1652216c88848015d8c0d90429123a67f91f0e41
+- **Owner fingerprint:** sha256:dfa5c2625edf6e953e927691e4200f53b2eb31d4e1c5ad589fd83b118b332da3
+- **Owner since:** 2026-09-13T19:53:44Z
+- **Owner until:** 2026-09-13T21:53:44Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

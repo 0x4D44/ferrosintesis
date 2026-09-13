@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / packaged-document link oracle
 - **Raised:** 2026-09-13T19:22:41Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T193602Z-fac72892
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00057-run-fix-20260913T193602Z-fac72892
+- **Owner base:** c890ee3d4bb08fe6bd014496bcc8794ca9fb6584
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T19:36:02Z
+- **Owner until:** 2026-09-13T21:36:02Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

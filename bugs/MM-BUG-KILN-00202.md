@@ -6,15 +6,15 @@
 - **Area:** sample assets / drumkit2 cache regression
 - **Raised:** 2026-08-16T07:16:52Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T193033Z-d353ea1b
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00202-run-verify-20260913T193033Z-d353ea1b
+- **Owner base:** 81157d121b60dd6c067de5891c7c9483dd486b86
+- **Owner fingerprint:** sha256:4b52af993348cfd5d4dda922c9387bf0194fb8406b3b3bb73042f3b479880e12
+- **Owner since:** 2026-09-13T19:30:33Z
+- **Owner until:** 2026-09-13T21:30:33Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

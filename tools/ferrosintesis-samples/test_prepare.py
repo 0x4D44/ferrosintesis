@@ -4474,6 +4474,124 @@ class HonkytonkOutputInventoryTest(unittest.TestCase):
         )
 
 
+class HonkytonkConcurrentExtractionTest(unittest.TestCase):
+    """MM-BUG-CRU-00069: concurrent bakes isolate decoded FLAC intermediates."""
+
+    def test_two_bakes_use_isolated_decode_intermediates(self):
+        worker = textwrap.dedent(
+            """
+            import os
+            import sys
+            import time
+            from unittest import mock
+
+            import prepare
+
+            src, repo_root, sync, token = sys.argv[1:]
+            other = "B" if token == "A" else "A"
+            token_bytes = token.encode("ascii")
+
+            def fake_run(command, check):
+                flac = command[command.index("-i") + 1]
+                wav = command[-1]
+                os.makedirs(os.path.dirname(wav), exist_ok=True)
+                with open(wav, "wb") as output:
+                    output.write(token_bytes)
+                if flac.endswith("htsrc_C2.flac"):
+                    with open(
+                            os.path.join(sync, f"path-{token}"),
+                            "w", encoding="ascii") as path:
+                        path.write(wav)
+                    open(os.path.join(sync, f"ready-{token}"), "wb").close()
+                    deadline = time.monotonic() + 10
+                    while not os.path.exists(os.path.join(sync, f"ready-{other}")):
+                        if time.monotonic() >= deadline:
+                            raise RuntimeError("concurrent honky-tonk barrier timed out")
+                        time.sleep(0.01)
+
+            def fake_read(path):
+                with open(path, "rb") as source:
+                    payload = source.read()
+                if payload != token_bytes:
+                    raise RuntimeError(
+                        f"{token}: read another process's decoded WAV {path}")
+                return [0.0, 0.25], prepare.OUT_SR
+
+            with (
+                mock.patch.object(prepare, "REPO_ROOT", repo_root),
+                mock.patch.object(prepare, "HONKYTONK_NOTES", ("C2", "C3")),
+                mock.patch.object(prepare, "ensure_archive_sources"),
+                mock.patch.object(prepare.subprocess, "run", side_effect=fake_run),
+                mock.patch.object(prepare, "read_wav", side_effect=fake_read),
+                mock.patch.object(
+                    prepare, "trim_to_onset", side_effect=lambda x, *_args: x
+                ),
+                mock.patch.object(prepare, "measure_f0", return_value=(440.0, 1.0)),
+                mock.patch.object(prepare, "write_wav_mono"),
+                mock.patch.object(prepare, "_validate_generated_output_inventory"),
+            ):
+                prepare._bake_honkytonk(src)
+            """
+        )
+        with tempfile.TemporaryDirectory() as temp_root:
+            src = os.path.join(temp_root, "honkytonk_fb")
+            repo_root = os.path.join(temp_root, "repo")
+            sync = os.path.join(temp_root, "sync")
+            os.makedirs(src)
+            os.makedirs(repo_root)
+            os.makedirs(sync)
+            script = os.path.join(temp_root, "concurrent_honkytonk_worker.py")
+            with open(script, "w", encoding="utf-8") as output:
+                output.write(worker)
+
+            module_dir = os.path.abspath(os.path.dirname(prepare.__file__))
+            child_env = os.environ.copy()
+            child_env["PYTHONPATH"] = (
+                module_dir + os.pathsep + child_env.get("PYTHONPATH", "")
+            )
+            processes = [
+                subprocess.Popen(
+                    [sys.executable, script, src, repo_root, sync, token],
+                    cwd=module_dir,
+                    env=child_env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                for token in ("A", "B")
+            ]
+            results = []
+            try:
+                for process in processes:
+                    results.append(process.communicate(timeout=15))
+            except subprocess.TimeoutExpired:
+                for process in processes:
+                    if process.poll() is None:
+                        process.kill()
+                for process in processes:
+                    process.communicate()
+                self.fail("concurrent honky-tonk worker timed out")
+
+            for token, process in zip(("A", "B"), processes):
+                stdout, stderr = results.pop(0)
+                self.assertEqual(
+                    process.returncode,
+                    0,
+                    f"worker {token} failed:\nstdout={stdout}\nstderr={stderr}",
+                )
+            with open(os.path.join(sync, "path-A"), encoding="ascii") as path:
+                path_a = path.read()
+            with open(os.path.join(sync, "path-B"), encoding="ascii") as path:
+                path_b = path.read()
+            self.assertNotEqual(path_a, path_b)
+            source_root = os.path.normcase(os.path.realpath(src))
+            for path in (path_a, path_b):
+                decoded = os.path.normcase(os.path.realpath(path))
+                self.assertNotEqual(decoded, source_root)
+                self.assertFalse(decoded.startswith(source_root + os.sep))
+                self.assertFalse(os.path.exists(path))
+
+
 class LocalBankSelectionTest(unittest.TestCase):
     """MM-BUG-KILN-00128: command modes must not rewrite an unrelated local bank.
 

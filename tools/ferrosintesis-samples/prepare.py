@@ -5538,22 +5538,24 @@ def _bake_honkytonk(src):
                            "ferrosintesis-samples-honkytonk", "samples")
     os.makedirs(out_dir, exist_ok=True)
     rows = []
-    for n in HONKYTONK_NOTES:
-        flac = os.path.join(src, f"htsrc_{n}.flac")
-        wav = os.path.join(src, f"htsrc_{n}.wav")
-        subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-                        "-i", flac, "-acodec", "pcm_s16le", wav], check=True)
-        x, wsr = read_wav(wav)
-        if wsr != OUT_SR:
-            x = resample(x, wsr, OUT_SR)
-            wsr = OUT_SR
-        seg = trim_to_onset(x, wsr, 1.5, 0.6)
-        nominal = NOTE_HZ[n]
-        f0, conf = measure_f0(seg, wsr, nominal * 0.8, nominal * 1.4)
-        cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
-        out_name = f"honkytonk_{n}.wav"
-        write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
-        rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
+    with tempfile.TemporaryDirectory(prefix="honkytonk-decode-") as decode_dir:
+        for n in HONKYTONK_NOTES:
+            flac = os.path.join(src, f"htsrc_{n}.flac")
+            # The source FLAC cache is shared, but each bake must own its decoded WAV.
+            wav = os.path.join(decode_dir, f"htsrc_{n}.wav")
+            subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                            "-i", flac, "-acodec", "pcm_s16le", wav], check=True)
+            x, wsr = read_wav(wav)
+            if wsr != OUT_SR:
+                x = resample(x, wsr, OUT_SR)
+                wsr = OUT_SR
+            seg = trim_to_onset(x, wsr, 1.5, 0.6)
+            nominal = NOTE_HZ[n]
+            f0, conf = measure_f0(seg, wsr, nominal * 0.8, nominal * 1.4)
+            cents = 1200 * math.log2(f0 / nominal) if f0 > 0 else 0.0
+            out_name = f"honkytonk_{n}.wav"
+            write_wav_mono(os.path.join(out_dir, out_name), seg, wsr)
+            rows.append((out_name, f0, f0, nominal, cents, conf, len(seg) / wsr))
     return rows
 
 

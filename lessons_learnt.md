@@ -10,6 +10,9 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **Shared source caches still need private decode outputs** (`prepare.py:_bake_honkytonk`).
+  - Keep downloaded FLACs reusable, but decode each concurrent bake inside a disposable run-owned directory.
+
 - 2026.09.13 — **Whole-file sample generation must fail closed on custom API** (`gen_crate_lib.py:custom_inventory_reason`).
   - Detect managed inventory regions and public items outside `FILE_COUNT` / `get`; a core-only token let drumkit APIs disappear.
 

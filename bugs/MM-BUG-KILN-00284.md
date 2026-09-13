@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00284 — Core drum-kit audio oracle omits 33 routed takes
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** core drum-kit sample crate / audio validation
 - **Raised:** 2026-08-17T11:40:04Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T185158Z-892715cf
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00284-run-fix-20260913T185158Z-892715cf
-- **Owner base:** 9514a6def413f851e388899cc0183f91394ca20a
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T18:51:58Z
-- **Owner until:** 2026-09-13T20:51:58Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T11:40:04Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T11:40:04Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:09:35Z, deltic:auto role=fix run=fix-20260913T185158Z-892715cf branch=task/bug-MM-BUG-KILN-00284-run-fix-20260913T185158Z-892715cf code=4687d7dc15d4b9c674243e3f9135e2bff8c7261b gate=manual)
 
 ## Observation
 

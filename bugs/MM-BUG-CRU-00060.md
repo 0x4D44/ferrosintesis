@@ -6,15 +6,15 @@
 - **Area:** sample asset crates / container documentation oracle
 - **Raised:** 2026-09-13T19:22:42Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T204905Z-553a16f8
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00060-run-verify-20260913T204905Z-553a16f8
+- **Owner base:** e539dbb574a56cf71e41f9e0b39cc2a7c2773c49
+- **Owner fingerprint:** sha256:92f8782f4b924f7748bce87c9834e132166814521f7fe561e1985c41d96befcb
+- **Owner since:** 2026-09-13T20:49:05Z
+- **Owner until:** 2026-09-13T22:49:05Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

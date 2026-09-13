@@ -69,6 +69,15 @@ def wav_from_pcm(pcm: bytes, sr: int = DST_SR) -> bytes:
             + b"data" + struct.pack("<I", len(pcm)) + pcm)
 
 
+def require_ffmpeg() -> None:
+    """Fail before baking if the external FLAC encoder/decoder is unavailable."""
+    if shutil.which("ffmpeg") is None:
+        raise SystemExit(
+            "ffmpeg executable not found on PATH; install ffmpeg and make sure "
+            "`ffmpeg` works in this shell before running the bake"
+        )
+
+
 def encode_flac(pcm: bytes, destination: Path) -> None:
     """Encode raw PCM to FLAC via ffmpeg, and prove the PCM survived."""
     wav = destination.with_suffix(".part.wav")
@@ -465,6 +474,7 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = crate_dir / "samples"
     pins = load_output_pins(crate_dir / "BAKE-PCM-SHA256")
     require_canonical_environment()
+    require_ffmpeg()
     payloads = bake_payloads(src_dir)
 
     errors = output_pin_errors(payloads, pins, out_dir if args.verify else None)

@@ -205,6 +205,17 @@ class FretNoiseBakeTests(unittest.TestCase):
         self.assertTrue(any("platform" in error for error in errors))
         self.assertTrue(any("machine" in error for error in errors))
 
+    def test_main_preflights_ffmpeg_before_baking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(BAKE, "find_repo_root", return_value=Path(tmp)), mock.patch.object(
+                BAKE, "load_output_pins", return_value={}
+            ), mock.patch.object(BAKE, "require_canonical_environment"), mock.patch.object(
+                BAKE.shutil, "which", return_value=None
+            ), mock.patch.object(BAKE, "bake_payloads", return_value=[]) as bake_payloads:
+                with self.assertRaisesRegex(SystemExit, "ffmpeg.*PATH"):
+                    BAKE.main([])
+                bake_payloads.assert_not_called()
+
     def test_pin_manifest_is_strict_and_rejects_duplicates(self) -> None:
         digest = hashlib.sha256(b"take").hexdigest()
         with tempfile.TemporaryDirectory() as tmp:

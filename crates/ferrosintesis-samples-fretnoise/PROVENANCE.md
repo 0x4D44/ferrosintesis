@@ -64,7 +64,10 @@ Byte identity is scoped to the canonical bake environment: 64-bit CPython
 promise cross-version random streams, and this package does not claim
 cross-platform FFT identity. `BAKE-PCM-SHA256` pins the decoded audio, while
 `BAKE-SHA256` pins the committed FLAC containers for the always-on standard-library
-integrity gate. The bake's `--verify` mode regenerates all twelve files in memory and
+integrity gate. The generator shells out to the separately installed `ffmpeg`
+executable for FLAC encode/decode; its directory must be on `PATH`, and the
+preflight reports a missing executable before generation starts. The bake's
+`--verify` mode regenerates all twelve files in memory and
 checks both generated and committed PCM hashes without writing. The observed canonical
 re-bake matches all twelve PCM pins.
 

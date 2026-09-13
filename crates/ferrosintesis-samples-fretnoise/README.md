@@ -32,8 +32,12 @@ crate through `ferrosintesis`.
 Byte-for-byte reproduction belongs to one canonical generator environment:
 64-bit CPython 3.14.3 on Windows x86-64 with NumPy 2.4.4. The bake refuses
 another environment because NumPy does not promise version-stable FFT or random
-output. From a `midi-music` checkout, create that environment and verify the
-committed bank without writing it:
+output. The generator also invokes the external `ffmpeg` executable for FLAC
+encoding and decoding. Install ffmpeg separately and put it on `PATH`; confirm
+that `ffmpeg -version` works in the same shell before running either verification
+or a write-mode bake. The script checks this prerequisite before it reads or
+rewrites the bank. From a `midi-music` checkout, create the Python environment
+and verify the committed bank without writing it:
 
 ```console
 py -3.14 -m venv venv\fretnoise-bake

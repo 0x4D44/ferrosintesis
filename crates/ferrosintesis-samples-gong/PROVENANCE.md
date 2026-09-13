@@ -126,7 +126,8 @@ ordinary first-2 ms motion — 12 samples (0.27 ms) here, which zeroes the first
 sample while leaving the 2 ms attack peak unchanged. Until
 MM-BUG-CRUCIBLE-00024 `trim_lead_and_ring` lacked that branch, and this layer
 shipped starting on PCM `-2769`, a click on every soft strike. Both layers are
-now pinned by `test_committed_gong_bank_starts_with_continuous_pcm`.
+now covered by the FLAC-aware `test_every_packaged_bank_starts_without_a_discontinuity`
+oracle in `tools/ferrosintesis-samples/test_prepare.py`.
 
 ## Regenerating
 

@@ -1094,6 +1094,8 @@ class PrepareSampleBankTests(unittest.TestCase):
         """
         crates_dir = os.path.join(prepare.REPO_ROOT, "crates")
         checked = 0
+        format_counts = {".wav": 0, prepare.PACKAGED_EXT: 0}
+        checked_names = set()
         offenders = set()
         for crate in sorted(os.listdir(crates_dir)):
             sample_dir = os.path.join(crates_dir, crate, "samples")
@@ -1105,11 +1107,30 @@ class PrepareSampleBankTests(unittest.TestCase):
                 path = os.path.join(sample_dir, name)
                 one_shot, step, ordinary_step = self._onset_continuity(path)
                 checked += 1
+                format_counts[os.path.splitext(name)[1]] += 1
+                checked_names.add((crate, name))
                 limit = max(ordinary_step, 1.0 / 32768.0) if one_shot else ordinary_step
                 if step > limit:
                     offenders.add((crate, name))
 
         self.assertGreater(checked, 1000, "the sweep stopped reaching the sample crates")
+        self.assertGreaterEqual(
+            format_counts[prepare.PACKAGED_EXT],
+            900,
+            "the sweep stopped reaching the converted FLAC banks",
+        )
+        self.assertGreaterEqual(
+            format_counts[".wav"],
+            50,
+            "the sweep stopped reaching the retained WAV banks",
+        )
+        self.assertTrue(
+            {
+                ("ferrosintesis-samples-gong", "gong_ageng_loud.flac"),
+                ("ferrosintesis-samples-gong", "gong_ageng_soft.flac"),
+            }.issubset(checked_names),
+            "the converted Gong layers must stay in the continuity sweep",
+        )
         self.assertEqual(
             offenders - self.KNOWN_DISCONTINUOUS_ONSETS,
             set(),
@@ -1121,6 +1142,32 @@ class PrepareSampleBankTests(unittest.TestCase):
             "these are fixed — delete them from KNOWN_DISCONTINUOUS_ONSETS "
             "(and close MM-BUG-NMI-00001 if the set is now empty)",
         )
+
+    @staticmethod
+    def _continuity_flac(tmp, name, samples):
+        wav = os.path.join(tmp, f"{name}.wav")
+        flac = os.path.join(tmp, f"{name}.flac")
+        prepare.write_wav_mono(wav, samples, prepare.OUT_SR)
+        prepare._encode_flac(wav, flac)
+        return flac
+
+    def test_flac_onset_oracle_catches_a_one_shot_frame_zero_jump(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._continuity_flac(tmp, "one-shot-jump", [0.75] * 500 + [0.0])
+
+            one_shot, step, ordinary_step = self._onset_continuity(path)
+
+        self.assertTrue(one_shot)
+        self.assertGreater(step, max(ordinary_step, 1.0 / 32768.0))
+
+    def test_flac_onset_oracle_catches_a_loop_wrap_discontinuity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._continuity_flac(tmp, "loop-wrap", [0.10] * 500 + [0.80])
+
+            one_shot, step, ordinary_step = self._onset_continuity(path)
+
+        self.assertFalse(one_shot)
+        self.assertGreater(step, ordinary_step)
 
     def test_dulcimer_assets_enter_from_silence(self):
         """The two formerly missed dulcimer openings must be de-clicked at frame zero."""

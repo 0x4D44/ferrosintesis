@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00045 — Clavinet bank's format assertion accepts RIFF or FLAC, so a WAV regression into a FLAC bank stays green
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-samples-clavinet
 - **Raised:** 2026-08-18T19:41:06Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T141946Z-971f4b5e
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00045-run-fix-20260913T141946Z-971f4b5e
-- **Owner base:** 474ad95ad9e6b9da04452d02cc8c36fd1c800d64
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T14:19:46Z
-- **Owner until:** 2026-09-13T16:19:46Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T19:41:06Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-18T19:41:06Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T14:35:13Z, deltic:auto role=fix run=fix-20260913T141946Z-971f4b5e branch=task/bug-MM-BUG-CRUCIBLE-00045-run-fix-20260913T141946Z-971f4b5e code=3385fe47a80d983e636bc90520432087f9dfb772 gate=manual)
 
 ## Observation
 

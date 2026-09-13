@@ -16,6 +16,9 @@ belong in `CLAUDE.md`, not here.
 - 2026.09.13 — **Whole-file sample generation must fail closed on custom API** (`gen_crate_lib.py:custom_inventory_reason`).
   - Detect managed inventory regions and public items outside `FILE_COUNT` / `get`; a core-only token let drumkit APIs disappear.
 
+- 2026.09.13 — **Committed source copies race in shared bake caches** (`prepare.py:ensure_freesound_sources`).
+  - Read worktree-local sources directly; fixed-name copies into `%TEMP%/vsco2ce_src` cross-contaminate concurrent bakes.
+
 - 2026.09.13 — **A large attack can hide a bad one-shot frame zero** (`test_prepare.py:PrepareSampleBankTests._onset_limit`).
   - Judge one-shot openings against an absolute or peak-relative floor; comparing them with ordinary attack motion let five stale assets pass.
 

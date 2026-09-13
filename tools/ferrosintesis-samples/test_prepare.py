@@ -2685,6 +2685,141 @@ class MandolinConcurrentSourceTest(unittest.TestCase):
                 )
 
 
+class LocalCommittedSourceConcurrentTest(unittest.TestCase):
+    """MM-BUG-CRU-00068: local source bakes do not share copied source bytes."""
+
+    def run_concurrent_intake(self, kind):
+        worker = textwrap.dedent(
+            """
+            import os
+            import sys
+            import time
+            from unittest import mock
+
+            import prepare
+
+            kind, source_dir, shared_src, sync, token = sys.argv[1:]
+            other = "B" if token == "A" else "A"
+            source_name = "rhodes_C4.wav" if kind == "freesound" else "picked_E2.wav"
+            dest_name = source_name if kind == "freesound" else "eastpick_E2.wav"
+            token_bytes = token.encode("ascii") * 4096
+
+            def wait_for(prefix):
+                open(os.path.join(sync, f"{prefix}-{token}"), "wb").close()
+                deadline = time.monotonic() + 10
+                while not os.path.exists(os.path.join(sync, f"{prefix}-{other}")):
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(f"{kind} {prefix} barrier timed out")
+                    time.sleep(0.01)
+
+            def overlapping_copy(source, destination):
+                with open(destination, "wb") as output:
+                    wait_for(f"{kind}-copy-open")
+                    output.write(token_bytes)
+                    output.flush()
+                    wait_for(f"{kind}-copy-complete")
+                return destination
+
+            patches = [
+                mock.patch.object(prepare.shutil, "copyfile", side_effect=overlapping_copy),
+            ]
+            if kind == "freesound":
+                patches.extend([
+                    mock.patch.object(prepare, "FREESOUND_SRC", source_dir),
+                    mock.patch.object(
+                        prepare, "FREESOUND_SOURCES", {source_name: source_name}
+                    ),
+                ])
+            else:
+                patches.extend([
+                    mock.patch.object(prepare, "EASTMAN_SRC", source_dir),
+                ])
+
+            with contextlib.ExitStack() as stack:
+                for patch in patches:
+                    stack.enter_context(patch)
+                if kind == "freesound":
+                    family_src = prepare.ensure_freesound_sources(shared_src)
+                    consumed_name = source_name
+                else:
+                    family_src = prepare.ensure_eastman_sources(
+                        shared_src, {dest_name: source_name}
+                    )
+                    consumed_name = source_name if family_src else dest_name
+                    family_src = family_src or shared_src
+                with open(os.path.join(family_src, consumed_name), "rb") as source:
+                    if source.read() != token_bytes:
+                        raise RuntimeError(
+                            f"{token}: consumed another process's {kind} source"
+                        )
+                open(os.path.join(sync, f"{kind}-consumed-{token}"), "wb").close()
+            """
+        )
+        with tempfile.TemporaryDirectory() as temp_root:
+            shared_src = os.path.join(temp_root, "shared-src")
+            sync = os.path.join(temp_root, "sync")
+            os.makedirs(shared_src)
+            os.makedirs(sync)
+            source_dirs = []
+            source_name = "rhodes_C4.wav" if kind == "freesound" else "picked_E2.wav"
+            for token in ("A", "B"):
+                source_dir = os.path.join(temp_root, f"source-{token}")
+                os.makedirs(source_dir)
+                with open(os.path.join(source_dir, source_name), "wb") as source:
+                    source.write(token.encode("ascii") * 4096)
+                source_dirs.append(source_dir)
+
+            script = os.path.join(temp_root, f"concurrent_{kind}_worker.py")
+            with open(script, "w", encoding="utf-8") as output:
+                output.write("import contextlib\n" + worker)
+
+            module_dir = os.path.abspath(os.path.dirname(prepare.__file__))
+            child_env = os.environ.copy()
+            child_env["PYTHONPATH"] = (
+                module_dir + os.pathsep + child_env.get("PYTHONPATH", "")
+            )
+            processes = [
+                subprocess.Popen(
+                    [sys.executable, script, kind, source_dir, shared_src, sync, token],
+                    cwd=module_dir,
+                    env=child_env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                for source_dir, token in zip(source_dirs, ("A", "B"))
+            ]
+            results = []
+            try:
+                for process in processes:
+                    stdout, stderr = process.communicate(timeout=15)
+                    results.append((process.returncode, stdout, stderr))
+            except subprocess.TimeoutExpired:
+                for process in processes:
+                    if process.poll() is None:
+                        process.kill()
+                for process in processes:
+                    process.communicate()
+                self.fail(f"concurrent {kind} worker timed out")
+
+            for token, (returncode, stdout, stderr) in zip(("A", "B"), results):
+                self.assertEqual(
+                    returncode,
+                    0,
+                    f"worker {token} failed:\nstdout={stdout}\nstderr={stderr}",
+                )
+                self.assertTrue(
+                    os.path.exists(os.path.join(sync, f"{kind}-consumed-{token}")),
+                    f"worker {token} did not consume its own {kind} source",
+                )
+
+    def test_two_processes_keep_freesound_sources_isolated(self):
+        self.run_concurrent_intake("freesound")
+
+    def test_two_processes_keep_eastman_sources_isolated(self):
+        self.run_concurrent_intake("eastman")
+
+
 class YdpArchiveCacheTest(unittest.TestCase):
     """MM-BUG-KILN-00141: YDP warm caches remain bound to the archive pin."""
 

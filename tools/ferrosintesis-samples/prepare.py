@@ -1116,8 +1116,8 @@ LOCAL_SOURCES = {
 
 # Freesound onset sources (GM4 Rhodes CC-BY, GM15 dulcimer CC-BY, GM10 music box CC0) —
 # Freesound gates downloads behind a login, so (like gong-src) the DECODED + trimmed source
-# notes are committed here, not auto-fetched. ensure_freesound_sources copies them into the
-# temp `src` so the main bake loop trims to onset + measures the root. Routed by
+# notes are committed here, not auto-fetched. ensure_freesound_sources returns this
+# directory so the main bake loop trims to onset + measures the root directly. Routed by
 # FAMILY_PACKAGE: rhodes/dulcimer → the CC-BY `-ccby` crate; musicbox → the CC0 `-orchestral2`.
 # Provenance (exact pack IDs/SHAs) in crates/ferrosintesis-samples-ccby/PROVENANCE.md.
 FREESOUND_SRC = os.path.join(TOOL_DIR, "freesound-src")
@@ -1732,11 +1732,17 @@ def ensure_direct_sources(src, source_map, label):
         ensure_source(fn, url, src, label=label)
 
 
-def ensure_freesound_sources(src):
-    """Copy the committed Freesound onset sources (freesound-src/*.wav) into `src` for the
-    main bake loop (they are auth-gated, so committed as source like gong-src, not fetched)."""
+def ensure_freesound_sources(_src):
+    """Return the committed Freesound source directory without copying into shared temp."""
+    if not os.path.isdir(FREESOUND_SRC):
+        raise FileNotFoundError(
+            f"Freesound source directory is missing: {FREESOUND_SRC}"
+        )
     for fn in FREESOUND_SOURCES:
-        shutil.copyfile(os.path.join(FREESOUND_SRC, fn), os.path.join(src, fn))
+        path = os.path.join(FREESOUND_SRC, fn)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"Freesound source file is missing: {path}")
+    return FREESOUND_SRC
 
 
 def ensure_mandolin_sources(_src):
@@ -1746,16 +1752,22 @@ def ensure_mandolin_sources(_src):
     return MANDOLIN_SRC
 
 
-def ensure_eastman_sources(src, source_map):
-    """Copy the committed Eastman E1D zone WAVs into `src` under their DEST names.
+def ensure_eastman_sources(_src, source_map):
+    """Return the committed Eastman E1D source directory without copying into shared temp.
 
     First-party recordings tracked in this repo (see the EASTMAN block above), so
     there is nothing to fetch and no digest to verify — same local-file intake shape
     as `ensure_freesound_sources` / the gong sources, never `ensure_source`. The main
-    bake loop then reads `src/<dest>` and runs the normal trim / measure / route chain.
+    bake loop reads the source filename from `source_map` and runs the normal trim /
+    measure / route chain while retaining the destination name.
     """
+    if not os.path.isdir(EASTMAN_SRC):
+        raise FileNotFoundError(f"Eastman source directory is missing: {EASTMAN_SRC}")
     for dest, fn in source_map.items():
-        shutil.copyfile(os.path.join(EASTMAN_SRC, fn), os.path.join(src, dest))
+        path = os.path.join(EASTMAN_SRC, fn)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"Eastman source file is missing: {path}")
+    return EASTMAN_SRC
 
 
 def validate_pcm16_wav(path):
@@ -5984,9 +5996,14 @@ def _bake_mtg_sax(src):
     return rows
 
 
-def _prepare_generic_source_sample(fn, family_src):
-    """Run the shared source-to-onset transform and return its report row."""
-    x, sr = read_wav(os.path.join(family_src, fn))
+def _prepare_generic_source_sample(fn, family_src, source_name=None):
+    """Run the shared source-to-onset transform and return its report row.
+
+    ``source_name`` lets committed banks retain output-oriented logical names while
+    reading a differently named source file directly from their repository directory.
+    """
+    source_name = fn if source_name is None else source_name
+    x, sr = read_wav(os.path.join(family_src, source_name))
     x = resample(x, sr, OUT_SR)
     sr = OUT_SR
     keep_s, fade_s = KEEP_FILE.get(fn, KEEP_FAM.get(fn.split("_")[0], (KEEP_S, FADE_S)))
@@ -6544,15 +6561,17 @@ def main():
             ensure_guitar_sources(src)
         if want("fingerbass") or want("pickbass"):
             ensure_ebass_sources(src, only)
+        freesound_src = None
+        eastman_src = None
         if want("rhodes") or want("dulcimer") or want("musicbox") or want("bottle"):
-            ensure_freesound_sources(src)
+            freesound_src = ensure_freesound_sources(src)
         if want("mandolin"):
             mandolin_src = ensure_mandolin_sources(src)
             rows += _bake_mandolin(mandolin_src)
         if want("eastpick"):
-            ensure_eastman_sources(src, EASTPICK_SOURCES)
+            eastman_src = ensure_eastman_sources(src, EASTPICK_SOURCES)
         if want("eastpluck"):
-            ensure_eastman_sources(src, EASTPLUCK_SOURCES)
+            eastman_src = ensure_eastman_sources(src, EASTPLUCK_SOURCES)
         if want("chanter"):
             ensure_bagpipe_sources(src)
         if want("grand"):
@@ -6693,8 +6712,20 @@ def main():
                 fam = fn.split("_")[0]
                 if fam in {"grand", "mandolin"} or fam in _BASS_FAMILIES or not want(fam):
                     continue
-                family_src = headroom_src if fn in HEADROOM_SOURCES else src
-                seg, sr, row = _prepare_generic_source_sample(fn, family_src)
+                source_name = None
+                if fn in FREESOUND_SOURCES:
+                    family_src = freesound_src
+                elif fn in EASTPICK_SOURCES:
+                    family_src = eastman_src
+                    source_name = EASTPICK_SOURCES[fn]
+                elif fn in EASTPLUCK_SOURCES:
+                    family_src = eastman_src
+                    source_name = EASTPLUCK_SOURCES[fn]
+                else:
+                    family_src = headroom_src if fn in HEADROOM_SOURCES else src
+                seg, sr, row = _prepare_generic_source_sample(
+                    fn, family_src, source_name
+                )
                 staging, logical_names = stage_for(fam)
                 logical_names.append(fn)
                 if fam == "piano":

@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00062 — GM76 lazy-fallback regression test assumes embedded samples, failing cargo test --no-default-features
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** ferrosintesis / GM76 voice tests
 - **Raised:** 2026-09-13T19:23:17Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T201032Z-feadacb0
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00062-run-fix-20260913T201032Z-feadacb0
-- **Owner base:** d480a6a2ab0d45dd29405136d711a54485e5e9d1
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T20:10:32Z
-- **Owner until:** 2026-09-13T22:10:32Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:23:17Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:23:17Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T20:22:06Z, deltic:auto role=fix run=fix-20260913T201032Z-feadacb0 branch=task/bug-MM-BUG-CRU-00062-run-fix-20260913T201032Z-feadacb0 code=28a82cbdea5d7f57ef044f537fc4469f3cbd59a8 gate=manual)
 
 ## Observation
 

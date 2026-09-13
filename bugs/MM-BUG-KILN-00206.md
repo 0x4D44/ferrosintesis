@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00206 — Sample-crate Rust generator writes directly over lib.rs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample crate generation / output durability
 - **Raised:** 2026-08-16T08:41:07Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T150200Z-99fda007
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00206-run-fix-20260913T150200Z-99fda007
-- **Owner base:** de048333e03e53624da788a2a49ccbafb493b2d2
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:02:00Z
-- **Owner until:** 2026-09-13T17:02:00Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T08:41:07Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-16T08:41:07Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T15:11:08Z, deltic:auto role=fix run=fix-20260913T150200Z-99fda007 branch=task/bug-MM-BUG-KILN-00206-run-fix-20260913T150200Z-99fda007 code=9a28305b82c66689effa1f06abd0677a0ebad0ea gate=manual)
 
 ## Observation
 

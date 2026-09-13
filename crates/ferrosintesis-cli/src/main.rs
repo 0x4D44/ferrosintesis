@@ -19,7 +19,7 @@ use std::time::Instant;
 
 fn usage() -> ! {
     eprintln!(
-        "usage: ferrosintesis <input.mid> [-o out.wav] [--rate N] [--wet X] [--delay MS] [--tail S] [--no-samples] [--solo CH[,CH...]] [--lufs LUFS] [--tp-ceiling dBTP] [--peak-normalize] [-q]\n  default: loudness-normalize to -18 LUFS with a -1 dBTP true-peak limit;\n  --peak-normalize uses the legacy per-track peak normalization (-1 dBFS)."
+        "usage: ferrosintesis <input.mid> [-o out.wav] [--rate 44100] [--wet 0.32] [--delay MS] [--tail 6] [--no-samples] [--solo CH[,CH...]] [--lufs LUFS] [--tp-ceiling dBTP] [--peak-normalize] [-q]\n  default: loudness-normalize to -18 LUFS with a -1 dBTP true-peak limit;\n  --peak-normalize uses the legacy per-track peak normalization (-1 dBFS)."
     );
     std::process::exit(2);
 }

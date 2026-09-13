@@ -380,21 +380,28 @@ mod tests {
     fn the_cli_help_text_states_the_real_defaults() {
         let a = authority();
         let cli = read("crates/ferrosintesis-cli/src/main.rs");
-        let docs: String = cli
-            .lines()
-            .filter(|l| l.trim_start().starts_with("//!") || l.contains("usage:"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let usage = cli
+            .split_once("fn usage() -> !")
+            .and_then(|(_, rest)| {
+                rest.split_once("std::process::exit(2);")
+                    .map(|(body, _)| body)
+            })
+            .expect("the CLI still has a usage() function with a terminating exit");
 
         for (flag, field_name) in [("--rate", "sr"), ("--wet", "wet"), ("--tail", "tail")] {
             let want = num(field(&a, field_name)).expect("a numeric default");
-            // The prose writes 6.0 as "6" and 44_100.0 as "44100"; accept either spelling of
-            // the same value rather than pinning the formatting.
-            let found = docs.split_whitespace().any(|tok| {
-                num(tok.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '.' && c != '-'))
-                    .map(|v| v == want)
-                    .unwrap_or(false)
-            });
+            let found = usage
+                .split_once(flag)
+                .and_then(|(_, rest)| rest.split_whitespace().next())
+                .and_then(|tok| {
+                    // The usage string writes the default immediately after its flag, often
+                    // before a closing `]`; accept equivalent numeric spellings such as `6.0`
+                    // and `6` without accepting a value found under another flag.
+                    num(tok
+                        .trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '.' && c != '-'))
+                })
+                .map(|got| got == want)
+                .unwrap_or(false);
             assert!(
                 found,
                 "the CLI's own documentation never states the default for `{flag}` \

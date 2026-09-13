@@ -10,6 +10,9 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **CLI default oracles must parse the user-visible usage text beside each flag** (`render_profile.rs`).
+  - Scanning module docs for values let swapped flags and missing help defaults pass.
+
 - 2026.09.13 — **Public sample summaries may delegate to packaged `PROVENANCE.md`** (`inventory.rs`).
 
 - 2026.09.13 — **Clippy's `manual_repeat_n` fix is MSRV-safe here** (`midi.rs`, `parse_robustness.rs`).

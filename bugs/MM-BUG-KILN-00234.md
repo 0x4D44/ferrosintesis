@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00234 — FLAC decoder ignores mandatory frame CRCs
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis-flac / frame integrity
 - **Raised:** 2026-08-16T20:59:26Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T060531Z-212caf5b
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00234-run-fix-20260913T060531Z-212caf5b
-- **Owner base:** 5feb4b0e37354574c6c6ddb8f944d570654cc7f6
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T06:05:31Z
-- **Owner until:** 2026-09-13T08:05:31Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T20:59:26Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T20:59:26Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:23:07Z, deltic:auto role=fix run=fix-20260913T060531Z-212caf5b branch=task/bug-MM-BUG-KILN-00234-run-fix-20260913T060531Z-212caf5b code=971ec0cf64c7769508fd7a446778bebb69887a7f gate=manual)
 
 ## Observation
 

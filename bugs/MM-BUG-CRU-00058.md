@@ -6,15 +6,15 @@
 - **Area:** sample tooling / Steinway alias oracle
 - **Raised:** 2026-09-13T19:22:42Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T203306Z-f5577e21
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00058-run-verify-20260913T203306Z-f5577e21
+- **Owner base:** fc12f9461ec70c97be243d1500ce62e01ee5d051
+- **Owner fingerprint:** sha256:f78ae098f7d4eb513b0d28308d9f536ee8c7c991041bb67a2fd90963c6b6c577
+- **Owner since:** 2026-09-13T20:33:06Z
+- **Owner until:** 2026-09-13T22:33:06Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

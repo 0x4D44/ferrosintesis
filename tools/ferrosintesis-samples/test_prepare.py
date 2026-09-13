@@ -3278,6 +3278,134 @@ class BassOutputInventoryTest(unittest.TestCase):
         )
 
 
+class BassWholeBankPublicationTest(unittest.TestCase):
+    """MM-BUG-KILN-00209: a failed bass rebake preserves the selected bank."""
+
+    def setUp(self):
+        self.repo_root = tempfile.mkdtemp()
+        self.src = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.repo_root, True)
+        self.addCleanup(shutil.rmtree, self.src, True)
+        self.crate_dir = os.path.join(
+            self.repo_root, "crates", "ferrosintesis-samples-bass")
+        self.sample_dir = os.path.join(self.crate_dir, "samples")
+        os.makedirs(self.sample_dir)
+        self.expected = tuple(sorted(
+            set(prepare.FINGERBASS_SOURCES) | set(prepare.PICKBASS_SOURCES)
+        ))
+        for name in self.expected:
+            packaged = prepare.packaged_name(name)
+            payload = f"old bass bank: {packaged}".encode("ascii")
+            with open(os.path.join(self.sample_dir, packaged), "wb") as output:
+                output.write(payload)
+
+    def snapshot_bank(self):
+        snapshot = {}
+        for name in sorted(os.listdir(self.sample_dir)):
+            with open(os.path.join(self.sample_dir, name), "rb") as source:
+                snapshot[name] = source.read()
+        return snapshot
+
+    @staticmethod
+    def staged_sample(fn, _src):
+        segment = [0.0, 0.25, -0.25, 0.0]
+        row = (fn, 440.0, 440.0, 440.0, 0.0, 1.0, len(segment) / prepare.OUT_SR)
+        return segment, prepare.OUT_SR, row
+
+    def run_bake(self, transform):
+        with mock.patch.object(prepare, "REPO_ROOT", self.repo_root), \
+                mock.patch.object(
+                    prepare, "_prepare_generic_source_sample", side_effect=transform
+                ):
+            return prepare._bake_bass(self.src, only=None)
+
+    def assert_no_bass_transaction_artifacts(self):
+        self.assertEqual(
+            [name for name in os.listdir(self.sample_dir) if name.endswith(".part")],
+            [],
+        )
+
+    def test_late_transform_failure_never_touches_the_previous_bank(self):
+        before = self.snapshot_bank()
+        calls = 0
+
+        def fail_on_fifth(fn, src):
+            nonlocal calls
+            calls += 1
+            if calls == 5:
+                raise OSError("late bass transform")
+            return self.staged_sample(fn, src)
+
+        with self.assertRaisesRegex(OSError, "late bass transform"):
+            self.run_bake(fail_on_fifth)
+
+        self.assertEqual(calls, 5)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assert_no_bass_transaction_artifacts()
+
+    def test_publication_failure_rolls_back_every_selected_file(self):
+        before = self.snapshot_bank()
+        replacements = 0
+        fail_at = len(self.expected) + 3
+        real_replace = prepare.atomic_replace
+
+        def fake_encode(_wav, flac):
+            with open(flac, "wb") as output:
+                output.write(b"new-flac")
+
+        def fail_during_publication(source, destination):
+            nonlocal replacements
+            replacements += 1
+            if replacements == fail_at:
+                raise OSError("injected bass publication failure")
+            return real_replace(source, destination)
+
+        with (
+            mock.patch.object(prepare, "_prepare_generic_source_sample",
+                              side_effect=self.staged_sample),
+            mock.patch.object(prepare, "_encode_flac", side_effect=fake_encode),
+            mock.patch.object(prepare, "_decode_flac_pcm", return_value=b"pcm"),
+            mock.patch.object(prepare, "_read_wav_pcm", return_value=b"pcm"),
+            mock.patch.object(
+                prepare, "atomic_replace", side_effect=fail_during_publication
+            ),
+        ):
+            with self.assertRaisesRegex(
+                    OSError, "injected bass publication failure"):
+                self.run_bake(self.staged_sample)
+
+        self.assertGreater(replacements, fail_at)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assert_no_bass_transaction_artifacts()
+
+    def test_main_routes_selected_bass_through_the_whole_bank_baker(self):
+        with (
+            mock.patch.object(prepare, "REPO_ROOT", self.repo_root),
+            mock.patch.object(prepare, "_require_ffmpeg"),
+            mock.patch.object(prepare.socket, "setdefaulttimeout"),
+            mock.patch.object(prepare.tempfile, "gettempdir",
+                              return_value=self.repo_root),
+            mock.patch.object(prepare, "_validate_generated_output_inventory"),
+            mock.patch.object(prepare, "ensure_ebass_sources"),
+            mock.patch.object(prepare, "_bake_bass", return_value=[]) as bake_bass,
+            mock.patch.object(
+                prepare, "_prepare_generic_source_sample",
+                side_effect=AssertionError("generic loop touched bass"),
+            ),
+            mock.patch.object(prepare, "_finish"),
+            mock.patch.object(
+                prepare, "_bake_selected_local_banks", return_value=[]
+            ),
+            mock.patch.object(
+                prepare.sys, "argv", ["prepare.py", "--only=fingerbass"]
+            ),
+        ):
+            prepare.main()
+
+        bake_bass.assert_called_once()
+        self.assertEqual(bake_bass.call_args.args[1], {"fingerbass"})
+
+
 class HonkytonkOutputInventoryTest(unittest.TestCase):
     """MM-BUG-KILN-00143: rebakes must reject obsolete owned outputs."""
 

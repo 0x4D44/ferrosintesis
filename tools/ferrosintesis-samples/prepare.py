@@ -5604,6 +5604,173 @@ def _bake_mtg_sax(src):
     return rows
 
 
+def _prepare_generic_source_sample(fn, family_src):
+    """Run the shared source-to-onset transform and return its report row."""
+    x, sr = read_wav(os.path.join(family_src, fn))
+    x = resample(x, sr, OUT_SR)
+    sr = OUT_SR
+    keep_s, fade_s = KEEP_FILE.get(fn, KEEP_FAM.get(fn.split("_")[0], (KEEP_S, FADE_S)))
+    seg = trim_to_onset(x, sr, keep_s, fade_s)
+    fam = fn.split("_")[0]
+    # Unpitched one-shots skip root measurement. Inert since the drum overlays
+    # were retired out of SOURCES (see DRUM_SOURCES above); kept because it is the
+    # recipe record for the archived files and the hook any future unpitched family
+    # would reuse.
+    if fn in DRUM_SOURCES:
+        root = f0 = cand = cents = conf = None
+    else:
+        lo, hi = F0_RANGE.get(fam, (80.0, 3000.0))
+        # nominal pitch from the filename, e.g. violin_G3_f / flute_C4
+        note = next(p for p in fn[:-4].split("_") if p[0] in "ABCDEFG" and p[-1].isdigit())
+        nominal = NOTE_HZ[note]
+        # 2f-dominant families: cap the ceiling per-note just above the label
+        # so autocorr cannot lock onto the 2nd harmonic (see TWO_F_STRONG).
+        if fam in TWO_F_STRONG:
+            hi = min(hi, nominal * 1.5)
+        f0, conf = measure_f0(seg, sr, lo, hi)
+        # snap measured f0 to the nearest octave of the nominal note
+        cand = min((nominal * 2 ** k for k in range(-2, 3)),
+                   key=lambda c: abs(math.log(f0 / c)))
+        cents = 1200 * math.log2(f0 / cand)
+        root = f0 if abs(cents) < 60 else cand
+    return seg, sr, (fn, root, f0, cand, cents, conf, len(seg) / sr)
+
+
+_BASS_FAMILIES = frozenset(("fingerbass", "pickbass"))
+
+
+def _publish_bass_bank(staging_dir, output_dir, logical_names):
+    """Encode and atomically publish a complete selected bass bank with rollback."""
+    logical_names = tuple(sorted(logical_names))
+    packaged_names = tuple(packaged_name(name) for name in logical_names)
+    if len(set(packaged_names)) != len(packaged_names):
+        raise ValueError("bass logical names collapse to duplicate packaged names")
+
+    staged = {
+        name for name in os.listdir(staging_dir)
+        if name.endswith((".wav", PACKAGED_EXT))
+    }
+    if staged != set(logical_names):
+        raise ValueError(
+            "bass staging output is incomplete: expected "
+            f"{len(logical_names)} WAVs, found {len(staged)}"
+        )
+
+    os.makedirs(output_dir, exist_ok=True)
+    mixed = sorted(
+        name for name in os.listdir(output_dir)
+        if name.endswith(".wav") and packaged_name(name) in packaged_names
+    )
+    if mixed:
+        raise ValueError(
+            "bass output contains mixed WAV/FLAC containers: "
+            + ", ".join(mixed)
+        )
+
+    parts = {}
+    backup_dir = None
+    cleanup_backup = True
+    backups = {}
+    published = []
+    try:
+        # Finish and verify every FLAC before moving one old bank entry aside.
+        for logical, packaged in zip(logical_names, packaged_names):
+            wav = os.path.join(staging_dir, logical)
+            validate_pcm16_wav(wav)
+            descriptor, part = tempfile.mkstemp(
+                prefix=f".{packaged}.", suffix=".part", dir=output_dir
+            )
+            os.close(descriptor)
+            parts[packaged] = part
+            try:
+                _encode_flac(wav, part)
+                if _decode_flac_pcm(part) != _read_wav_pcm(wav):
+                    raise ValueError(f"{packaged}: FLAC encode was not bit-exact")
+            except Exception:
+                if os.path.exists(part):
+                    os.remove(part)
+                parts[packaged] = None
+                raise
+
+        backup_dir = tempfile.mkdtemp(prefix=".bass-backup-", dir=output_dir)
+        try:
+            for packaged in packaged_names:
+                destination = os.path.join(output_dir, packaged)
+                if os.path.exists(destination):
+                    backup = os.path.join(backup_dir, packaged)
+                    atomic_replace(destination, backup)
+                    backups[packaged] = backup
+            for packaged in packaged_names:
+                destination = os.path.join(output_dir, packaged)
+                atomic_replace(parts[packaged], destination)
+                parts[packaged] = None
+                published.append(destination)
+        except Exception as error:
+            rollback_errors = []
+            for destination in reversed(published):
+                try:
+                    if os.path.exists(destination):
+                        os.remove(destination)
+                except OSError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            for packaged, backup in reversed(tuple(backups.items())):
+                if not os.path.exists(backup):
+                    continue
+                try:
+                    atomic_replace(backup, os.path.join(output_dir, packaged))
+                except OSError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            if rollback_errors:
+                cleanup_backup = False
+                raise RuntimeError(
+                    "bass bank publication failed and rollback was incomplete: "
+                    + "; ".join(rollback_errors)
+                ) from error
+            raise
+    finally:
+        for part in parts.values():
+            if part is not None and os.path.exists(part):
+                os.remove(part)
+        if backup_dir is not None and cleanup_backup:
+            shutil.rmtree(backup_dir, ignore_errors=True)
+
+
+def _bake_bass(src, only):
+    """Bake selected electric-bass zones in a fresh staging bank, then publish."""
+    selected = {}
+    if _wants_family(only, "fingerbass"):
+        selected.update(FINGERBASS_SOURCES)
+    if _wants_family(only, "pickbass"):
+        selected.update(PICKBASS_SOURCES)
+    expected = set(selected)
+    if not expected:
+        return []
+
+    out_dir = os.path.dirname(sample_output_path(sorted(expected)[0]))
+    selected_families = {name.split("_", 1)[0] for name in expected}
+    _validate_generated_output_families(
+        selected_families, expected, output_dir=out_dir)
+    rows = []
+    with tempfile.TemporaryDirectory(prefix=".bass-bank-") as staging:
+        for fn in sorted(expected):
+            seg, sr, row = _prepare_generic_source_sample(fn, src)
+            write_wav_mono(os.path.join(staging, fn), seg, sr)
+            rows.append(row)
+        staged = {
+            name for name in os.listdir(staging)
+            if name.endswith((".wav", PACKAGED_EXT))
+        }
+        if staged != expected:
+            raise ValueError(
+                "bass staging output is incomplete: expected "
+                f"{len(expected)} WAVs, found {len(staged)}"
+            )
+        _validate_generated_output_inventory(
+            None, expected, output_dir=staging)
+        _publish_bass_bank(staging, out_dir, expected)
+    return rows
+
+
 def _print_sample_rows(rows):
     print(f"{'file':26} {'root_hz':>9} {'measured':>9} {'nominal':>9} {'cents':>7} {'conf':>5} {'len_s':>6}")
     for r in rows:
@@ -5616,9 +5783,9 @@ def _print_sample_rows(rows):
 def _finish(rows):
     """Publish the banks this run wrote, then print the recipe table.
 
-    Every path through `main` that writes a bank ends here. Keeping the publish
-    step beside the print, rather than only at the bottom of `main`, is what
-    stops `--sax-only` (which returns early) from leaving its bank as WAV.
+    Generic paths through `main` end here. The bass path publishes its own
+    all-or-nothing transaction before entering the generic loop, while keeping
+    this final step is what stops `--sax-only` from leaving its bank as WAV.
     """
     published = publish_pending_banks()
     _print_sample_rows(rows)
@@ -6111,6 +6278,8 @@ def main():
             sax_src = os.path.join(tempfile.gettempdir(), "mtg_sax_src", MTG_SAX_REV)
             os.makedirs(sax_src, exist_ok=True)
             rows += _bake_mtg_sax(sax_src)
+        if want("fingerbass") or want("pickbass"):
+            rows += _bake_bass(src, only)
         for fn in sorted(
             SOURCES | GUITAR_SOURCES | STEEL_URLS | HARPSICHORD_URLS | HARP_URLS
             | OCARINA_URLS | RECORDER_URLS | TIMPANI_URLS | VIOLA_URLS
@@ -6122,37 +6291,11 @@ def main():
             | GRAND_SOURCES
             | STEINWAYB_SOURCES | KAWAI_SOURCES | HEADROOM_SOURCES
         ):
-            if not want(fn.split("_")[0]):
+            fam = fn.split("_")[0]
+            if fam in _BASS_FAMILIES or not want(fam):
                 continue
             family_src = headroom_src if fn in HEADROOM_SOURCES else src
-            x, sr = read_wav(os.path.join(family_src, fn))
-            x = resample(x, sr, OUT_SR)
-            sr = OUT_SR
-            keep_s, fade_s = KEEP_FILE.get(fn, KEEP_FAM.get(fn.split("_")[0], (KEEP_S, FADE_S)))
-            seg = trim_to_onset(x, sr, keep_s, fade_s)
-            fam = fn.split("_")[0]
-            # Unpitched one-shots skip root measurement. Inert since the drum overlays
-            # were retired out of SOURCES (see DRUM_SOURCES above); kept because it is
-            # the recipe record for the archived files and the hook any future
-            # unpitched family would reuse.
-            if fn in DRUM_SOURCES:
-                root = f0 = cand = cents = conf = None
-            else:
-                lo, hi = F0_RANGE.get(fam, (80.0, 3000.0))
-                # nominal pitch from the filename, e.g. violin_G3_f / flute_C4
-                note = next(p for p in fn[:-4].split("_") if p[0] in "ABCDEFG" and p[-1].isdigit())
-                nominal = NOTE_HZ[note]
-                # 2f-dominant families: cap the ceiling per-note just above the label
-                # so autocorr cannot lock onto the 2nd harmonic (see TWO_F_STRONG).
-                if fam in TWO_F_STRONG:
-                    hi = min(hi, nominal * 1.5)
-                f0, conf = measure_f0(seg, sr, lo, hi)
-                # snap measured f0 to the nearest octave of the nominal note
-                cand = min((nominal * 2 ** k for k in range(-2, 3)),
-                           key=lambda c: abs(math.log(f0 / c)))
-                cents = 1200 * math.log2(f0 / cand)
-                root = f0 if abs(cents) < 60 else cand
-            row = (fn, root, f0, cand, cents, conf, len(seg) / sr)
+            seg, sr, row = _prepare_generic_source_sample(fn, family_src)
             if fam == "piano":
                 piano_pending.append((fn, seg, row))
             else:

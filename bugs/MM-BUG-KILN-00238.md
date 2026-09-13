@@ -6,15 +6,15 @@
 - **Area:** gong sample crate / public lookup contract
 - **Raised:** 2026-08-16T21:52:59Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T195755Z-f79e08c9
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00238-run-verify-20260913T195755Z-f79e08c9
+- **Owner base:** 6bf579c8825cfd21f7ceee44f3dc239d59b7711d
+- **Owner fingerprint:** sha256:9ed7c6c288fbdc7dc4845cf5c6223b7de69f3f961e18a1372565bf28679ea16a
+- **Owner since:** 2026-09-13T19:57:55Z
+- **Owner until:** 2026-09-13T21:57:55Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00240 — Packaged-sample onset sweep excludes every converted FLAC bank
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample tooling / committed onset continuity oracle
 - **Raised:** 2026-08-16T21:54:31Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T063558Z-2be406e5
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00240-run-fix-20260913T063558Z-2be406e5
-- **Owner base:** de085957563c29100cfe3e6bdc9b923e6e2097c8
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T06:35:58Z
-- **Owner until:** 2026-09-13T08:35:58Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T21:54:31Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T21:54:31Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:43:38Z, deltic:auto role=fix run=fix-20260913T063558Z-2be406e5 branch=task/bug-MM-BUG-KILN-00240-run-fix-20260913T063558Z-2be406e5 code=10ef4c899f29cdd505939258269d5ba80f8a2d32 gate=manual)
 
 ## Observation
 

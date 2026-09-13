@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00072 — Catalog overlap audit's reset-sorts-first same-tick rule has no cross-track control
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/render-catalog / MIDI overlap oracle tests
 - **Raised:** 2026-09-13T19:32:32Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T215005Z-786a2a87
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00072-run-fix-20260913T215005Z-786a2a87
-- **Owner base:** 7dfbb212297eb3105d0f6c4f93353e754390edb3
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T21:50:05Z
-- **Owner until:** 2026-09-13T23:50:05Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:32:32Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:32:32Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T21:53:18Z, deltic:auto role=fix run=fix-20260913T215005Z-786a2a87 branch=task/bug-MM-BUG-CRU-00072-run-fix-20260913T215005Z-786a2a87 code=984f2013061c25590e93bb843b9c6493bfe08d83 gate=manual)
 
 ## Observation
 

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00247 — Headroom sample documentation still describes WAV payloads after FLAC conversion
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** headroom sample crate / public package contract
 - **Raised:** 2026-08-17T00:04:27Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T162211Z-c54220b4
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00247-run-fix-20260913T162211Z-c54220b4
-- **Owner base:** f6432222a2c4a0391f9d21b210bb1b80ea54e6be
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T16:22:11Z
-- **Owner until:** 2026-09-13T18:22:11Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T00:04:27Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T00:04:27Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:30:46Z, deltic:auto role=fix run=fix-20260913T162211Z-c54220b4 branch=task/bug-MM-BUG-KILN-00247-run-fix-20260913T162211Z-c54220b4 code=edb66ef8deea05b93b1efb872863364dada43363 gate=manual)
 
 ## Observation
 

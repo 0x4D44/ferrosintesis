@@ -2209,6 +2209,22 @@ class ClavinetConcurrentExtractionTest(unittest.TestCase):
             self.assertNotIn(src, path_b)
 
 
+class B1RustdocHeaderTest(unittest.TestCase):
+    """MM-BUG-KILN-00267: the B1 crate-level consumer sentence is complete."""
+
+    def test_consumer_pointer_is_complete_before_the_licence_pointer(self):
+        lib = pathlib.Path(prepare.REPO_ROOT) / (
+            "crates/ferrosintesis-samples-b1-upright/src/lib.rs"
+        )
+        text = re.sub(r"//!\s?", "", lib.read_text(encoding="utf-8"))
+        normalized = re.sub(r"\s+", " ", text)
+        self.assertIn(
+            "Consumers normally reach this crate through `ferrosintesis`.",
+            normalized,
+        )
+        self.assertNotIn("through Licence/provenance", normalized)
+
+
 class B1ConcurrentPreparationTest(unittest.TestCase):
     """MM-BUG-KILN-00266: each B1 bake owns disposable intermediates."""
 

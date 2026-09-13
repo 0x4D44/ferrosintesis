@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00274 — Bounded MIDI files can expand into an unbounded decoded event flood
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** ferrosintesis / SMF parser resource bounds
 - **Raised:** 2026-08-17T09:41:16Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T173220Z-8a0f7670
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00274-run-fix-20260913T173220Z-8a0f7670
-- **Owner base:** 17c6adaab082558593f57afd4379ef2fd1504044
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T17:32:20Z
-- **Owner until:** 2026-09-13T19:32:20Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T09:41:16Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T09:41:16Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:54:48Z, deltic:auto role=fix run=fix-20260913T173220Z-8a0f7670 branch=task/bug-MM-BUG-KILN-00274-run-fix-20260913T173220Z-8a0f7670 code=4951e6ed6e747b0c11fd2054cd248b64e43cb5c0 gate=manual)
 
 ## Observation
 

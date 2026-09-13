@@ -6,15 +6,15 @@
 - **Area:** clavinet sample generation / failure atomicity
 - **Raised:** 2026-08-16T13:44:40Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T201249Z-09edf3d5
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00220-run-verify-20260913T201249Z-09edf3d5
+- **Owner base:** 68ff9ce0636bca61a689e57ecf3482ba97943eae
+- **Owner fingerprint:** sha256:67de86726efa9a838194928d2ee34045add0a5d0d38971117daa8548dc51df13
+- **Owner since:** 2026-09-13T20:12:49Z
+- **Owner until:** 2026-09-13T22:12:49Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

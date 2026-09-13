@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00069 — Honky-tonk bake decodes to fixed intermediates in the shared honkytonk_fb temp directory
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample tooling / concurrent cache isolation
 - **Raised:** 2026-09-13T19:26:11Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T213306Z-f78d849d
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00069-run-fix-20260913T213306Z-f78d849d
-- **Owner base:** 39d87ecfd8d449621b870612a6355eafe41b094f
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T21:33:06Z
-- **Owner until:** 2026-09-13T23:33:06Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:26:11Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:26:11Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T21:39:08Z, deltic:auto role=fix run=fix-20260913T213306Z-f78d849d branch=task/bug-MM-BUG-CRU-00069-run-fix-20260913T213306Z-f78d849d code=d3cd6cd2ad352c761c2c52a094e21a5f010395ff gate=manual)
 
 ## Observation
 

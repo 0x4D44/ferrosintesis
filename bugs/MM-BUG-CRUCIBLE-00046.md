@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00046 — Core and orchestral crates.io READMEs ship panicking get() examples and WAV container claims missed by MM-BUG-CRUCIBLE-00044
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-samples-core
 - **Raised:** 2026-08-18T22:27:49Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T143701Z-2acd888a
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00046-run-fix-20260913T143701Z-2acd888a
-- **Owner base:** be365e4024cf85d25ef3d66813cae890edb06abf
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T14:37:01Z
-- **Owner until:** 2026-09-13T16:37:01Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T22:27:49Z, raised via `deltic bugs new` model=claude-fable-5)
+- **State history:** Open (2026-08-18T22:27:49Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-09-13T14:42:26Z, deltic:auto role=fix run=fix-20260913T143701Z-2acd888a branch=task/bug-MM-BUG-CRUCIBLE-00046-run-fix-20260913T143701Z-2acd888a code=a69748aa8643f768336ac4b20629a86a19564bda gate=manual)
 
 ## Observation
 

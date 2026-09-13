@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00295 — the_cli_help_text_states_the_real_defaults never binds a default to its flag, and does not read the help text
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** crates/ferrosintesis
 - **Raised:** 2026-08-17T22:48:36Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T222640Z-883bf95f
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00295-run-fix-20260913T222640Z-883bf95f
-- **Owner base:** 9d0b96875a9fd94b73b896fb354982bea796bbf7
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:26:40Z
-- **Owner until:** 2026-09-14T00:26:40Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:48:36Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-17T22:48:36Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:36:29Z, deltic:auto role=fix run=fix-20260913T222640Z-883bf95f branch=task/bug-MM-BUG-KILN-00295-run-fix-20260913T222640Z-883bf95f code=63414e87dade028bc763832918bd5571ae471aa8 gate=manual)
 
 ## Observation
 

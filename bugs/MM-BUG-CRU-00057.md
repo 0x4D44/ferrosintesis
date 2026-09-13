@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00057 — Packaged-document link oracle treats a #fragment as part of the filename, so a valid README anchor link turns cargo test red
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** ferrosintesis / packaged-document link oracle
 - **Raised:** 2026-09-13T19:22:41Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T193602Z-fac72892
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00057-run-fix-20260913T193602Z-fac72892
-- **Owner base:** c890ee3d4bb08fe6bd014496bcc8794ca9fb6584
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T19:36:02Z
-- **Owner until:** 2026-09-13T21:36:02Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:22:41Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:22:41Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T19:48:20Z, deltic:auto role=fix run=fix-20260913T193602Z-fac72892 branch=task/bug-MM-BUG-CRU-00057-run-fix-20260913T193602Z-fac72892 code=9e87c96dc17ec76fec98a77ae665e337b98c602c gate=manual)
 
 ## Observation
 

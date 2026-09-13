@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis-flac / LPC validation
 - **Raised:** 2026-08-16T20:59:26Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T192111Z-6af50691
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00235-run-verify-20260913T192111Z-6af50691
+- **Owner base:** c26713ee50f0701718b8ec11c436f43f4c3d0696
+- **Owner fingerprint:** sha256:f78de81794ed1dbc6a67d4512b0dd3e0e5869a3efbca0612cedb87ec9c2800af
+- **Owner since:** 2026-09-13T19:21:11Z
+- **Owner until:** 2026-09-13T21:21:11Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

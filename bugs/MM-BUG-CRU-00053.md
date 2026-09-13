@@ -6,15 +6,15 @@
 - **Area:** YDP sample package / regeneration documentation
 - **Raised:** 2026-08-20T15:50:56Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T152133Z-9adb0a87
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00053-run-fix-20260913T152133Z-9adb0a87
+- **Owner base:** ef5a9a2fc7300990a6ab73c122d0a09710e3bea6
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T15:21:33Z
+- **Owner until:** 2026-09-13T17:21:33Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

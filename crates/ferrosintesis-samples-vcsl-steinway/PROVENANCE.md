@@ -7,9 +7,9 @@
 | `steinwayb_*` | 27 |
 
 Grand-piano attack/body bank for a **GM 0 Acoustic Grand alternate** (CC0=3):
-27 unique mono 16-bit 44.1 kHz FLACs serving 54 logical names across 9 pitch
-zones (C2–C6) × 3 dynamics (pp/mf/f) × 2 round robins. The 27 repeated upstream
-velocity cells are declared in `ALIASES` rather than packaged twice. Generated
+27 unique mono 16-bit 44.1 kHz FLACs serving 54 canonical `.flac` names and 27
+legacy `.wav` names across 9 pitch zones (C2–C6) × 3 dynamics (pp/mf/f) × 2 round
+robins. The 27 repeated upstream velocity cells are declared in `ALIASES` rather than packaged twice. Generated
 by `tools/ferrosintesis-samples/prepare.py` (family `steinwayb`) from the VCSL
 "Grand Piano, Steinway B" close-mic samples. The FLACs under `samples/` are
 **packaged data, not build output** — committed and embedded via `include_bytes!`.
@@ -55,7 +55,7 @@ Per file: `read_wav` decode (24-bit stereo → mono 0.5/0.5); linear resample to
 pad), keeps **1.5 s** of body (`KEEP_FAM['steinwayb']`) with a lead-bounded 2 ms
 fade-in and a 0.6 s squared fade-out, peak-normalized to 0.9; `measure_f0`
 records the autocorrelation root pinned in the `steinwayb_*` zone tables in
-`crates/ferrosintesis/src/sampler.rs`. Output: 16-bit mono WAV.
+`crates/ferrosintesis/src/sampler.rs`. Output: 16-bit mono 44.1 kHz PCM stored losslessly in FLAC.
 
 ## Regenerating
 
@@ -64,4 +64,4 @@ python3 tools/ferrosintesis-samples/prepare.py --only=steinwayb
 ```
 
 Downloads the VCSL Steinway B files once (cached under the system temp dir), then
-bakes. Pure stdlib (plain WAV, no ffmpeg).
+bakes. Requires `ffmpeg 8.1.1` on `PATH` for the pinned FLAC encoder.

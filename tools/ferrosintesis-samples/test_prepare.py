@@ -5973,6 +5973,47 @@ class SteinwayOutputInventoryTest(unittest.TestCase):
             write_output.assert_not_called()
 
 
+class SteinwayPackagedContractTest(unittest.TestCase):
+    """MM-BUG-KILN-00272: Steinway retains former physical WAV lookup keys."""
+
+    def test_legacy_keys_and_published_format_match_the_packaged_bank(self):
+        crate = pathlib.Path(prepare.REPO_ROOT) / (
+            "crates/ferrosintesis-samples-vcsl-steinway"
+        )
+        sample_dir = crate / "samples"
+        packaged = sorted(
+            path.name
+            for path in sample_dir.iterdir()
+            if path.is_file() and path.suffix in {".wav", ".flac"}
+        )
+        self.assertTrue(packaged)
+        self.assertEqual({pathlib.Path(name).suffix for name in packaged}, {".flac"})
+
+        aliases = {}
+        for line in (crate / "ALIASES").read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            alias, canonical = line.split()
+            aliases[alias] = canonical
+        expected_legacy = {
+            f"{pathlib.Path(name).stem}.wav": name for name in packaged
+        }
+        self.assertEqual(
+            {alias: target for alias, target in aliases.items() if alias.endswith(".wav")},
+            expected_legacy,
+        )
+
+        readme = (crate / "README.md").read_text(encoding="utf-8")
+        provenance = (crate / "PROVENANCE.md").read_text(encoding="utf-8")
+        lib = (crate / "src" / "lib.rs").read_text(encoding="utf-8")
+        self.assertIn("54 canonical `.flac` names", readme)
+        self.assertIn("27 legacy `.wav` names", readme)
+        self.assertIn("16-bit mono 44.1 kHz PCM stored losslessly in FLAC", provenance)
+        self.assertNotIn("Output: 16-bit mono WAV.", provenance)
+        self.assertRegex(lib, r"pub const LOGICAL_FILE_COUNT: usize = 81;")
+
+
 class StringsPackagedDocumentContractTest(unittest.TestCase):
     """MM-BUG-KILN-00270: Strings docs and exact lookup keys follow the FLAC bank."""
 

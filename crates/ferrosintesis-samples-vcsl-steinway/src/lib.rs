@@ -9,8 +9,8 @@
 /// Number of sample files embedded in this package.
 pub const FILE_COUNT: usize = 27;
 
-/// Number of exact logical names accepted, including aliases.
-pub const LOGICAL_FILE_COUNT: usize = 54;
+/// Number of exact canonical and legacy logical names accepted, including aliases.
+pub const LOGICAL_FILE_COUNT: usize = 81;
 
 static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     (
@@ -123,7 +123,7 @@ static SAMPLES: [(&str, &[u8]); FILE_COUNT] = [
     ),
 ];
 
-static ALIASES: [(&str, &str); 27] = [
+static ALIASES: [(&str, &str); 54] = [
     ("steinwayb_C2_f.flac", "steinwayb_C2_mf_rr2.flac"),
     ("steinwayb_C2_f_rr2.flac", "steinwayb_C2_pp_rr2.flac"),
     ("steinwayb_C2_mf.flac", "steinwayb_C2_pp_rr2.flac"),
@@ -151,6 +151,33 @@ static ALIASES: [(&str, &str); 27] = [
     ("steinwayb_F#5_f.flac", "steinwayb_F#5_mf_rr2.flac"),
     ("steinwayb_F#5_f_rr2.flac", "steinwayb_F#5_pp_rr2.flac"),
     ("steinwayb_F#5_mf.flac", "steinwayb_F#5_pp_rr2.flac"),
+    ("steinwayb_C2_mf_rr2.wav", "steinwayb_C2_mf_rr2.flac"),
+    ("steinwayb_C2_pp.wav", "steinwayb_C2_pp.flac"),
+    ("steinwayb_C2_pp_rr2.wav", "steinwayb_C2_pp_rr2.flac"),
+    ("steinwayb_C3_mf_rr2.wav", "steinwayb_C3_mf_rr2.flac"),
+    ("steinwayb_C3_pp.wav", "steinwayb_C3_pp.flac"),
+    ("steinwayb_C3_pp_rr2.wav", "steinwayb_C3_pp_rr2.flac"),
+    ("steinwayb_C4_mf_rr2.wav", "steinwayb_C4_mf_rr2.flac"),
+    ("steinwayb_C4_pp.wav", "steinwayb_C4_pp.flac"),
+    ("steinwayb_C4_pp_rr2.wav", "steinwayb_C4_pp_rr2.flac"),
+    ("steinwayb_C5_mf_rr2.wav", "steinwayb_C5_mf_rr2.flac"),
+    ("steinwayb_C5_pp.wav", "steinwayb_C5_pp.flac"),
+    ("steinwayb_C5_pp_rr2.wav", "steinwayb_C5_pp_rr2.flac"),
+    ("steinwayb_C6_mf_rr2.wav", "steinwayb_C6_mf_rr2.flac"),
+    ("steinwayb_C6_pp.wav", "steinwayb_C6_pp.flac"),
+    ("steinwayb_C6_pp_rr2.wav", "steinwayb_C6_pp_rr2.flac"),
+    ("steinwayb_F#2_mf_rr2.wav", "steinwayb_F#2_mf_rr2.flac"),
+    ("steinwayb_F#2_pp.wav", "steinwayb_F#2_pp.flac"),
+    ("steinwayb_F#2_pp_rr2.wav", "steinwayb_F#2_pp_rr2.flac"),
+    ("steinwayb_F#3_mf_rr2.wav", "steinwayb_F#3_mf_rr2.flac"),
+    ("steinwayb_F#3_pp.wav", "steinwayb_F#3_pp.flac"),
+    ("steinwayb_F#3_pp_rr2.wav", "steinwayb_F#3_pp_rr2.flac"),
+    ("steinwayb_F#4_mf_rr2.wav", "steinwayb_F#4_mf_rr2.flac"),
+    ("steinwayb_F#4_pp.wav", "steinwayb_F#4_pp.flac"),
+    ("steinwayb_F#4_pp_rr2.wav", "steinwayb_F#4_pp_rr2.flac"),
+    ("steinwayb_F#5_mf_rr2.wav", "steinwayb_F#5_mf_rr2.flac"),
+    ("steinwayb_F#5_pp.wav", "steinwayb_F#5_pp.flac"),
+    ("steinwayb_F#5_pp_rr2.wav", "steinwayb_F#5_pp_rr2.flac"),
 ];
 
 /// Returns the embedded sample bytes for an exact (case-sensitive) name.
@@ -246,6 +273,14 @@ mod tests {
                     right_name
                 );
             }
+        }
+    }
+
+    #[test]
+    fn former_physical_wav_keys_remain_accepted() {
+        for (canonical, bytes) in SAMPLES {
+            let legacy = format!("{}.wav", canonical.trim_end_matches(".flac"));
+            assert_eq!(get(&legacy), Some(bytes), "{legacy}");
         }
     }
 }

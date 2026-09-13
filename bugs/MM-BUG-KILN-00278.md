@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / public payload documentation
 - **Raised:** 2026-08-17T09:42:03Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T193200Z-40f870e7
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00278-run-verify-20260913T193200Z-40f870e7
+- **Owner base:** 2ff2e45b5f038533db1dd099a4335150b5ade5ae
+- **Owner fingerprint:** sha256:bf004a46feef13613941880b63871d7ebfc569dbede77e4074857182d6de94f8
+- **Owner since:** 2026-09-13T19:32:00Z
+- **Owner until:** 2026-09-13T21:32:00Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

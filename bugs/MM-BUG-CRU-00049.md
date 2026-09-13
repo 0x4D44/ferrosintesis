@@ -6,15 +6,15 @@
 - **Area:** mandolin sample generation / concurrent source isolation
 - **Raised:** 2026-08-20T12:21:19Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T200250Z-ee0f9e55
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00049-run-verify-20260913T200250Z-ee0f9e55
+- **Owner base:** dac45daaaf96b8adf9b28f10ed5fdb498bd83e8d
+- **Owner fingerprint:** sha256:f94fc027f206ed5202a441a1dc4dbb77d9110df5cc12f65eecbefe4dafaefc28
+- **Owner since:** 2026-09-13T20:02:50Z
+- **Owner until:** 2026-09-13T22:02:50Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

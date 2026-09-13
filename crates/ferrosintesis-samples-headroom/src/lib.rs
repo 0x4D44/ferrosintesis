@@ -241,7 +241,7 @@ mod tests {
 
     // Aggregate byte size of the embedded samples; regenerate with
     // gen_crate_lib.py and re-pin if the bank changes.
-    const EXPECTED_BYTES: usize = 2460740;
+    const EXPECTED_BYTES: usize = 2460742;
 
     #[test]
     fn inventory_matches_packaged_samples() {

@@ -10,6 +10,9 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **A large attack can hide a bad one-shot frame zero** (`test_prepare.py:PrepareSampleBankTests._onset_limit`).
+  - Judge one-shot openings against an absolute or peak-relative bound; comparing them with ordinary attack motion let five stale assets pass.
+
 - 2026.09.13 — **Source oracles should find calls structurally, not match one spelling** (`inventory.rs:validation_precedes_source_uses`).
   - Grouped validation changed a one-line per-family call into a multiline package call;
     strip comments and strings, then compare the validator call with later source-table use.

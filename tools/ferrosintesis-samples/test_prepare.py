@@ -1105,10 +1105,11 @@ class PrepareSampleBankTests(unittest.TestCase):
     # lists did.
     KNOWN_DISCONTINUOUS_ONSETS = set()
     INTERNAL_LOOP_CRATES = {"ferrosintesis-samples-clavinet"}
+    ONE_SHOT_FRAME_ZERO_TOLERANCE = 3.0 / 32768.0
 
     @staticmethod
     def _onset_continuity(path):
-        """Return (is_one_shot, offending_step, ordinary_step) for one packaged WAV.
+        """Return (is_one_shot, offending_step, ordinary_step) for one WAV.
 
         The predicate DEPENDS on what kind of sample it is, which is the correction
         MM-BUG-NMI-00001 needed. A one-shot decays to silence, so its first sample is
@@ -1120,7 +1121,10 @@ class PrepareSampleBankTests(unittest.TestCase):
         one per repetition.
 
         Which kind a file is comes from the DATA, not a list: a sample that ends at
-        silence is a one-shot; one that ends mid-waveform is a loop.
+        silence is a one-shot; one that ends mid-waveform is a loop. One-shots allow
+        a small recording-noise floor at frame zero, but reject a material opening
+        transient. This keeps owner-recorded fret-noise takes in the sweep without
+        masking the much larger stale-onset defects this oracle is meant to catch.
         """
         samples, sr = prepare.read_wav(path)
         window = min(len(samples), int(0.010 * sr))
@@ -1128,6 +1132,15 @@ class PrepareSampleBankTests(unittest.TestCase):
         one_shot = abs(samples[-1]) <= 2.0 / 32768.0
         step = abs(samples[0]) if one_shot else abs(samples[0] - samples[-1])
         return one_shot, step, ordinary_step
+
+    @classmethod
+    def _onset_limit(cls, one_shot, ordinary_step):
+        if not one_shot:
+            return ordinary_step
+        # Converted 16-bit banks can retain a few PCM LSB from edge ringing and
+        # dither. Do not compare the opening with ordinary attack motion: a large
+        # attack can hide a much smaller, but still material, frame-zero step.
+        return cls.ONE_SHOT_FRAME_ZERO_TOLERANCE
 
     def test_every_packaged_bank_starts_without_a_discontinuity(self):
         """Derived sweep over EVERY packaged sample crate.
@@ -1161,7 +1174,7 @@ class PrepareSampleBankTests(unittest.TestCase):
                 checked += 1
                 format_counts[os.path.splitext(name)[1]] += 1
                 checked_names.add((crate, name))
-                limit = max(ordinary_step, 1.0 / 32768.0) if one_shot else ordinary_step
+                limit = self._onset_limit(one_shot, ordinary_step)
                 if step > limit:
                     offenders.add((crate, name))
 
@@ -1205,12 +1218,26 @@ class PrepareSampleBankTests(unittest.TestCase):
 
     def test_flac_onset_oracle_catches_a_one_shot_frame_zero_jump(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = self._continuity_flac(tmp, "one-shot-jump", [0.75] * 500 + [0.0])
+            path = self._continuity_flac(
+                tmp, "one-shot-jump", [0.05, 0.80] + [0.80] * 500 + [0.0]
+            )
 
             one_shot, step, ordinary_step = self._onset_continuity(path)
 
         self.assertTrue(one_shot)
-        self.assertGreater(step, max(ordinary_step, 1.0 / 32768.0))
+        self.assertLess(step, ordinary_step)
+        self.assertGreater(step, self._onset_limit(one_shot, ordinary_step))
+
+    def test_flac_onset_oracle_allows_a_small_one_shot_noise_floor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._continuity_flac(
+                tmp, "one-shot-noise-floor", [0.0001, 0.0002, 0.75, 0.0]
+            )
+
+            one_shot, step, ordinary_step = self._onset_continuity(path)
+
+        self.assertTrue(one_shot)
+        self.assertLessEqual(step, self._onset_limit(one_shot, ordinary_step))
 
     def test_flac_onset_oracle_catches_a_loop_wrap_discontinuity(self):
         with tempfile.TemporaryDirectory() as tmp:

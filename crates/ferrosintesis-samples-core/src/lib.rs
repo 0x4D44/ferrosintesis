@@ -348,9 +348,7 @@ mod tests {
         );
         for (name, bytes) in SAMPLES {
             assert!(bytes.len() >= 12, "{name} is too short to be a sample");
-            let riff = &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE";
-            let flac = &bytes[..4] == b"fLaC";
-            assert!(riff || flac, "{name} is neither RIFF/WAVE nor FLAC");
+            assert_eq!(&bytes[..4], b"fLaC", "{name} is not a FLAC sample");
         }
         assert_eq!(get("missing.wav"), None);
         assert_eq!(get("piano_C2_pp_rr2.wav"), get("piano_C2_pp.flac"));

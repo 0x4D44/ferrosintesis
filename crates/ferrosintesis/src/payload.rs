@@ -26,8 +26,8 @@
 //! The default-feature crate list comes from the `embedded-samples` feature (read as
 //! TEXT, via [`crate::licensing::default_sample_crates`], so these oracles assert the
 //! same thing under `--no-default-features` — an oracle that evaporates with a feature
-//! flag is how MM-BUG-KILN-00020 happened). The WAV count and byte total come from
-//! walking each of those crates' `samples/` directories on disk.
+//! flag is how MM-BUG-KILN-00020 happened). The sample-file count and byte total come
+//! from walking each of those crates' `samples/` directories on disk.
 //!
 //! ## What is deliberately NOT asserted
 //!
@@ -37,33 +37,150 @@
 //! and the size only to the nearest sensible rounding, with a tolerance stated below.
 
 use crate::licensing::{crates_dir, default_sample_crates, read};
+use std::path::Path;
 
-/// Number of embedded WAVs and their total size, across the default sample crates.
+/// The only default sample bank that deliberately remains WAV.
+///
+/// Every other default-embedded bank is a FLAC bank. Keep this exception explicit and
+/// derive the covered crate set from the embedded-samples feature below.
+const NON_FLAC_SAMPLE_CRATES: &[&str] = &["ferrosintesis-samples-b1-upright"];
+
+fn expected_sample_container(krate: &str) -> &'static str {
+    if NON_FLAC_SAMPLE_CRATES.contains(&krate) {
+        "wav"
+    } else {
+        "flac"
+    }
+}
+
+fn sample_container_errors<'a, I>(entries: I, expected: &'static str) -> Vec<String>
+where
+    I: IntoIterator<Item = (&'a str, &'a [u8])>,
+{
+    let mut files = 0usize;
+    let mut found = None;
+    let mut errors = Vec::new();
+
+    for (name, bytes) in entries {
+        files += 1;
+        let extension = Path::new(name)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("");
+        let Some(container) = (match extension {
+            "wav" => Some("wav"),
+            "flac" => Some("flac"),
+            _ => None,
+        }) else {
+            errors.push(format!(
+                "{name} has unsupported sample extension {extension:?}"
+            ));
+            continue;
+        };
+
+        if let Some(previous) = found {
+            if previous != container {
+                errors.push(format!(
+                    "{name} uses {container}, mixed with the bank's {previous} files"
+                ));
+            }
+        } else {
+            found = Some(container);
+        }
+
+        if container != expected {
+            errors.push(format!(
+                "{name} uses {container}, but this bank must use {expected}"
+            ));
+        }
+
+        let magic_matches = match container {
+            "wav" => bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE",
+            "flac" => bytes.len() >= 4 && &bytes[..4] == b"fLaC",
+            _ => false,
+        };
+        if !magic_matches {
+            errors.push(format!("{name} does not contain a {container} header"));
+        }
+    }
+
+    if files == 0 {
+        errors.push("sample directory contains no files".to_owned());
+    }
+    errors
+}
+
+fn sample_inventory(krate: &str) -> (usize, u64, &'static str) {
+    fn visit(root: &Path, dir: &Path, entries: &mut Vec<(String, Vec<u8>)>) {
+        for entry in
+            std::fs::read_dir(dir).unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
+        {
+            let path = entry.expect("sample entry must be readable").path();
+            if path.is_dir() {
+                visit(root, &path, entries);
+                continue;
+            }
+            let name = path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .into_owned();
+            entries.push((
+                name,
+                std::fs::read(&path)
+                    .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display())),
+            ));
+        }
+    }
+
+    let dir = crates_dir().join(krate).join("samples");
+    let mut entries = Vec::new();
+    visit(&dir, &dir, &mut entries);
+    let expected = expected_sample_container(krate);
+    let errors = sample_container_errors(
+        entries
+            .iter()
+            .map(|(name, bytes)| (name.as_str(), bytes.as_slice())),
+        expected,
+    );
+    assert!(
+        errors.is_empty(),
+        "{krate}/samples container oracle failed:\n  {}",
+        errors.join("\n  ")
+    );
+    let actual = entries
+        .iter()
+        .find_map(|(name, _)| {
+            match Path::new(name)
+                .extension()
+                .and_then(|extension| extension.to_str())
+            {
+                Some("wav") => Some("wav"),
+                Some("flac") => Some("flac"),
+                _ => None,
+            }
+        })
+        .expect("validated sample inventory must have a known container");
+    assert_eq!(
+        actual, expected,
+        "{krate}/samples uses {actual}, but its default-bank policy requires {expected}"
+    );
+    let bytes = entries
+        .iter()
+        .map(|(_, contents)| contents.len() as u64)
+        .sum();
+    (entries.len(), bytes, actual)
+}
+
+/// Number of embedded sample files and their total size, across the default sample crates.
 pub(crate) fn embedded_payload() -> (usize, usize, u64) {
     let crates = default_sample_crates();
     let mut files = 0usize;
     let mut bytes = 0u64;
     for krate in &crates {
-        let dir = crates_dir().join(krate).join("samples");
-        let entries = std::fs::read_dir(&dir).unwrap_or_else(|e| {
-            panic!(
-                "payload oracle cannot read {}: {e}.\n\
-                 It derives the embedded total from the sibling asset crates, so it \
-                 only runs inside the ferrosintesis workspace.",
-                dir.display()
-            )
-        });
-        for entry in entries {
-            let entry = entry.expect("readable directory entry");
-            if entry
-                .path()
-                .extension()
-                .is_some_and(|e| e == "wav" || e == "flac")
-            {
-                files += 1;
-                bytes += entry.metadata().expect("readable metadata").len();
-            }
-        }
+        let (crate_files, crate_bytes, _) = sample_inventory(krate);
+        files += crate_files;
+        bytes += crate_bytes;
     }
     assert!(
         crates.len() > 15 && files > 500,
@@ -78,7 +195,6 @@ pub(crate) fn embedded_payload() -> (usize, usize, u64) {
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
-    use std::path::Path;
 
     /// Spelt-out numbers the prose uses, e.g. "twenty-four".
     fn spelled(n: usize) -> String {
@@ -128,50 +244,8 @@ mod tests {
     /// temporary PCM/WAV produced while baking. Keep those source and processing references
     /// valid while refusing a package claim that names a format no longer under `samples/`.
     fn packaged_containers(krate: &str) -> BTreeSet<&'static str> {
-        fn visit(
-            dir: &Path,
-            formats: &mut BTreeSet<&'static str>,
-            files: &mut usize,
-            unknown: &mut Vec<String>,
-        ) {
-            for entry in std::fs::read_dir(dir)
-                .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
-            {
-                let path = entry.expect("sample entry must be readable").path();
-                if path.is_dir() {
-                    visit(&path, formats, files, unknown);
-                    continue;
-                }
-                let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                match extension {
-                    "wav" => {
-                        formats.insert("wav");
-                        *files += 1;
-                    }
-                    "flac" => {
-                        formats.insert("flac");
-                        *files += 1;
-                    }
-                    other => unknown.push(format!("{} ({other:?})", path.display())),
-                }
-            }
-        }
-
-        let dir = crates_dir().join(krate).join("samples");
-        let mut formats = BTreeSet::new();
-        let mut files = 0;
-        let mut unknown = Vec::new();
-        visit(&dir, &mut formats, &mut files, &mut unknown);
-        assert!(
-            unknown.is_empty(),
-            "{krate}/samples contains unsupported non-audio files:\n  {}",
-            unknown.join("\n  ")
-        );
-        assert!(
-            files > 0 && !formats.is_empty(),
-            "{krate}/samples has no WAV or FLAC files — the container oracle would pass vacuously"
-        );
-        formats
+        let (_, _, container) = sample_inventory(krate);
+        BTreeSet::from([container])
     }
 
     fn mentions_container(text: &str, container: &str) -> bool {
@@ -711,6 +785,38 @@ mod tests {
         assert!(
             documented_container_mismatches("README.md", valid_legacy_alias, &packaged).is_empty(),
             "the oracle mistook a compatibility alias for a packaged WAV"
+        );
+    }
+
+    #[test]
+    fn sample_container_oracle_rejects_a_wav_planted_in_a_flac_bank() {
+        let wav = *b"RIFF....WAVE";
+        let errors = sample_container_errors([("clavinet_C2.wav", wav.as_slice())], "flac");
+        assert!(
+            !errors.is_empty(),
+            "the container oracle accepted a WAV planted in a FLAC bank"
+        );
+        assert!(
+            sample_container_errors([("b1_hard_A0.wav", wav.as_slice())], "wav").is_empty(),
+            "the explicit B1 WAV exception was rejected"
+        );
+    }
+
+    #[test]
+    fn default_sample_bank_containers_match_the_derived_policy() {
+        let crates = default_sample_crates();
+        let mut non_flac = Vec::new();
+        for krate in &crates {
+            let (_, _, actual) = sample_inventory(krate);
+            let expected = expected_sample_container(krate);
+            assert_eq!(actual, expected, "unexpected container for {krate}");
+            if actual != "flac" {
+                non_flac.push(krate.as_str());
+            }
+        }
+        assert_eq!(
+            non_flac, NON_FLAC_SAMPLE_CRATES,
+            "the non-FLAC allowlist must stay explicit and minimal"
         );
     }
 

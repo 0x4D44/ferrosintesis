@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00287 — Orchestral regeneration leaves the embedded FLAC bank stale
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** orchestral sample generation / final-format regeneration
 - **Raised:** 2026-08-17T13:40:55Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T042224Z-c069c901
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00287-run-fix-20260913T042224Z-c069c901
-- **Owner base:** ed9ed17ae38fef8e98008f233022147624c13d51
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T04:22:24Z
-- **Owner until:** 2026-09-13T06:22:24Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T13:40:55Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T13:40:55Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T04:24:49Z, deltic:auto role=fix run=fix-20260913T042224Z-c069c901 branch=task/bug-MM-BUG-KILN-00287-run-fix-20260913T042224Z-c069c901 code=55298fb16c0f370149bafafb7e518685cafa4443 gate=manual)
 
 ## Observation
 

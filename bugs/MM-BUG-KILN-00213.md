@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / GM76 voice construction
 - **Raised:** 2026-08-16T11:38:34Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T191407Z-8bcb5494
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00213-run-verify-20260913T191407Z-8bcb5494
+- **Owner base:** 31eb54d242b6bb38a40ede86ad8ac64c7c90110b
+- **Owner fingerprint:** sha256:cb715973f65c9bb59acc18f5db0867173d5e2e69f3dddd02396d60384a6f65ea
+- **Owner since:** 2026-09-13T19:14:07Z
+- **Owner until:** 2026-09-13T21:14:07Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

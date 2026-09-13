@@ -27,7 +27,7 @@ assert_eq!(&flac[..4], b"fLaC");
 
 ## Provenance and license
 
-The 116 string, brass, and reed WAVs were trimmed from
+The 116 string, brass, and reed source WAVs were trimmed from
 [VSCO 2 Community Edition](https://github.com/sgossner/VSCO-2-CE) by Versilian
 Studios / sgossner, released under the CC0 1.0 Universal public-domain
 dedication. Source downloads are pinned to repository commit
@@ -38,7 +38,7 @@ robins each) used to ship here. They were superseded by the sampled kit in
 `ferrosintesis-samples-drumkit`, no `ferrosintesis` code read them, and they
 left this package on 2026-07-26. See `PROVENANCE.md` for where they went.
 
-The seven `nylon_*` WAVs were trimmed from the
+The seven `nylon_*` source WAVs were trimmed from the
 [FreePats Spanish classical guitar](https://freepats.zenvoid.org/Guitar/acoustic-guitar.html)
 sound bank, version 2019-06-18, by roberto@zenvoid.org. That set is also
 released under CC0 1.0 Universal. The generator pins the versioned
@@ -48,7 +48,7 @@ released under CC0 1.0 Universal. The generator pins the versioned
 ef2fb7de0cc0ab561c4ebc28494f3fc2962596e4f32f16d6c96b8a385c7c098b
 ```
 
-The eight `steel_*` WAVs were trimmed from the `026-Acoustic Guitar (steel)`
+The eight `steel_*` source WAVs were trimmed from the `026-Acoustic Guitar (steel)`
 instrument of the
 [Discord SFZ GM Bank](https://github.com/sfzinstruments/Discord-SFZ-GM-Bank) —
 a 2017 Martin HD28 Vintage Series recorded by Jeff Learman, who dedicated it to
@@ -73,11 +73,11 @@ The generator therefore fetches from a pinned revision and must never track
 05d5ed8befa042fd9d99a6d159dfc3673d3f8edc
 ```
 
-The two `drone_*` and six `chanter_*` WAVs are looped sustains (not attack
+The two `drone_*` and fifteen `chanter_*` source WAVs are looped sustains (not attack
 transients) for the GM 109 bagpipe, trimmed from the
 [FreePats Bagpipe](https://freepats.zenvoid.org/Ethnic/Bagpipe/) bank (a G-pipe
 recorded by Gilles Sadowski), released under CC0 1.0 with the full legal code
-bundled as `cc0.txt`. The generator pins the versioned WAV archive
+bundled as `cc0.txt`. The generator pins the versioned source WAV archive
 `Bagpipe-SFZ-20221204.7z` by SHA-256:
 
 ```text
@@ -91,7 +91,7 @@ generator.
 The repository's
 [`tools/ferrosintesis-samples/prepare.py`](https://github.com/0x4D44/ferrosintesis/blob/main/tools/ferrosintesis-samples/prepare.py)
 performs onset detection, trimming, fades, peak normalization, and conversion
-to mono 16-bit 44.1 kHz WAV.
+to mono 16-bit 44.1 kHz PCM, then encodes the packaged samples as FLAC.
 
 The packaged samples and this package are dedicated to the public domain under
 CC0-1.0. The full legal text is in `LICENSE-CC0`. Attribution is not required

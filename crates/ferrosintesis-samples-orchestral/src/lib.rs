@@ -4,6 +4,7 @@
 //! committed `samples/*.flac`; consumers normally reach it through `ferrosintesis`.
 //! Licence/provenance: see `LICENSE-CC0` / `PROVENANCE.md`.
 
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
 /// Number of sample files embedded in this package.

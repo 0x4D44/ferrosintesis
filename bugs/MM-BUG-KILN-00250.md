@@ -6,15 +6,15 @@
 - **Area:** honky-tonk sample crate / public package contract
 - **Raised:** 2026-08-17T01:05:10Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T200003Z-a2caac3e
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00250-run-verify-20260913T200003Z-a2caac3e
+- **Owner base:** 6854afdb9aba4baeeaf4c849e85ee7de013b2755
+- **Owner fingerprint:** sha256:0d6474ac281c2ddff0dee5400f96e1e8acef737475e1dfffd9bcc431d8882b62
+- **Owner since:** 2026-09-13T20:00:03Z
+- **Owner until:** 2026-09-13T22:00:03Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

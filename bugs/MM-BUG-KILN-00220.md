@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00220 — Clavinet regeneration can publish a mixed bank after a late failure
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** clavinet sample generation / failure atomicity
 - **Raised:** 2026-08-16T13:44:40Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T051135Z-6d367a7e
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00220-run-fix-20260913T051135Z-6d367a7e
-- **Owner base:** b9d76193cfa1c2a02dda53a7a65ac2584714389b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T05:11:35Z
-- **Owner until:** 2026-09-13T07:11:35Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T13:44:40Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-16T13:44:40Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T05:26:37Z, deltic:auto role=fix run=fix-20260913T051135Z-6d367a7e branch=task/bug-MM-BUG-KILN-00220-run-fix-20260913T051135Z-6d367a7e code=c449b81868347ec5dd7f5918d51b19911f746075 gate=manual)
 
 ## Observation
 

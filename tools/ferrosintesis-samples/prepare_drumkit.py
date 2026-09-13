@@ -365,6 +365,10 @@ def publish_staged(staging_root, repo_root, plans):
     crosses from staging into a crate.
     """
     pending = []
+    backup_dirs = []
+    backups = {}
+    published = []
+    cleanup_backups = True
     try:
         for package, expected in plans.items():
             out_dir = os.path.join(repo_root, "crates", package, "samples")
@@ -404,12 +408,54 @@ def publish_staged(staging_root, repo_root, plans):
                 pending.append((part, destination))
 
         # Every take is encoded and verified before any tracked file changes.
+        # Keep the backup/swap/rollback shape in sync with
+        # prepare._publish_staged_flac_bank: the two package directories form
+        # one publication transaction, so a failure cannot leave a mixed kit.
+        for package, expected in plans.items():
+            out_dir = os.path.join(repo_root, "crates", package, "samples")
+            backup_dir = tempfile.mkdtemp(
+                prefix=f".{package}-backup-", dir=out_dir
+            )
+            backup_dirs.append(backup_dir)
+            for name in sorted(expected):
+                destination = os.path.join(out_dir, packaged_name(name))
+                if os.path.exists(destination):
+                    backup = os.path.join(backup_dir, os.path.basename(destination))
+                    atomic_replace(destination, backup)
+                    backups[destination] = backup
+
         for part, destination in pending:
-            os.replace(part, destination)
+            atomic_replace(part, destination)
+            published.append(destination)
+    except Exception as error:
+        rollback_errors = []
+        for destination in reversed(published):
+            try:
+                if os.path.exists(destination):
+                    os.remove(destination)
+            except OSError as rollback_error:
+                rollback_errors.append(str(rollback_error))
+        for destination, backup in reversed(tuple(backups.items())):
+            if not os.path.exists(backup):
+                continue
+            try:
+                atomic_replace(backup, destination)
+            except OSError as rollback_error:
+                rollback_errors.append(str(rollback_error))
+        if rollback_errors:
+            cleanup_backups = False
+            raise RuntimeError(
+                "drumkit publication failed and rollback was incomplete: "
+                + "; ".join(rollback_errors)
+            ) from error
+        raise
     finally:
         for part, _ in pending:
             if os.path.exists(part):
                 os.remove(part)
+        if cleanup_backups:
+            for backup_dir in backup_dirs:
+                shutil.rmtree(backup_dir, ignore_errors=True)
 
 
 def regenerate(ffmpeg, cache, repo_root=None):

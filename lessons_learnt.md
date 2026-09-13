@@ -10,6 +10,10 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.13 — **Classify container claims by their subject, not nearby source words** (`payload.rs:documented_container_mismatches`).
+  - Wrapped source prose and claims such as “WAVs in `samples/` are extracted” need explicit subject markers;
+    otherwise source context can hide a stale package claim.
+
 - 2026.09.13 — **Bind attribution counts to their noun phrase, not fixed sentence offsets** (`licensing.rs:attribution_count_mismatches`).
   - A stale “five of these ten” survived because the oracle only inspected three old NOTICE
     sentences. Scan every shipped attribution phrase and derive its expected count instead.

@@ -278,6 +278,7 @@ mod tests {
             "retired",
             "read_wav",
             "temporary",
+            "bake",
             "source cuts",
             "source recordings",
             "original",
@@ -292,7 +293,11 @@ mod tests {
         [
             "embedded",
             "packaged",
+            "crate ships",
+            "package ships",
             "include_bytes",
+            "in `samples/",
+            "samples/ are",
             "under `samples/",
             "under samples/",
             "baked to `samples/",
@@ -839,6 +844,18 @@ roughly 111 MiB of recorded audio across 1156 recordings in first-party asset cr
         assert!(
             documented_container_mismatches("README.md", valid_legacy_alias, &packaged).is_empty(),
             "the oracle mistook a compatibility alias for a packaged WAV"
+        );
+
+        let source_context = "The 11 WAVs in `samples/` are extracted from the source archive.";
+        assert!(
+            !documented_container_mismatches("PROVENANCE.md", source_context, &packaged).is_empty(),
+            "the oracle exempted a packaged WAV claim because the same sentence names its source"
+        );
+
+        let source_heading = "## Extraction and bake\n\nThis crate ships 11 WAV files.";
+        assert!(
+            !documented_container_mismatches("PROVENANCE.md", source_heading, &packaged).is_empty(),
+            "the oracle exempted a packaged WAV claim under an extraction heading"
         );
     }
 

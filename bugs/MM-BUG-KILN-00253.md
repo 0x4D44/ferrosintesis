@@ -6,15 +6,15 @@
 - **Area:** MuseScore grand sample crate / published package contract
 - **Raised:** 2026-08-17T02:29:49Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T200159Z-58e22d7f
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00253-run-verify-20260913T200159Z-58e22d7f
+- **Owner base:** 3e9c41f24fd34dac989da3d495c52c8286709ce3
+- **Owner fingerprint:** sha256:26456495670000f0218116e522a9fb112ff8358090483dee49f5129b12f151a0
+- **Owner since:** 2026-09-13T20:01:59Z
+- **Owner until:** 2026-09-13T22:01:59Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

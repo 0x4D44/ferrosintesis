@@ -3282,7 +3282,13 @@ pub struct LaVoice {
     transient_handover: Option<(usize, usize)>,
     transient_handover_len: usize,
     blend: LaBlend,
-    buf: Vec<f32>,
+    /// The live renderer always calls voices with this many mono frames. Keep that
+    /// deadline-bearing path inline; allocating a Vec for a fresh sampled voice here
+    /// would happen inside the audio callback (MM-BUG-KILN-00216).
+    buf: [f32; LA_REALTIME_BLOCK],
+    /// Offline callers may render a larger slice in one call. Preserve that existing
+    /// API by growing a separate fallback buffer only for those non-realtime renders.
+    long_buf: Vec<f32>,
     fx: LaFx,
     /// Detuned side-read positions (source-rate samples).
     pos2: f32,
@@ -3350,6 +3356,8 @@ pub(crate) const DEFAULT_LA_RELEASE_T60: f32 = 0.06;
 /// instrument's note-off damping (piano dampers can otherwise stretch to seconds).
 const LA_SLUR_HANDOVER_S: f32 = 0.06;
 const DEFAULT_MAX_UP_RATIO: f32 = 2.05;
+/// Must match `live::LIVE_BLOCK`: one realtime voice render is one mono block.
+const LA_REALTIME_BLOCK: usize = 64;
 
 impl LaVoice {
     /// Wrap `sustain`; falls back to the bare model when the target is too
@@ -3736,7 +3744,8 @@ impl LaVoice {
             transient_handover: None,
             transient_handover_len: (LA_SLUR_HANDOVER_S * sr) as usize,
             blend,
-            buf: Vec::new(),
+            buf: [0.0; LA_REALTIME_BLOCK],
+            long_buf: Vec::new(),
             fx,
             // 5 / 9 ms into the source (44.1 kHz zone data)
             pos2: 220.0,
@@ -3756,9 +3765,14 @@ impl LaVoice {
 
 impl Voice for LaVoice {
     fn render(&mut self, out: &mut [f32]) -> bool {
-        self.buf.resize(out.len(), 0.0);
-        self.buf.fill(0.0);
-        let sustain_alive = self.sustain.render(&mut self.buf);
+        let scratch = if out.len() <= LA_REALTIME_BLOCK {
+            &mut self.buf[..out.len()]
+        } else {
+            self.long_buf.resize(out.len(), 0.0);
+            &mut self.long_buf[..]
+        };
+        scratch.fill(0.0);
+        let sustain_alive = self.sustain.render(scratch);
         let n = self.zone.data.len();
         let fade_len = (self.fade_end - self.fade_start).max(1) as f32;
         let mut sample_live = false;
@@ -3789,7 +3803,7 @@ impl Voice for LaVoice {
             } else {
                 (base_u, base_model_weight)
             };
-            let mut s = self.buf[i] * model_weight;
+            let mut s = scratch[i] * model_weight;
             let j = self.pos as usize;
             if t >= self.start && t < self.fade_end && j + 1 < n && self.rel_gain > 0.0005 {
                 sample_live = true;
@@ -3977,6 +3991,11 @@ impl Voice for LaVoice {
 
     fn rr_phase(&self) -> Option<usize> {
         self.rr.map(|rr| rr.idx % rr.takes.max(1))
+    }
+
+    #[cfg(test)]
+    fn realtime_scratch_capacity_for_test(&self) -> usize {
+        self.long_buf.capacity()
     }
 
     #[cfg(test)]
@@ -9395,6 +9414,66 @@ mod tests {
             }]
             .into_boxed_slice(),
         )
+    }
+
+    /// MM-BUG-KILN-00216: a fresh sampled voice must not grow scratch storage in
+    /// the 64-frame block used by the realtime callback.
+    #[test]
+    fn la_realtime_block_does_not_grow_render_scratch() {
+        let mut voice = match LaVoice::build(
+            Box::new(ConstantVoice(1.0)),
+            constant_zone(),
+            60,
+            100,
+            44_100.0,
+            1.0,
+            (0.05, 0.20),
+            LaFx::default(),
+            DEFAULT_LA_RELEASE_T60,
+            LaBlend::Replacement,
+            DEFAULT_MAX_UP_RATIO,
+        ) {
+            Ok(voice) => voice,
+            Err(_) => panic!("constant test zone must build a sampled voice"),
+        };
+        let mut block = [0.0; 64];
+
+        assert_eq!(voice.realtime_scratch_capacity_for_test(), 0);
+        voice.render(&mut block);
+        assert_eq!(
+            voice.realtime_scratch_capacity_for_test(),
+            0,
+            "the first realtime render grew LaVoice scratch storage"
+        );
+    }
+
+    /// MM-BUG-KILN-00216: the two sampled programs named by the bug must also
+    /// stay allocation-free after their normal voice construction path.
+    #[test]
+    fn sampled_gm4_and_gm15_realtime_blocks_use_inline_scratch() {
+        for (program, key) in [(4u8, 60u8), (15, 60)] {
+            let mut voice = voices::make_uncorrected_for_test(
+                program,
+                key,
+                100,
+                44_100.0,
+                0x2160_0000 + program as u32,
+                true,
+            );
+            let mut block = [0.0; 64];
+
+            assert_eq!(
+                voice.realtime_scratch_capacity_for_test(),
+                0,
+                "GM{program} sampled voice had pre-existing realtime scratch capacity"
+            );
+            voice.render(&mut block);
+            assert_eq!(
+                voice.realtime_scratch_capacity_for_test(),
+                0,
+                "GM{program} first realtime render grew scratch storage"
+            );
+        }
     }
 
     #[test]

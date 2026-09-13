@@ -102,6 +102,12 @@ pub trait Voice: Send {
     /// Plucks report their preset name; other families their family name.
     #[cfg(test)]
     fn kind(&self) -> &'static str;
+
+    /// Test-only probe for sampled wrappers' realtime scratch storage.
+    #[cfg(test)]
+    fn realtime_scratch_capacity_for_test(&self) -> usize {
+        0
+    }
 }
 
 fn t60_mul(t60: f32, sr: f32) -> f32 {

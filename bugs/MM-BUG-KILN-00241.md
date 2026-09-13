@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00241 — FLAC retarget left the sample-crate Rust generator syntactically invalid
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample tooling / generated crate inventories
 - **Raised:** 2026-08-16T21:54:56Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T064440Z-fe335cba
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00241-run-fix-20260913T064440Z-fe335cba
-- **Owner base:** f9ca251a9a814d81a16546ee3351463107c1d16f
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T06:44:40Z
-- **Owner until:** 2026-09-13T08:44:40Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T21:54:56Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T21:54:56Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:54:02Z, deltic:auto role=fix run=fix-20260913T064440Z-fe335cba branch=task/bug-MM-BUG-KILN-00241-run-fix-20260913T064440Z-fe335cba code=5e648268 gate=manual)
 
 ## Observation
 

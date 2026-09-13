@@ -6,15 +6,15 @@
 - **Area:** sample asset crates / packaged attribution notices
 - **Raised:** 2026-08-18T06:59:44Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T080234Z-3d8fc1e0
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00042-run-fix-20260913T080234Z-3d8fc1e0
+- **Owner base:** 68b69ac6221e46361db510c76e9b298d12d63398
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T08:02:34Z
+- **Owner until:** 2026-09-13T10:02:34Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

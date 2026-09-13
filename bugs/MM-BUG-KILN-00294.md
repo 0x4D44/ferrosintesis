@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00294 — Windows identity probe's exclusive input open aborts the render when any process is reading the MIDI
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:47:52Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T222304Z-5f794e50
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00294-run-fix-20260913T222304Z-5f794e50
-- **Owner base:** 289712083a28106ad16b584d23c3e011d86f4b4a
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:23:04Z
-- **Owner until:** 2026-09-14T00:23:04Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:47:52Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-17T22:47:52Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:46:15Z, deltic:auto role=fix run=fix-20260913T222304Z-5f794e50 branch=task/bug-MM-BUG-KILN-00294-run-fix-20260913T222304Z-5f794e50 code=b5bc0ae5ef7edc0fb4981be054dcd486577704f5 gate=manual)
 
 ## Observation
 

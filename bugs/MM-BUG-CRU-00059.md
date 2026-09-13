@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00059 — Parent README still says five of these ten attribution banks, and the NOTICE count oracle only reads numbers before three phrases
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** licensing / attribution documentation
 - **Raised:** 2026-09-13T19:22:42Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T204032Z-f2e73c9c
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00059-run-verify-20260913T204032Z-f2e73c9c
-- **Owner base:** e9cc52b1bae7da23f06bbdc4177159242954ed9a
-- **Owner fingerprint:** sha256:66898c5f3d3b9def044e65c30c8e415626e2d87c09fc888f301b91716f8646bf
-- **Owner since:** 2026-09-13T20:40:32Z
-- **Owner until:** 2026-09-13T22:40:32Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:22:42Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T20:13:52Z, deltic:auto role=fix run=fix-20260913T200524Z-659a531d branch=task/bug-MM-BUG-CRU-00059-run-fix-20260913T200524Z-659a531d code=6475418989789eea7c88d1a2b828f06be19a5e59 gate=manual)
+- **State history:** Open (2026-09-13T19:22:42Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T20:13:52Z, deltic:auto role=fix run=fix-20260913T200524Z-659a531d branch=task/bug-MM-BUG-CRU-00059-run-fix-20260913T200524Z-659a531d code=6475418989789eea7c88d1a2b828f06be19a5e59 gate=manual) -> Closed (2026-09-13T20:46:48Z, independent verify by Codex run=verify-20260913T204032Z-f2e73c9c: attribution counts are derived and stale compound prose is rejected)
 
 ## Observation
 
@@ -27,6 +27,20 @@ Split at independent verification of MM-BUG-CRUCIBLE-00038 (2026-09-13, trunk 8b
 
 ## Fix
 
-<unfixed — raised only>
+`6475418989789eea7c88d1a2b828f06be19a5e59` (`fix(MM-BUG-CRU-00059): derive attribution count checks`)
+removes the stale “five of these ten” README prose and generalizes the count oracle to
+shipped attribution prose. It scans near the attribution-bearing phrase, while preserving
+the three existing NOTICE obligation phrases, and applies the check to both README and NOTICE.
+
+### Verification (closure) (2026-09-13, Codex, independent)
+
+All 16 `licensing::tests::` passed, including `notice_attribution_count_oracle_rejects_stale_count`,
+`readme_names_every_attribution_bearing_sample_bank`, and
+`parent_notice_is_packaged_and_names_every_attribution_bearing_bank`. `cargo fmt --all -- --check`
+also passed.
+
+For a negative control, I removed the new attribution-bearing scan. The hidden-count fixture
+then failed as expected: it found 0 mismatches instead of 1. Restoring the scan made all
+16 licensing tests pass again with no source diff remaining.
 
 ## Notes

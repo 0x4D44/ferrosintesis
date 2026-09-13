@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00219 — Clavinet embeds and decodes more than one second of unreachable audio per zone
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** clavinet sample assets / binary and runtime footprint
 - **Raised:** 2026-08-16T13:44:22Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T154255Z-e6d44563
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00219-run-fix-20260913T154255Z-e6d44563
-- **Owner base:** bf59e02830213f606b99eb3e9496bb54685636ed
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:42:55Z
-- **Owner until:** 2026-09-13T17:42:55Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T13:44:22Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-16T13:44:22Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T15:57:32Z, deltic:auto role=fix run=fix-20260913T154255Z-e6d44563 branch=task/bug-MM-BUG-KILN-00219-run-fix-20260913T154255Z-e6d44563 code=6ee2af43e4ead58a1422302ad2e03b0ab2dacaf9 gate=manual)
 
 ## Observation
 

@@ -6,15 +6,15 @@
 - **Area:** grand sample generation / failure atomicity
 - **Raised:** 2026-08-16T22:56:42Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T201456Z-6331e256
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00245-run-verify-20260913T201456Z-6331e256
+- **Owner base:** 7c7de7ccb81fd0ff984c20019e07e50a6ceccfab
+- **Owner fingerprint:** sha256:bb321a6807ba55f61526b85f843fb36d4a9a2e765c561998faccbb0eae1465e5
+- **Owner since:** 2026-09-13T20:14:56Z
+- **Owner until:** 2026-09-13T22:14:56Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

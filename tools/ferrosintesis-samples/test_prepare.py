@@ -5491,6 +5491,48 @@ class KawaiPackagedDocumentContractTest(unittest.TestCase):
         self.assertNotIn("Pure stdlib (plain WAV, no ffmpeg)", provenance)
 
 
+class YdpPackagedDocumentContractTest(unittest.TestCase):
+    """MM-BUG-CRU-00053: YDP docs distinguish stdlib extraction from FLAC publication."""
+
+    def test_docs_match_filesystem_container_and_encoder_prerequisites(self):
+        logical = f"ydpgrand_{prepare._midi_name(prepare.YDP_ZONE_MIDI[0])}.wav"
+        packaged = prepare.packaged_name(logical)
+        crates_dir = pathlib.Path(prepare.REPO_ROOT) / "crates"
+        sample_dirs = [
+            crate / "samples"
+            for crate in crates_dir.iterdir()
+            if crate.is_dir() and (crate / "samples" / packaged).is_file()
+        ]
+        self.assertEqual(len(sample_dirs), 1)
+        sample_dir = sample_dirs[0]
+        samples = [
+            path
+            for path in sample_dir.iterdir()
+            if path.is_file() and path.suffix in {".wav", ".flac"}
+        ]
+        suffixes = {path.suffix for path in samples}
+        self.assertTrue(samples)
+        self.assertEqual(suffixes, {prepare.PACKAGED_EXT})
+        container = next(iter(suffixes)).lstrip(".").upper()
+
+        crate = sample_dir.parent
+        documents = {
+            name: (crate / name).read_text(encoding="utf-8")
+            for name in ("README.md", "PROVENANCE.md")
+        }
+        for name, text in documents.items():
+            with self.subTest(document=name):
+                self.assertIn(container, text)
+                self.assertIn("--only=ydpgrand", text)
+                self.assertRegex(text.lower(), r"ffmpeg.{0,100}path")
+
+        provenance = documents["PROVENANCE.md"]
+        self.assertIn("raw 16-bit PCM", provenance)
+        self.assertIn("16-bit mono 44.1 kHz PCM stored losslessly in FLAC", provenance)
+        self.assertNotIn("Output: 16-bit mono WAV.", provenance)
+        self.assertNotIn("Pure stdlib (raw-PCM SF2 — no ffmpeg)", provenance)
+
+
 class RealtimePrewarmMemoryDocumentationTest(unittest.TestCase):
     """MM-BUG-CRU-00052: prewarm guidance must describe decoded f32 storage."""
 

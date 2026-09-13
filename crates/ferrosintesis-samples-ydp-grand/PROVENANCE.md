@@ -44,10 +44,11 @@ present in layer 3's minor-third sampling.
 ## Processing (deterministic)
 
 Per zone: slice the SF2 `smpl` chunk by the `shdr` FRAME offsets (× 2 bytes, raw
-16-bit PCM — no ffmpeg); `trim_to_onset` keeps the onset + **1.5 s** of body (0.6 s
+16-bit PCM; Python's stdlib parses these samples without invoking ffmpeg);
+`trim_to_onset` keeps the onset + **1.5 s** of body (0.6 s
 fade-out), peak-normalized to 0.9; `measure_f0` (tight window around the MIDI root)
 records the root pinned in `ydpgrand_*` in `crates/ferrosintesis/src/sampler.rs`.
-Output: 16-bit mono WAV.
+Output: 16-bit mono 44.1 kHz PCM stored losslessly in FLAC.
 
 ## Regenerating
 
@@ -55,4 +56,4 @@ Output: 16-bit mono WAV.
 python3 tools/ferrosintesis-samples/prepare.py --only=ydpgrand
 ```
 
-Pure stdlib (raw-PCM SF2 — no ffmpeg).
+Python's stdlib handles raw-PCM SF2 extraction. The recipe requires `ffmpeg 8.1.1` on `PATH` to encode the final FLAC bank; the generator checks its libavformat pin.

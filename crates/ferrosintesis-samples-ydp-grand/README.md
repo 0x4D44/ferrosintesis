@@ -14,3 +14,5 @@ from the LA blend + model (see `PROVENANCE.md`).
 Per Child recordings. Copy the `NOTICE`, not this summary.
 
 Regenerate with `python3 tools/ferrosintesis-samples/prepare.py --only=ydpgrand`.
+The recipe requires `ffmpeg 8.1.1` on `PATH` to encode the packaged FLAC bank;
+the generator checks its libavformat pin.

@@ -6,15 +6,15 @@
 - **Area:** YDP sample generation / shared cache concurrency
 - **Raised:** 2026-08-20T15:51:10Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T201046Z-d3556cab
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00054-run-verify-20260913T201046Z-d3556cab
+- **Owner base:** d480a6a2ab0d45dd29405136d711a54485e5e9d1
+- **Owner fingerprint:** sha256:c331bb0b9d4f50779abe4c38c7d49dae5fd0e6e19b01791dc29bb4b27eb2ada4
+- **Owner since:** 2026-09-13T20:10:46Z
+- **Owner until:** 2026-09-13T22:10:46Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

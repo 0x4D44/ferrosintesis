@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00267 — B1 crate Rustdoc lost its ferrosintesis object after the legal-header split
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** B1 sample crate / published documentation
 - **Raised:** 2026-08-17T05:30:56Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T165457Z-c62699f5
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00267-run-fix-20260913T165457Z-c62699f5
-- **Owner base:** 063a0a7f9ffe0ebf899cbbecfc78e7ea50484977
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T16:54:57Z
-- **Owner until:** 2026-09-13T18:54:57Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T05:30:56Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-17T05:30:56Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T17:01:34Z, deltic:auto role=fix run=fix-20260913T165457Z-c62699f5 branch=task/bug-MM-BUG-KILN-00267-run-fix-20260913T165457Z-c62699f5 code=9f14d0752300779e33f71a6b1616d4e5a7d419fd gate=manual)
 
 ## Observation
 

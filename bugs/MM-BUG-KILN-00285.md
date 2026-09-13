@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00285 — Core drum-kit cache test can still bypass process isolation
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** core drum-kit sample crate / cache regression
 - **Raised:** 2026-08-17T11:40:11Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T191035Z-0a326789
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00285-run-fix-20260913T191035Z-0a326789
-- **Owner base:** a1f427a49a6010e6faf4bb0284023e425afee9cd
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T19:10:35Z
-- **Owner until:** 2026-09-13T21:10:35Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T11:40:11Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T11:40:11Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:15:51Z, deltic:auto role=fix run=fix-20260913T191035Z-0a326789 branch=task/bug-MM-BUG-KILN-00285-run-fix-20260913T191035Z-0a326789 code=0517847f846ab227031c56cc04b33ac80a0fdc75 gate=manual)
 
 ## Observation
 

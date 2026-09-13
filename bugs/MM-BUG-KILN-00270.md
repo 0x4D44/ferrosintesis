@@ -6,15 +6,15 @@
 - **Area:** strings sample crate / public package contract
 - **Raised:** 2026-08-17T07:29:00Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T171158Z-2f3c0d9d
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00270-run-fix-20260913T171158Z-2f3c0d9d
+- **Owner base:** 75d9efcc229379297b73dbed74f37b41b181fb41
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T17:11:58Z
+- **Owner until:** 2026-09-13T19:11:58Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

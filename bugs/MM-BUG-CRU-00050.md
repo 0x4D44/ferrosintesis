@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00050 — Mandolin provenance still names a retired physical WAV package path
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** mandolin sample crate / packaged provenance
 - **Raised:** 2026-08-20T12:21:24Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T150730Z-28f71eea
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00050-run-fix-20260913T150730Z-28f71eea
-- **Owner base:** 4fa266764b4f205af8275298cb2b578767f57d50
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:07:30Z
-- **Owner until:** 2026-09-13T17:07:30Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T12:21:24Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-20T12:21:24Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:11:08Z, deltic:auto role=fix run=fix-20260913T150730Z-28f71eea branch=task/bug-MM-BUG-CRU-00050-run-fix-20260913T150730Z-28f71eea code=b8162d01134c9adc165374e1465b61cb32f34480 gate=manual)
 
 ## Observation
 

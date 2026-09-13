@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00055 — MIDI resource-bound test helpers fail clippy manual_repeat_n, leaving the workspace clippy gate red
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Must
 - **Severity:** Medium
 - **Area:** ferrosintesis / MIDI parser tests
 - **Raised:** 2026-09-13T19:19:46Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T220245Z-abb143ec
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00055-run-fix-20260913T220245Z-abb143ec
-- **Owner base:** 6042927a8b7560f7291daddcc934b9e8142e5c05
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T22:02:45Z
-- **Owner until:** 2026-09-14T00:02:45Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:19:46Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:19:46Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T22:10:20Z, deltic:auto role=fix run=fix-20260913T220245Z-abb143ec branch=task/bug-MM-BUG-CRU-00055-run-fix-20260913T220245Z-abb143ec code=e75867d65e07f6a04935acfa3dcc64c325d0bd58 gate=manual)
 
 ## Observation
 

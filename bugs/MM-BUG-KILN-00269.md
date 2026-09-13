@@ -6,15 +6,15 @@
 - **Area:** sax sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T06:31:31Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T202621Z-e3282bc0
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00269-run-verify-20260913T202621Z-e3282bc0
+- **Owner base:** d676a08827b7486c047f3be22de16d22c5e9dcfe
+- **Owner fingerprint:** sha256:866975e58cdae23d469f1b08721d8c6d0917e7b61050579b1efad3245c79e46e
+- **Owner since:** 2026-09-13T20:26:21Z
+- **Owner until:** 2026-09-13T22:26:21Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

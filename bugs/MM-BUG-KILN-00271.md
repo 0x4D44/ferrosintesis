@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00271 — Strings regeneration command leaves the embedded FLAC bank stale
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** strings sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T07:29:12Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T171722Z-c6965ed4
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00271-run-fix-20260913T171722Z-c6965ed4
-- **Owner base:** 253e277616a669ee2827fdacc63eacb9adfa73e1
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T17:17:22Z
-- **Owner until:** 2026-09-13T19:17:22Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T07:29:12Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T07:29:12Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T17:29:02Z, deltic:auto role=fix run=fix-20260913T171722Z-c6965ed4 branch=task/bug-MM-BUG-KILN-00271-run-fix-20260913T171722Z-c6965ed4 code=711e6a5a22170ff23bd3a5df09ea37464ff91539 gate=manual)
 
 ## Observation
 

@@ -6,15 +6,15 @@
 - **Area:** licensing / attribution documentation
 - **Raised:** 2026-08-18T00:07:44Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T064720Z-27ceb47a
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00038-run-fix-20260913T064720Z-27ceb47a
+- **Owner base:** 0bbcf5a5bd3b7990518870f287ae06ad5c27c5c0
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T06:47:20Z
+- **Owner until:** 2026-09-13T08:47:20Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -20,6 +20,36 @@ banjo_extract = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(banjo_extract)
 
 
+class BanjoInventoryTest(unittest.TestCase):
+    def test_split_sample_table_keeps_only_canonical_flac_entries(self):
+        expected = banjo_extract._sampler_banjo_files()
+        self.assertEqual(
+            len(expected), banjo_extract.EXPECTED_BANJO_FILE_COUNT
+        )
+        entries = []
+        for name in sorted(expected):
+            entries.append(
+                f'    (\n        "{name}",\n'
+                f'        include_bytes!("../samples/{name}"),\n    ),'
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+            lib = repo / "crates/ferrosintesis-samples-orchestral2/src/lib.rs"
+            lib.parent.mkdir(parents=True)
+            lib.write_text(
+                "static SAMPLES: &[(&str, &[u8])] = &[\n"
+                + "\n".join(entries)
+                + "\n];\n"
+                + 'const NOT_AN_ENTRY: &str = "banjo_not_embedded.flac";\n',
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                banjo_extract._sample_crate_banjo_files(repo), expected
+            )
+
+
 class BanjoPublicationTest(unittest.TestCase):
     """MM-BUG-KILN-00153: a failed regeneration preserves the old bank."""
 
@@ -59,6 +89,29 @@ class BanjoPublicationTest(unittest.TestCase):
             banjo_extract.publish_banjo_bank(self.staging, self.out)
 
         self.assert_old_bank_unchanged()
+
+    def test_stale_wav_only_output_is_rejected_before_publication(self):
+        for path in self.out.glob(banjo_extract.BANJO_GLOB):
+            path.unlink()
+        stale = {}
+        for name in self.expected:
+            wav_name = banjo_extract.staging_name(name)
+            stale[wav_name] = f"stale bank: {name}".encode()
+            (self.out / wav_name).write_bytes(stale[wav_name])
+
+        with self.assertRaisesRegex(RuntimeError, "stale WAV"):
+            banjo_extract.publish_banjo_bank(self.staging, self.out)
+
+        self.assertEqual(
+            {path.name for path in self.out.glob(banjo_extract.STAGING_GLOB)},
+            set(stale),
+        )
+        for name, old in stale.items():
+            self.assertEqual((self.out / name).read_bytes(), old)
+        self.assertEqual(
+            {path.name for path in self.out.glob(banjo_extract.BANJO_GLOB)},
+            set(),
+        )
 
     def test_mid_publish_write_failure_rolls_back_every_file(self):
         replacements = 0

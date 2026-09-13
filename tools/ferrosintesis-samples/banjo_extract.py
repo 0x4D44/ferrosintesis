@@ -4,10 +4,11 @@
 
 This is the banjo's equivalent of `prepare.py`'s per-family bake, but the banjo does
 NOT come from a URL fetch: it is a real instrument recorded note-by-note (see
-`samples/banjo/`). This script turns that one take into the 24 trimmed onset WAVs the
-synth embeds (`crates/ferrosintesis-samples-orchestral2/samples/banjo_*.wav`).
+`samples/banjo/`). This script turns that one take into the 24-file FLAC bank the
+synth embeds (`crates/ferrosintesis-samples-orchestral2/samples/banjo_*.flac`), using
+WAVs only for temporary staging and PCM validation.
 
-Pipeline (all stdlib + numpy; ffmpeg only to decode the source):
+Pipeline (all stdlib + numpy; ffmpeg decodes the source and publishes FLAC):
   1. decode the source recording to mono 44.1 kHz float (ffmpeg — reads .opus/.wav/…)
   2. onset-segment on a fast energy rise with a refractory gap
   3. per take: robust OCTAVE-CORRECT f0 (harmonic-sum estimate refined by autocorrelation),
@@ -17,7 +18,7 @@ Pipeline (all stdlib + numpy; ffmpeg only to decode the source):
   5. extract: trim to the onset, keep ~0.5 s, peak-normalize to -1 dBFS, short fades,
      TPDF-dither to 16-bit PCM (seeded → deterministic)
 
-The shipped WAVs were extracted from the ORIGINAL lossless take; `samples/banjo/*.opus`
+The shipped FLACs were extracted from the ORIGINAL lossless take; `samples/banjo/*.opus`
 is the space-saving archive of that take (Opus @160 kbps is transparent, so re-running
 this on the archive reproduces the bank to within codec transparency). Roots are the
 MEASURED sounding pitch, so the player's slightly-sharp fretting up the neck is captured
@@ -61,16 +62,39 @@ def _quoted_fields(line: str) -> list[str]:
 def _sample_crate_banjo_files(repo: Path = REPO) -> frozenset[str]:
     """The banjo takes the orchestral2 crate embeds, read from its table.
 
-    Scanned over the WHOLE file rather than line by line. The generated table is
-    rustfmt'd, and rustfmt wraps an entry whose name pushes it past
-    `fn_call_width` — so the name and its `include_bytes!` land on separate
-    lines. A line-oriented scan that required both on one line therefore missed
-    every longer name silently: it reported 14 of 24 takes once `.wav` became
-    `.flac` and the sharps grew a character.
+    The generated table is rustfmt'd, and rustfmt wraps an entry whose name
+    pushes it past `fn_call_width` — so the name and its `include_bytes!` land on
+    separate lines. Restricting the scan to the table keeps comments and other
+    strings out of the canonical inventory while the entry matcher spans those
+    formatting newlines.
     """
     lib = repo / "crates/ferrosintesis-samples-orchestral2/src/lib.rs"
     text = lib.read_text(encoding="utf-8")
-    return frozenset(re.findall(r'"(banjo_[^"/]*\.flac)"', text))
+    table = re.search(
+        r"(?ms)^\s*static\s+SAMPLES\b[^=]*=\s*&?\[\s*(.*?)^\s*\];",
+        text,
+    )
+    if table is None:
+        raise RuntimeError("banjo sample crate has no SAMPLES table")
+
+    names = set()
+    entries = re.finditer(
+        r'(?s)\(\s*"(?P<name>[^"]+)"\s*,\s*'
+        r'include_bytes!\s*\(\s*"(?P<path>[^"]+)"\s*\)\s*,?\s*\)',
+        table.group(1),
+    )
+    for entry in entries:
+        name = entry.group("name")
+        if not name.startswith("banjo_"):
+            continue
+        if not name.endswith(".flac"):
+            raise RuntimeError(f"banjo sample crate has a non-FLAC entry: {name}")
+        if Path(entry.group("path")).name != name:
+            raise RuntimeError(
+                f"banjo sample crate entry {name} embeds {entry.group('path')}"
+            )
+        names.add(name)
+    return frozenset(names)
 
 
 def _sampler_banjo_files(repo: Path = REPO) -> frozenset[str]:
@@ -250,10 +274,23 @@ def validate_banjo_output_plan(staging: Path, repo: Path = REPO) -> frozenset[st
     return expected
 
 
+def _validate_banjo_output_inventory(out: Path) -> None:
+    """Reject a stale WAV bank before a FLAC publication can touch the output."""
+    if not out.is_dir():
+        return
+    stale = sorted(path.name for path in out.glob(STAGING_GLOB))
+    if stale:
+        raise RuntimeError(
+            "banjo output contains stale WAV files; the published bank is "
+            f"FLAC-only: {_format_names(stale)}"
+        )
+
+
 def publish_banjo_bank(
         staging: Path, out: Path = OUT, repo: Path = REPO,
         replace_file=os.replace) -> None:
     expected = validate_banjo_output_plan(staging, repo)
+    _validate_banjo_output_inventory(out)
     # Encode BEFORE touching the published bank, so an encoder failure cannot
     # leave the bank half-replaced -- the replace loop below is the only step
     # that mutates `out`, and it is what the rollback path unwinds.

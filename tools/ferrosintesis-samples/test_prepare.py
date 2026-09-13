@@ -4706,6 +4706,82 @@ class StringsGenericScopedPublicationTest(unittest.TestCase):
         self.assertFalse(any(path.name.endswith(".part") for path in sample_dir.iterdir()))
 
 
+class SteinwayGenericScopedPublicationTest(unittest.TestCase):
+    """MM-BUG-KILN-00273: the Steinway recipe replaces one physical FLAC bank."""
+
+    def test_steinway_selector_replaces_all_physical_outputs_without_wav_duplicates(self):
+        expected = set(prepare.STEINWAYB_SOURCES)
+        self.assertEqual(len(expected), 27)
+        repo_root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, repo_root, True)
+        self.addCleanup(prepare._PENDING_BANK_DIRS.clear)
+        sample_dir = pathlib.Path(
+            repo_root,
+            "crates",
+            "ferrosintesis-samples-vcsl-steinway",
+            "samples",
+        )
+        sample_dir.mkdir(parents=True)
+        old_payloads = {
+            prepare.packaged_name(name): f"old-{name}".encode("ascii")
+            for name in expected
+        }
+        for name, payload in old_payloads.items():
+            (sample_dir / name).write_bytes(payload)
+
+        source_calls = []
+        transform_calls = []
+        source_dirs = []
+
+        def fake_ensure_direct_sources(src, source_map, label):
+            self.assertEqual(label, "steinwayb")
+            source_dirs.append(src)
+            for name, url in source_map.items():
+                source_calls.append((name, url))
+
+        def fake_transform(name, src):
+            transform_calls.append((name, src))
+            segment = [0.0, 0.25, -0.25, 0.0]
+            row = (name, 440.0, 440.0, 440.0, 0.0, 1.0, len(segment) / prepare.OUT_SR)
+            return segment, prepare.OUT_SR, row
+
+        def fake_encode(_wav, flac):
+            pathlib.Path(flac).write_bytes(b"new steinway flac")
+
+        patches = (
+            mock.patch.object(prepare, "REPO_ROOT", repo_root),
+            mock.patch.object(prepare, "ensure_direct_sources", side_effect=fake_ensure_direct_sources),
+            mock.patch.object(
+                prepare, "_prepare_generic_source_sample", side_effect=fake_transform
+            ),
+            mock.patch.object(prepare, "_require_ffmpeg"),
+            mock.patch.object(prepare, "_encode_flac", side_effect=fake_encode),
+            mock.patch.object(prepare, "_decode_flac_pcm", return_value=b"pcm"),
+            mock.patch.object(prepare, "_read_wav_pcm", return_value=b"pcm"),
+            mock.patch.object(
+                prepare.sys, "argv", ["prepare.py", "--only=steinwayb"]
+            ),
+        )
+        with contextlib.ExitStack() as stack:
+            for patcher in patches:
+                stack.enter_context(patcher)
+            prepare.main()
+
+        self.assertEqual({name for name, _url in source_calls}, expected)
+        self.assertEqual(len(source_calls), len(expected))
+        self.assertEqual({name for name, _src in transform_calls}, expected)
+        self.assertEqual(len(transform_calls), len(expected))
+        self.assertEqual(len(source_dirs), 1)
+        self.assertEqual({src for _name, src in transform_calls}, set(source_dirs))
+        published = {path.name: path.read_bytes() for path in sample_dir.iterdir()}
+        self.assertEqual(set(published), {prepare.packaged_name(name) for name in expected})
+        self.assertEqual(set(published.values()), {b"new steinway flac"})
+        self.assertTrue(
+            all(path.suffix == ".flac" for path in sample_dir.iterdir())
+        )
+        self.assertFalse(any(path.name.endswith((".wav", ".part")) for path in sample_dir.iterdir()))
+
+
 class GrandRegenerationRecipeTest(unittest.TestCase):
     """MM-BUG-KILN-00135/00142: the copyable recipe selects only the grand family."""
 

@@ -5700,6 +5700,24 @@ def _family_output_sets():
     return owned
 
 
+def _family_output_groups():
+    """Package directory -> (families, expected outputs) for source-backed banks.
+
+    A package can own several filename families. Validation must treat those
+    families as one inventory when a selected family shares their destination;
+    otherwise a selective rebake can leave an obsolete sibling in the package.
+    """
+    groups = {}
+    for family, expected in _family_output_sets().items():
+        if not expected:
+            continue
+        output_dir = os.path.dirname(sample_output_path(next(iter(expected))))
+        families, outputs = groups.setdefault(output_dir, (set(), set()))
+        families.add(family)
+        outputs.update(expected)
+    return groups
+
+
 def _prepare_only_families():
     """Families whose selected prepare.py path writes at least one sample row."""
     source_backed = _family_prefixes(*_source_tables())
@@ -5746,12 +5764,15 @@ def _validate_only_families(only):
     )
 
 
-def _validate_generated_output_inventory(family, expected, repo_root=None, output_dir=None):
+def _validate_generated_output_inventory(
+        family, expected, repo_root=None, output_dir=None, families=None):
     """Fail closed when an output retains an obsolete generated sample.
 
     `family=None` validates every generated file in a complete disposable output
     directory; packaged banks pass their filename prefix and validate only that
-    family.
+    family. `families` narrows a shared package check to the source-backed
+    families represented by `expected`, leaving separate recipe-owned banks in
+    the same package to their own validators.
 
     Both sides are compared as PACKAGED names. Callers pass the logical `.wav`
     names their recipe uses, and the directory holds `.flac`; normalising here
@@ -5767,12 +5788,20 @@ def _validate_generated_output_inventory(family, expected, repo_root=None, outpu
     )
     if out_dir is None:
         raise ValueError("complete generated-output validation requires output_dir")
+    if family is not None and families is not None:
+        raise ValueError("inventory validation cannot combine family and families")
+    families = None if families is None else set(families)
     if not os.path.isdir(out_dir):
         return
     unexpected = sorted(
         name for name in os.listdir(out_dir)
         if name.endswith((".wav", PACKAGED_EXT))
-        and (family is None or name.startswith(f"{family}_"))
+        and (
+            (family is None and (
+                families is None or name.split("_", 1)[0] in families
+            ))
+            or (family is not None and name.startswith(f"{family}_"))
+        )
         and packaged_name(name) not in expected
     )
     if unexpected:
@@ -5878,17 +5907,17 @@ def main():
     # WAVs remain — so a later table refresh embeds the obsolete file and makes the
     # generated table self-consistent with the wrong directory.
     #
-    # Derived from the source tables, one check per SELECTED family
-    # (MM-BUG-KILN-00182, MM-BUG-KILN-00191). This used to name steinwayb, kawai,
-    # headroom and the bass pair by hand, so the other 37 source-backed families —
-    # grand, and every generic orchestral2 family: harp, ocarina, recorder, timpani,
-    # viola, marimba, xylo, glock, vibes, tubular, musicbox, eastpick, eastpluck —
-    # ran the generic write loop with no scoped check at all and silently kept
-    # obsolete outputs. A hand-written list of which families to guard is the same
-    # defect class it was guarding against.
-    for family, expected in sorted(_family_output_sets().items()):
-        if want(family):
-            _validate_generated_output_inventory(family, expected)
+    # Derived from the source tables and grouped by destination package
+    # (MM-BUG-KILN-00182, MM-BUG-KILN-00191, MM-BUG-KILN-00207). This used to
+    # name steinwayb, kawai, headroom and the bass pair by hand, so the other
+    # source-backed families ran the generic write loop with no scoped check at
+    # all. A package-level group catches a stale sibling when either owner is
+    # selected, while `families=` ignores separate recipe-owned banks in the same
+    # crate, such as chanter in the orchestral package.
+    for output_dir, (families, expected) in sorted(_family_output_groups().items()):
+        if any(want(family) for family in families):
+            _validate_generated_output_inventory(
+                None, expected, output_dir=output_dir, families=families)
 
     # `--sax-only` bakes ONLY the MTG recorded sax bank (network + the -sax crate),
     # skipping the slow VSCO fetch/rewrite — fast iteration on the sax bank alone.

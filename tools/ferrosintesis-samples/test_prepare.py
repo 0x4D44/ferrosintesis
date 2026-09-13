@@ -3173,6 +3173,47 @@ class HeadroomOutputInventoryTest(unittest.TestCase):
 class BassOutputInventoryTest(unittest.TestCase):
     """MM-BUG-CRUCIBLE-00022: bass rebakes must reject retired outputs."""
 
+    def assert_selected_family_rejects_stale_sibling(
+        self, selected, sibling_table_name, sibling_sources
+    ):
+        sibling_sources = dict(sibling_sources)
+        stale = next(iter(sibling_sources))
+        sibling_sources.pop(stale)
+
+        with tempfile.TemporaryDirectory() as repo_root:
+            out_dir = os.path.join(
+                repo_root, "crates", "ferrosintesis-samples-bass", "samples"
+            )
+            os.makedirs(out_dir)
+            with open(os.path.join(out_dir, stale), "wb"):
+                pass
+
+            with (
+                mock.patch.object(prepare, "REPO_ROOT", repo_root),
+                mock.patch.object(prepare, sibling_table_name, sibling_sources),
+                mock.patch.object(
+                    prepare,
+                    "ensure_ebass_sources",
+                    side_effect=AssertionError(
+                        "inventory must be checked before fetching"
+                    ),
+                ) as ensure_sources,
+                mock.patch.object(
+                    prepare,
+                    "read_wav",
+                    side_effect=AssertionError("inventory must be checked before reading"),
+                ),
+                mock.patch.object(prepare, "write_wav_mono"),
+                mock.patch.object(
+                    prepare.sys, "argv", ["prepare.py", f"--only={selected}"]
+                ),
+                mock.patch.object(prepare, "_require_ffmpeg"),
+            ):
+                with self.assertRaisesRegex(ValueError, re.escape(stale)):
+                    prepare.main()
+
+            ensure_sources.assert_not_called()
+
     def test_removed_mapping_rejects_its_stale_output_before_fetching_or_writing(self):
         finger_sources = dict(prepare.FINGERBASS_SOURCES)
         stale = next(iter(finger_sources))
@@ -3202,6 +3243,16 @@ class BassOutputInventoryTest(unittest.TestCase):
 
             ensure_sources.assert_not_called()
             write_output.assert_not_called()
+
+    def test_finger_selection_rejects_stale_pick_sibling(self):
+        self.assert_selected_family_rejects_stale_sibling(
+            "fingerbass", "PICKBASS_SOURCES", prepare.PICKBASS_SOURCES
+        )
+
+    def test_pick_selection_rejects_stale_finger_sibling(self):
+        self.assert_selected_family_rejects_stale_sibling(
+            "pickbass", "FINGERBASS_SOURCES", prepare.FINGERBASS_SOURCES
+        )
 
 
 class HonkytonkOutputInventoryTest(unittest.TestCase):

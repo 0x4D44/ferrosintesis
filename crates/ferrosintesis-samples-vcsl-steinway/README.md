@@ -6,7 +6,7 @@ intimate vintage Steinway that voices a **GM 0 Acoustic Grand alternate**
 contrast to the bright Salamander C5 grand (CC0=2).
 
 9 pitch zones (C2–C6) × 3 dynamics (pp/mf/f) × 2 round robins = 54 canonical `.flac` names
-backed by 27 unique mono 16-bit 44.1 kHz FLACs, plus 27 legacy `.wav` names for
+backed by 27 unique mono 16-bit 44.1 kHz FLACs, plus 27 legacy `.wav` aliases for
 the former physical entries. The 27 canonical names that reuse
 an upstream velocity layer resolve through the packaged `ALIASES` manifest, so
 each payload is embedded and decoded once. Consumers normally reach this crate

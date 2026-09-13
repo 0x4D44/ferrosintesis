@@ -5520,6 +5520,75 @@ class GenCrateLibMixedContainerTest(unittest.TestCase):
         self.assertIn('&bytes[..4] == b"fLaC"', generated)
         self.assertNotIn("ignored.txt", generated)
 
+    def test_write_failure_preserves_existing_lib_and_cleans_temp(self):
+        with tempfile.TemporaryDirectory() as crate:
+            crate_path = pathlib.Path(crate)
+            samples = crate_path / "samples"
+            samples.mkdir()
+            (crate_path / "src").mkdir()
+            (crate_path / "Cargo.toml").write_text(
+                '[package]\ninclude = ["LICENSE-MIT"]\n', encoding="utf-8"
+            )
+            (crate_path / "LICENSE-MIT").write_text("test license\n", encoding="utf-8")
+            lib = crate_path / "src" / "lib.rs"
+            before = b"previous lib bytes\x00\n"
+            lib.write_bytes(before)
+            (samples / "a.flac").write_bytes(b"fLaC\x00\x01")
+
+            real_fdopen = gen_crate_lib.os.fdopen
+
+            def fail_write(fd, *args, **kwargs):
+                handle = real_fdopen(fd, *args, **kwargs)
+
+                def write(_data):
+                    raise OSError("injected generator write failure")
+
+                handle.write = write
+                return handle
+
+            with mock.patch.object(gen_crate_lib.os, "fdopen", side_effect=fail_write):
+                with self.assertRaises(OSError):
+                    with mock.patch.object(gen_crate_lib.subprocess, "run"):
+                        with mock.patch.object(
+                            gen_crate_lib.sys,
+                            "argv",
+                            ["gen_crate_lib.py", crate, "--doc", "Write failure."],
+                        ):
+                            gen_crate_lib.main()
+
+            self.assertEqual(lib.read_bytes(), before)
+            self.assertEqual(list((crate_path / "src").glob(".lib.rs.*.rs")), [])
+
+    def test_rustfmt_failure_preserves_existing_lib_and_cleans_temp(self):
+        with tempfile.TemporaryDirectory() as crate:
+            crate_path = pathlib.Path(crate)
+            samples = crate_path / "samples"
+            samples.mkdir()
+            (crate_path / "src").mkdir()
+            (crate_path / "Cargo.toml").write_text(
+                '[package]\ninclude = ["LICENSE-MIT"]\n', encoding="utf-8"
+            )
+            (crate_path / "LICENSE-MIT").write_text("test license\n", encoding="utf-8")
+            lib = crate_path / "src" / "lib.rs"
+            before = b"previous lib bytes\x00\n"
+            lib.write_bytes(before)
+            (samples / "a.flac").write_bytes(b"fLaC\x00\x01")
+
+            with mock.patch.object(
+                gen_crate_lib.subprocess,
+                "run",
+                side_effect=subprocess.CalledProcessError(1, "rustfmt"),
+            ), self.assertRaises(subprocess.CalledProcessError):
+                with mock.patch.object(
+                    gen_crate_lib.sys,
+                    "argv",
+                    ["gen_crate_lib.py", crate, "--doc", "Rustfmt failure."],
+                ):
+                    gen_crate_lib.main()
+
+            self.assertEqual(lib.read_bytes(), before)
+            self.assertEqual(list((crate_path / "src").glob(".lib.rs.*.rs")), [])
+
     def test_swapped_embedded_payload_fails_the_packaged_file_oracle(self):
         with tempfile.TemporaryDirectory() as crate:
             crate_path = pathlib.Path(crate)

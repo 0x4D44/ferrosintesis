@@ -14,6 +14,7 @@ tests are self-consistent by construction.
 import os
 import subprocess
 import sys
+import tempfile
 
 
 LEGAL_DOC_NAMES = ("LICENSE-CC0", "LICENSE-MIT", "NOTICE", "PROVENANCE.md")
@@ -275,23 +276,40 @@ def main():
     lines.append("")
 
     out = os.path.join(crate, "src", "lib.rs")
-    os.makedirs(os.path.dirname(out), exist_ok=True)
-    with open(out, "w", newline="\n", encoding="utf-8") as f:
-        f.write("\n".join(lines))
-
-    # rustfmt the result rather than trying to reproduce its heuristics here. An entry is
-    # `2*len(name) + 35` chars wide, so any sample name over 12 characters exceeds rustfmt's
-    # 60-char fn_call_width and gets wrapped; a one-file crate goes the other way and gets
-    # folded onto one line. Emitting either form by hand is wrong for the other case, and
-    # the mismatch only ever surfaced at the integration gate's `cargo fmt --all --check`.
+    out_dir = os.path.dirname(out)
+    os.makedirs(out_dir, exist_ok=True)
+    temp_fd, temp_path = tempfile.mkstemp(
+        dir=out_dir, prefix=".lib.rs.", suffix=".rs"
+    )
     try:
-        subprocess.run(["rustfmt", "--edition", "2021", out], check=True)
-    except FileNotFoundError:
-        raise SystemExit(
-            f"wrote {out}, but `rustfmt` is not on PATH — the generated table is not "
-            "fmt-clean and will fail `cargo fmt --all --check`. Install it with "
-            "`rustup component add rustfmt`, then re-run."
-        )
+        with os.fdopen(temp_fd, "w", newline="\n", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+
+        # rustfmt the result rather than trying to reproduce its heuristics here. An entry is
+        # `2*len(name) + 35` chars wide, so any sample name over 12 characters exceeds rustfmt's
+        # 60-char fn_call_width and gets wrapped; a one-file crate goes the other way and gets
+        # folded onto one line. Emitting either form by hand is wrong for the other case, and
+        # the mismatch only ever surfaced at the integration gate's `cargo fmt --all --check`.
+        try:
+            subprocess.run(["rustfmt", "--edition", "2021", temp_path], check=True)
+        except FileNotFoundError:
+            raise SystemExit(
+                "`rustfmt` is not on PATH — the generated table was not published. "
+                "Install it with `rustup component add rustfmt`, then re-run."
+            )
+
+        with open(temp_path, encoding="utf-8") as f:
+            formatted = f.read()
+        if not formatted:
+            raise RuntimeError("rustfmt produced an empty generated source file")
+        os.replace(temp_path, out)
+        temp_path = None
+    finally:
+        if temp_path is not None:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
 
     print(f"wrote {out}: {len(names)} files, {total} bytes")
 

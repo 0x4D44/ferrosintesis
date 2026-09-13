@@ -6,15 +6,15 @@
 - **Area:** realtime synth / prewarm contract tests
 - **Raised:** 2026-08-19T09:33:21Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T233904Z-b6938618
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KIL-00309-run-fix-20260913T233904Z-b6938618
+- **Owner base:** eeeca14764f65e1998c83d96926f3257b75edffd
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T23:39:04Z
+- **Owner until:** 2026-09-14T01:39:04Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

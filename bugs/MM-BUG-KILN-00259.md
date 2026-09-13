@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00259 — MuseScore sample regeneration leaves the embedded FLAC bank stale
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** MuseScore sample crate / deterministic regeneration
 - **Raised:** 2026-08-17T03:29:03Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T141756Z-302585e6
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00259-run-fix-20260913T141756Z-302585e6
-- **Owner base:** 0d36728730168e08635a61d0bc80c752812654c8
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T14:17:56Z
-- **Owner until:** 2026-09-13T16:17:56Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T03:29:03Z, raised via `deltic bugs new` model=gpt-5.6-sol@high)
+- **State history:** Open (2026-08-17T03:29:03Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T14:21:50Z, deltic:auto role=fix run=fix-20260913T141756Z-302585e6 branch=task/bug-MM-BUG-KILN-00259-run-fix-20260913T141756Z-302585e6 code=55298fb16c0f370149bafafb7e518685cafa4443 gate=manual)
 
 ## Observation
 

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00243 — Grand sample API still documents WAV keys and bytes after FLAC conversion
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** grand sample crate / public lookup contract
 - **Raised:** 2026-08-16T22:56:37Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T065525Z-90184756
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00243-run-fix-20260913T065525Z-90184756
-- **Owner base:** cb9947f1d544da351d443042eb14d93d35f73319
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T06:55:25Z
-- **Owner until:** 2026-09-13T08:55:25Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T22:56:37Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T22:56:37Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:03:12Z, deltic:auto role=fix run=fix-20260913T065525Z-90184756 branch=task/bug-MM-BUG-KILN-00243-run-fix-20260913T065525Z-90184756 code=1dbacabf gate=manual)
 
 ## Observation
 

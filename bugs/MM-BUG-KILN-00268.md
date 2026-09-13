@@ -6,15 +6,15 @@
 - **Area:** sax sample crate / public package contract
 - **Raised:** 2026-08-17T06:31:16Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T200702Z-48529a1c
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00268-run-verify-20260913T200702Z-48529a1c
+- **Owner base:** e8e4ccafbe921b7959b7e26eec094a7e6a3e873b
+- **Owner fingerprint:** sha256:bc040e02c985ed9ddb2232bd8cf57f1fa5c5e611bbc08c704ceabb9c4ce247a2
+- **Owner since:** 2026-09-13T20:07:02Z
+- **Owner until:** 2026-09-13T22:07:02Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -6,15 +6,15 @@
 - **Area:** sample generation / bank reproducibility
 - **Raised:** 2026-08-18T00:08:02Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T070447Z-0245f995
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00039-run-fix-20260913T070447Z-0245f995
+- **Owner base:** f193333a0e750dd3d548f4d436b7dce0d869fbab
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T07:04:47Z
+- **Owner until:** 2026-09-13T09:04:47Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

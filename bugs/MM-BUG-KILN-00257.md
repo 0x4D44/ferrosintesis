@@ -6,15 +6,15 @@
 - **Area:** sample tooling / MuseScore bottle routing regression
 - **Raised:** 2026-08-17T03:28:39Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T203315Z-20fdce91
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00257-run-verify-20260913T203315Z-20fdce91
+- **Owner base:** fc12f9461ec70c97be243d1500ce62e01ee5d051
+- **Owner fingerprint:** sha256:db0f4d1edd06feab06924da03bf8301dc343e799842106c6cf3131a28bd28c54
+- **Owner since:** 2026-09-13T20:33:15Z
+- **Owner until:** 2026-09-13T22:33:15Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

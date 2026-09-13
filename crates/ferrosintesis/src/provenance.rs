@@ -378,15 +378,10 @@ mod tests {
         out
     }
 
-    /// Everything every sample crate's packaged `PROVENANCE.md` says, concatenated.
-    ///
-    /// Packaged on purpose: evidence that ships with the crate is evidence a downstream
-    /// consumer can actually audit. A hash recorded only in a repo-root document would leave
-    /// the published artifact unverifiable.
-    fn packaged_provenance_text() -> String {
+    /// Every first-party sample crate directory, discovered from the filesystem.
+    fn sample_crate_dirs() -> Vec<(String, PathBuf)> {
         let crates = repo_root().join("crates");
-        let mut all = String::new();
-        let mut dirs: Vec<PathBuf> = std::fs::read_dir(&crates)
+        let mut dirs: Vec<(String, PathBuf)> = std::fs::read_dir(&crates)
             .expect("crates/ is readable")
             .filter_map(|e| e.ok())
             .map(|e| e.path())
@@ -395,9 +390,71 @@ mod tests {
                     .map(|n| n.to_string_lossy().starts_with("ferrosintesis-samples-"))
                     .unwrap_or(false)
             })
+            .map(|p| {
+                let name = p
+                    .file_name()
+                    .expect("a sample crate has a directory name")
+                    .to_string_lossy()
+                    .into_owned();
+                (name, p)
+            })
             .collect();
-        dirs.sort();
-        for d in dirs {
+        dirs.sort_by(|a, b| a.0.cmp(&b.0));
+        assert!(
+            dirs.len() > 10,
+            "found only {} ferrosintesis sample crates — the scan is not reading what it \
+             thinks it is",
+            dirs.len()
+        );
+        dirs
+    }
+
+    /// Every file in one crate's retained, package-local licence-evidence directory.
+    ///
+    /// The directory is deliberately discovered rather than represented by a list of three
+    /// manifests. A future retained copy must either carry its hash in that crate's
+    /// `PROVENANCE.md` or this test turns red.
+    fn licence_evidence_files(crate_name: &str, crate_dir: &Path) -> Vec<(String, String)> {
+        let evidence_dir = crate_dir.join("licence-evidence");
+        if !evidence_dir.is_dir() {
+            return Vec::new();
+        }
+        let mut files: Vec<PathBuf> = std::fs::read_dir(&evidence_dir)
+            .unwrap_or_else(|e| panic!("{} is not readable: {e}", evidence_dir.display()))
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .collect();
+        files.sort();
+        let mut out = Vec::new();
+        for path in files {
+            assert!(
+                path.is_file(),
+                "{} contains a non-file entry; classify it before it can evade the licence \
+                 evidence scan",
+                path.display()
+            );
+            let name = path
+                .file_name()
+                .expect("a licence-evidence file has a name")
+                .to_string_lossy();
+            let bytes = std::fs::read(&path)
+                .unwrap_or_else(|e| panic!("{} is not readable: {e}", path.display()));
+            out.push((
+                format!("{crate_name}/licence-evidence/{name}"),
+                sha256_hex(&bytes),
+            ));
+        }
+        out
+    }
+
+    /// Everything every sample crate's packaged `PROVENANCE.md` says, concatenated.
+    ///
+    /// Packaged on purpose: evidence that ships with the crate is evidence a downstream
+    /// consumer can actually audit. A hash recorded only in a repo-root document would leave
+    /// the published artifact unverifiable.
+    fn packaged_provenance_text() -> String {
+        let mut all = String::new();
+        for (_, d) in sample_crate_dirs() {
             if let Ok(text) = std::fs::read_to_string(d.join("PROVENANCE.md")) {
                 all.push_str(&text);
                 all.push('\n');
@@ -440,6 +497,56 @@ mod tests {
         );
     }
 
+    /// Every retained licence manifest that ships beside a sample crate is pinned by that
+    /// crate's own packaged provenance. Keeping the check per crate matters: concatenating all
+    /// provenance documents would let one package accidentally satisfy another's evidence.
+    #[test]
+    fn every_packaged_licence_evidence_copy_is_pinned_by_its_crate_provenance() {
+        let mut checked = 0usize;
+        let mut unpackaged = Vec::new();
+        let mut missing = Vec::new();
+
+        for (crate_name, crate_dir) in sample_crate_dirs() {
+            let evidence_dir = crate_dir.join("licence-evidence");
+            if !evidence_dir.is_dir() {
+                continue;
+            }
+            let manifest = std::fs::read_to_string(crate_dir.join("Cargo.toml"))
+                .unwrap_or_else(|e| panic!("{crate_name}/Cargo.toml is not readable: {e}"));
+            if !manifest.contains("\"licence-evidence/**\"") {
+                unpackaged.push(crate_name.clone());
+            }
+            let evidence = licence_evidence_files(&crate_name, &crate_dir);
+            checked += evidence.len();
+            let provenance = std::fs::read_to_string(crate_dir.join("PROVENANCE.md"))
+                .unwrap_or_else(|e| panic!("{crate_name}/PROVENANCE.md is not readable: {e}"));
+            missing.extend(
+                unpinned(&evidence, &provenance)
+                    .into_iter()
+                    .map(str::to_owned),
+            );
+        }
+
+        assert!(
+            checked > 0,
+            "the scan found no licence-evidence files in sample crates; it is not reading \
+             what it thinks it is"
+        );
+        assert!(
+            unpackaged.is_empty(),
+            "{} sample crate(s) carry licence evidence but do not package the whole \
+             `licence-evidence/**` directory: {unpackaged:?}",
+            unpackaged.len()
+        );
+        assert!(
+            missing.is_empty(),
+            "{} packaged licence-evidence file(s) have no matching SHA-256 in their own \
+             PROVENANCE.md:\n  {}",
+            missing.len(),
+            missing.join("\n  ")
+        );
+    }
+
     /// The adversarial half: prove the check can actually FAIL.
     ///
     /// The repo's standing lesson is that a derived oracle is only as good as its predicate,
@@ -475,6 +582,21 @@ mod tests {
             ),
             vec!["freesound-src/a.wav", "gong-src/b.wav"]
         );
+    }
+
+    #[test]
+    fn the_licence_evidence_check_rejects_a_mutated_copy() {
+        let path = "ferrosintesis-samples-ccby/licence-evidence/manifest.txt";
+        let original = b"license: Attribution 4.0\n";
+        let mut mutated = original.to_vec();
+        mutated[0] ^= 1;
+        let docs = format!("| manifest.txt | `{}` |", sha256_hex(original));
+
+        let committed = vec![(path.to_owned(), sha256_hex(original))];
+        assert!(unpinned(&committed, &docs).is_empty());
+
+        let mutated_copy = vec![(path.to_owned(), sha256_hex(&mutated))];
+        assert_eq!(unpinned(&mutated_copy, &docs), vec![path]);
     }
 
     /// The retained upstream licence manifests are themselves committed sources, so the

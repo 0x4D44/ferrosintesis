@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00038 — Shipped NOTICE instructs distributors to reproduce ten attribution notices; nine exist and nine are listed
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** licensing / attribution documentation
 - **Raised:** 2026-08-18T00:07:44Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T192525Z-d93abde3
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00038-run-verify-20260913T192525Z-d93abde3
-- **Owner base:** e5b3e3232e695f0d3d6985c0151eede68156492e
-- **Owner fingerprint:** sha256:ad48621774bda87e4b005fd626ee7d85643b0a96a756f2147f5db413f6428135
-- **Owner since:** 2026-09-13T19:25:25Z
-- **Owner until:** 2026-09-13T21:25:25Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T00:07:44Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T07:03:13Z, deltic:auto role=fix run=fix-20260913T064720Z-27ceb47a branch=task/bug-MM-BUG-CRUCIBLE-00038-run-fix-20260913T064720Z-27ceb47a code=d975f7bb2f66d5a2bbccfd2186e16e5e4a67a14b gate=manual)
+- **State history:** Open (2026-08-18T00:07:44Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T07:03:13Z, deltic:auto role=fix run=fix-20260913T064720Z-27ceb47a branch=task/bug-MM-BUG-CRUCIBLE-00038-run-fix-20260913T064720Z-27ceb47a code=d975f7bb2f66d5a2bbccfd2186e16e5e4a67a14b gate=manual) -> Closed (2026-09-13, independently verified by Codex: derived NOTICE count oracle passes and no residual gap)
 
 ## Observation
 
@@ -81,21 +81,29 @@ counted from the committed manifests and the committed `NOTICE`.
 
 ## Fix
 
-Unfixed. Raised for the fix-open-bugs loop; this review did not change code.
+Fixed by `d975f7bb2f66d5a2bbccfd2186e16e5e4a67a14b`. The shipped NOTICE, README, and
+crate rustdoc no longer repeat hand-maintained bank counts. `licensing.rs` derives the
+attribution-bearing set from the default feature and licence evidence, then rejects any
+explicit count in the NOTICE that disagrees with that set. The negative stale-count control
+proves the oracle catches all three obligation phrases.
 
-Two directions, and the second is the one MM-BUG-KILN-00121's reasoning points at:
+### Verification summary (2026-09-13 — Codex)
 
-1. Correct "ten" → "nine" at `NOTICE:9, :12, :14` and "twenty-five" → "twenty-four" at
-   `licensing.rs:7`. This restores accuracy but recreates the hazard — the next crate
-   added or removed re-breaks it silently.
-2. Better: remove the bare numerals from the instruction ("reproduce the notices listed
-   below"), and add one derived assertion in `licensing.rs` that any numeral the document
-   *does* state equals the size of the already-derived set. That is derived, not
-   hand-maintained, so it does not reintroduce what MM-BUG-KILN-00121 refused.
+`$null | deltic timeout 300 cargo test -p ferrosintesis licensing` passed all 16 licensing
+tests, including `parent_notice_is_packaged_and_names_every_attribution_bearing_bank` and
+`notice_attribution_count_oracle_rejects_stale_count`.
 
-Whichever is chosen, the negative control matters: write a NOTICE whose count disagrees
-with the derived set and prove the new assertion goes red, per CLAUDE.md's rule that an
-oracle must be shown to fail once.
+For the required mutation check, I temporarily made
+`notice_attribution_count_mismatches` return an empty vector. The stale-count test failed as
+required (`left: 0`, `right: 3`); I restored the detector and verified its source diff is empty.
+
+The documented workspace gates were not fully green for unrelated existing surfaces:
+`cargo test --workspace` reached 892 passed and 44 ignored but failed five inventory, payload,
+and sampler tests; `cargo clippy --workspace --all-targets -- -D warnings` failed on existing
+warnings in `sampler.rs`, `midi.rs`, `parse_robustness.rs`, and `payload.rs`. None is part of
+this licensing-count fix. The shared licensing module also contains distinct open/fixed
+records for packaged evidence, container wording, and container assertions; those concerns
+are separate from this NOTICE count defect.
 
 ## Notes
 

@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00061 — ffmpeg-prerequisite documentation tests pass on text that denies ffmpeg is needed
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample tooling / regeneration prerequisite oracles
 - **Raised:** 2026-09-13T19:22:43Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T202711Z-3a9994fe
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00061-run-fix-20260913T202711Z-3a9994fe
-- **Owner base:** efb3cfaefc62f5af176f26ef54cbe9b2ec47bfbe
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T20:27:11Z
-- **Owner until:** 2026-09-13T22:27:11Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:22:43Z, raised via `deltic bugs new` model=claude-opus-5)
+- **State history:** Open (2026-09-13T19:22:43Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T20:38:22Z, deltic:auto role=fix run=fix-20260913T202711Z-3a9994fe branch=task/bug-MM-BUG-CRU-00061-run-fix-20260913T202711Z-3a9994fe code=bf681a3f105cef44e82b767c99a4fd751b40cc2d gate=manual)
 
 ## Observation
 

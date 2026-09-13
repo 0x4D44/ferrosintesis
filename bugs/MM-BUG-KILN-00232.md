@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis-flac / resource bounds
 - **Raised:** 2026-08-16T20:59:04Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T054211Z-eb7058c3
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00232-run-fix-20260913T054211Z-eb7058c3
+- **Owner base:** b30f9fc89a0488fcd825b7ad71312de48789700a
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T05:42:11Z
+- **Owner until:** 2026-09-13T07:42:11Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

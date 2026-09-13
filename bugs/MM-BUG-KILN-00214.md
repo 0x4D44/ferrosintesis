@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00214 — Bottle sample name says G3 while its measured root is 205 Hz
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample package / bottle pitch metadata
 - **Raised:** 2026-08-16T11:38:37Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T195617Z-d35ab636
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00214-run-verify-20260913T195617Z-d35ab636
-- **Owner base:** be168cabe08d411d5063c93cfa92c89560b05dd7
-- **Owner fingerprint:** sha256:b8b526876c0d2c6bce2cd72f559876953036493f5358a41b25a26c2f155f1531
-- **Owner since:** 2026-09-13T19:56:17Z
-- **Owner until:** 2026-09-13T21:56:17Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T11:38:37Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:41:57Z, deltic:auto role=fix run=fix-20260913T153622Z-8d72e8db branch=task/bug-MM-BUG-KILN-00214-run-fix-20260913T153622Z-8d72e8db code=1f1892c98b12eb5270d5d4b7adbe978afbecd5b3 gate=manual)
+- **State history:** Open (2026-08-16T11:38:37Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:41:57Z, deltic:auto role=fix run=fix-20260913T153622Z-8d72e8db branch=task/bug-MM-BUG-KILN-00214-run-fix-20260913T153622Z-8d72e8db code=1f1892c98b12eb5270d5d4b7adbe978afbecd5b3 gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: bottle crate exports MEASURED_ROOT_HZ 205.0 used by the sampler; pre-fix docs fail the metadata contract test)
 
 ## Observation
 
@@ -48,5 +48,13 @@ label it as a historical/source filename and state that consumers must use the m
 release, rename the asset and every generator/runtime key together. Add measured-root
 metadata or a documented accessor so direct consumers do not infer pitch from the
 filename.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `1f1892c9`) by an agent other than the fixer.
+
+**Original observation re-derived.** The bottle crate exports `MEASURED_ROOT_HZ: f32 = 205.0`, and `sampler.rs` builds the zone from it (a matching constant without default features). README, PROVENANCE and rustdoc call `bottleloop_G3.flac` a historical filename and give 205.0 Hz (about 22 cents flat of G#3). The constant equals the root the synth already used, so renders are unchanged.
+
+**Fails-before (method A).** With the README and PROVENANCE from `1f1892c9^`, `BottleMeasuredRootMetadataTest` fails in two subtests. It passes on HEAD, as do `bottle_loop_pitch_integrity`, `bottle_loop_level_parity_and_flat` and `wd_o13_bottle_level_pitch_and_bend_across_keys`.
 
 ## Notes

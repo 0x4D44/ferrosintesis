@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00240 — Packaged-sample onset sweep excludes every converted FLAC bank
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample tooling / committed onset continuity oracle
 - **Raised:** 2026-08-16T21:54:31Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T193456Z-77a5e058
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00240-run-verify-20260913T193456Z-77a5e058
-- **Owner base:** dcd6e91ab982e27c7c977d71104e231cd81c6626
-- **Owner fingerprint:** sha256:097e88206e5c7e4052dcb30d0ecef2eec6f230d3dc8d61d3a2858662ff0e87a0
-- **Owner since:** 2026-09-13T19:34:56Z
-- **Owner until:** 2026-09-13T21:34:56Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T21:54:31Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:43:38Z, deltic:auto role=fix run=fix-20260913T063558Z-2be406e5 branch=task/bug-MM-BUG-KILN-00240-run-fix-20260913T063558Z-2be406e5 code=10ef4c899f29cdd505939258269d5ba80f8a2d32 gate=manual)
+- **State history:** Open (2026-08-16T21:54:31Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:43:38Z, deltic:auto role=fix run=fix-20260913T063558Z-2be406e5 branch=task/bug-MM-BUG-KILN-00240-run-fix-20260913T063558Z-2be406e5 code=10ef4c899f29cdd505939258269d5ba80f8a2d32 gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: skipping the gong layers or filtering to WAV-only each fail the sweep's new named coverage guards)
 
 ## Observation
 
@@ -28,5 +28,13 @@ Observation: crates/ferrosintesis-samples-gong/PROVENANCE.md:121-128 says the tw
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `10ef4c89`) by an agent other than the fixer.
+
+**Original observation re-derived.** The `.wav`-only filter the record describes was already removed by `55298fb1`, which made the sweep accept `PACKAGED_EXT`; `read_wav` dispatches on `fLaC` magic. On HEAD the sweep decodes both gong FLAC layers, and the gong PROVENANCE names a test that exists. Clavinet is deliberately excluded via `INTERNAL_LOOP_CRATES`.
+
+**Fails-before (method B, on the guards this fix added).** Skipping the gong crate fails the sweep ("the converted Gong layers must stay in the continuity sweep"); restoring a WAV-only filter fails it ("52 not greater than 1000"). Restored; the sweep and both FLAC onset controls pass on HEAD.
 
 ## Notes

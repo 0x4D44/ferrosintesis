@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00228 — Packaged fret-noise README points to provenance data absent from the package
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** fret-noise package documentation / provenance
 - **Raised:** 2026-08-16T16:53:13Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T195712Z-ac780954
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00228-run-verify-20260913T195712Z-ac780954
-- **Owner base:** dee9a7f63d86ea6d1abb00423300519a75abe4bd
-- **Owner fingerprint:** sha256:72f7d026a84a4e24e882fb0fe1085e320f93e5e7b2c44ebcdd2b1b7dc5c71e2a
-- **Owner since:** 2026-09-13T19:57:12Z
-- **Owner until:** 2026-09-13T21:57:12Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T16:53:13Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T16:20:57Z, deltic:auto role=fix run=fix-20260913T161451Z-b2335558 branch=task/bug-MM-BUG-KILN-00228-run-fix-20260913T161451Z-b2335558 code=80747f5953794f95878245ed50a6971d3d22cd64 gate=manual)
+- **State history:** Open (2026-08-16T16:53:13Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T16:20:57Z, deltic:auto role=fix run=fix-20260913T161451Z-b2335558 branch=task/bug-MM-BUG-KILN-00228-run-fix-20260913T161451Z-b2335558 code=80747f5953794f95878245ed50a6971d3d22cd64 gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: packaged fret-noise PROVENANCE links the cut map at an immutable trunk commit; pre-fix PROVENANCE fails the crate test)
 
 ## Observation
 
@@ -42,6 +42,14 @@ defect is Low-severity published documentation.
 Unfixed. Either copy the promised measurements and cut map into the packaged
 `PROVENANCE.md`, or state clearly that the detailed source record is external
 to the crate package and provide a stable repository or commit link to it.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `80747f59`) by an agent other than the fixer.
+
+**Original observation re-derived.** The packaged PROVENANCE says the detailed source record lives outside the crate and links it at commit `17804653`, which is on trunk; that commit's `samples/fret-noise-eastman-e1d/README.md` holds the level measurements and the 12-cut map. `cargo package --list` confirms README and PROVENANCE ship.
+
+**Fails-before (method A).** With PROVENANCE.md from `80747f59^`, `tests::packaged_provenance_hands_off_to_the_immutable_source_record` fails. It passes on HEAD.
 
 ## Notes
 

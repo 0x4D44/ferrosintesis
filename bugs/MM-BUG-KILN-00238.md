@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00238 — Gong sample API still documents WAV keys and bytes after FLAC conversion
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** gong sample crate / public lookup contract
 - **Raised:** 2026-08-16T21:52:59Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T195755Z-f79e08c9
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00238-run-verify-20260913T195755Z-f79e08c9
-- **Owner base:** 6bf579c8825cfd21f7ceee44f3dc239d59b7711d
-- **Owner fingerprint:** sha256:9ed7c6c288fbdc7dc4845cf5c6223b7de69f3f961e18a1372565bf28679ea16a
-- **Owner since:** 2026-09-13T19:57:55Z
-- **Owner until:** 2026-09-13T21:57:55Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T21:52:59Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:22:54Z, deltic:auto role=fix run=fix-20260913T061026Z-c982e0e7 branch=task/bug-MM-BUG-KILN-00238-run-fix-20260913T061026Z-c982e0e7 code=bf8066cda96af77f7c9e0e13c0046d24733c969a gate=manual)
+- **State history:** Open (2026-08-16T21:52:59Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T06:22:54Z, deltic:auto role=fix run=fix-20260913T061026Z-c982e0e7 branch=task/bug-MM-BUG-KILN-00238-run-fix-20260913T061026Z-c982e0e7 code=bf8066cda96af77f7c9e0e13c0046d24733c969a gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: gong docs describe two FLAC keys totalling 1,160,636 bytes; pre-fix docs fail the lookup contract test)
 
 ## Observation
 
@@ -28,5 +28,13 @@ Observation: crates/ferrosintesis-samples-gong/src/lib.rs:23-25 promises embedde
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `bf8066cd`) by an agent other than the fixer.
+
+**Original observation re-derived.** Gong rustdoc, README and PROVENANCE describe FLAC and name `gong_ageng_loud.flac` and `gong_ageng_soft.flac`; 518,201 + 642,435 = 1,160,636 bytes = `EXPECTED_BYTES`. Documented keys resolve through `get()` and `.wav` keys return None; remaining WAV wording covers only committed `gong-src/` inputs.
+
+**Fails-before (method A).** With README and PROVENANCE from `bf8066cd^`, `documented_flac_lookup_contract_matches_packaged_inventory` fails. All three gong tests pass on HEAD.
 
 ## Notes

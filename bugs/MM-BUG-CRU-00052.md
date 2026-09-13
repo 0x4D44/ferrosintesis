@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00052 — Realtime prewarm memory guidance still assumes uncompressed sample payloads after the FLAC migration
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** realtime API / sample prewarm documentation
 - **Raised:** 2026-08-20T15:01:11Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T195024Z-c418af1a
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00052-run-verify-20260913T195024Z-c418af1a
-- **Owner base:** 4514551f8dccb0c1b9ee5d7c0e9ae2c4df0fd282
-- **Owner fingerprint:** sha256:1f6cde08b03444369791841ee81a8fe69748da512b23629ab5f9a2a926cb39a1
-- **Owner since:** 2026-09-13T19:50:24Z
-- **Owner until:** 2026-09-13T21:50:24Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T15:01:11Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:20:50Z, deltic:auto role=fix run=fix-20260913T151752Z-de616c4c branch=task/bug-MM-BUG-CRU-00052-run-fix-20260913T151752Z-de616c4c code=dc6aa28a93c3cab614cd6579157bc5ce74bed8c6 gate=manual)
+- **State history:** Open (2026-08-20T15:01:11Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:20:50Z, deltic:auto role=fix run=fix-20260913T151752Z-de616c4c branch=task/bug-MM-BUG-CRU-00052-run-fix-20260913T151752Z-de616c4c code=dc6aa28a93c3cab614cd6579157bc5ce74bed8c6 gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: prewarm guidance now says four bytes per decoded mono frame, matching the f32 decode; reversing the hunk fails the wording test)
 
 ## Observation
 
@@ -53,5 +53,13 @@ Either state that formula without promising one ratio, or derive and publish a c
 whole-bank estimate from the packaged STREAMINFO metadata. Keep the B1 custom-tail figure
 separate. If a numeric estimate remains, bind it to a source-derived oracle so a future
 container or inventory change cannot leave the public guidance stale again.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `dc6aa28a`) by an agent other than the fixer.
+
+**Original observation re-derived.** The "roughly twice their embedded bytes" sentence is gone from the `live.rs` prewarm docs. Checked against code: `sampler.rs parse_wav` decodes FLAC with `decode_mono16` into a mono `Vec<f32>` (4 bytes per frame); the drum-kit caches hold `Vec<i16>`, so the rule over-budgets them, which is safe.
+
+**Fails-before (method B).** Reversing the hunk fails `RealtimePrewarmMemoryDocumentationTest` ("'four bytes per decoded mono PCM frame' not found"). Restored; passes on HEAD.
 
 ## Notes

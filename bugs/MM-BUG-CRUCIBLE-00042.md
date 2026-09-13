@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00042 — Five packaged sample-crate NOTICEs still call the embedded FLAC banks WAVs
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample asset crates / packaged attribution notices
 - **Raised:** 2026-08-18T06:59:44Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T193613Z-822f6ff0
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00042-run-verify-20260913T193613Z-822f6ff0
-- **Owner base:** c890ee3d4bb08fe6bd014496bcc8794ca9fb6584
-- **Owner fingerprint:** sha256:7fa2e7d6d22fceb892d56425356a96dec04292b4bfe28c8b12be4d9305308419
-- **Owner since:** 2026-09-13T19:36:13Z
-- **Owner until:** 2026-09-13T21:36:13Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T06:59:44Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-09-13T08:08:58Z, deltic:auto role=fix run=fix-20260913T080234Z-3d8fc1e0 branch=task/bug-MM-BUG-CRUCIBLE-00042-run-fix-20260913T080234Z-3d8fc1e0 code=7c214447cda4d061de26949a503abccfd43e37e7 gate=manual)
+- **State history:** Open (2026-08-18T06:59:44Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-09-13T08:08:58Z, deltic:auto role=fix run=fix-20260913T080234Z-3d8fc1e0 branch=task/bug-MM-BUG-CRUCIBLE-00042-run-fix-20260913T080234Z-3d8fc1e0 code=7c214447cda4d061de26949a503abccfd43e37e7 gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: no sample-crate NOTICE names WAV and every named crate ships only FLAC; pre-fix NOTICEs said embedded WAV)
 
 ## Observation
 
@@ -58,5 +58,15 @@ themselves are correct.
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `7c214447` for ccby, kawai, steinway and ydp; honkytonk by `3f692a8e`; headroom by KILN-00247) by an agent other than the fixer.
+
+**Original observation re-derived.** A case-insensitive search for `wav` across every `crates/ferrosintesis-samples-*/NOTICE` finds nothing, and all six named crates ship only `.flac`. "The embedded samples..." is container-neutral and true; the ccby "attack transients trimmed from the original recordings" matches its provenance.
+
+**Fails-before (method A).** At `7c214447^` each of the four NOTICEs says "embedded WAV".
+
+No regression guard was added; the record marked one optional, and the container oracle does not scan NOTICE files.
 
 ## Notes

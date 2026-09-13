@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00046 — Core and orchestral crates.io READMEs ship panicking get() examples and WAV container claims missed by MM-BUG-CRUCIBLE-00044
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-samples-core
 - **Raised:** 2026-08-18T22:27:49Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T194415Z-489d7a63
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00046-run-verify-20260913T194415Z-489d7a63
-- **Owner base:** d3c8f0fa2ccd7775d0290d2f1f0ef4a1909b3a1a
-- **Owner fingerprint:** sha256:22b1c88f4eb6b0750a3bbc995b61dd5a0456d72f9cda14b4dc9734528b1d4ad3
-- **Owner since:** 2026-09-13T19:44:15Z
-- **Owner until:** 2026-09-13T21:44:15Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T22:27:49Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-09-13T14:42:26Z, deltic:auto role=fix run=fix-20260913T143701Z-2acd888a branch=task/bug-MM-BUG-CRUCIBLE-00046-run-fix-20260913T143701Z-2acd888a code=a69748aa8643f768336ac4b20629a86a19564bda gate=manual)
+- **State history:** Open (2026-08-18T22:27:49Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-09-13T14:42:26Z, deltic:auto role=fix run=fix-20260913T143701Z-2acd888a branch=task/bug-MM-BUG-CRUCIBLE-00046-run-fix-20260913T143701Z-2acd888a code=a69748aa8643f768336ac4b20629a86a19564bda gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: README examples now run as doctests on real .flac keys; reverting either to .wav panics its doctest)
 
 ## Observation
 
@@ -73,6 +73,14 @@ Fold into the MM-BUG-CRUCIBLE-00044 sweep, extending its list with these two REA
    container-claim oracle to also flag `get("….wav")` calls inside README code fences.
 
 Effort: ~30 min alongside the 00044 sweep.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fixes `a69748aa`, `db16a45b`) by an agent other than the fixer.
+
+**Original observation re-derived.** Both READMEs call `get("flute_A4.flac")` / `get("trumpet_C3_f.flac")` and check `b"fLaC"`. Orchestral says "fifteen `chanter_*`", and disk holds 15 chanter and 2 drone files of 158. The processing prose matches `prepare.py` (`PACKAGED_EXT=.flac`).
+
+**Fails-before (method B).** Both READMEs are included via `#![doc = include_str!("../README.md")]`, so their examples are doctests. Reverting either example to `.wav` with the RIFF check panics its doctest at the `unwrap`. Restored; one doctest per crate passes on HEAD.
 
 ## Notes
 

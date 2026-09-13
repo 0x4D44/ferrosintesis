@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00212 — Bottle provenance publishes an unusable regeneration command
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample package / bottle regeneration documentation
 - **Raised:** 2026-08-16T11:38:32Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T195546Z-08892558
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00212-run-verify-20260913T195546Z-08892558
-- **Owner base:** 1d32445ddbb4c73f657777f227eb41c80ad15152
-- **Owner fingerprint:** sha256:9737b8eb61e9908625a6edc2451977c36651896a3ace82d3e6e28da913c19be5
-- **Owner since:** 2026-09-13T19:55:46Z
-- **Owner until:** 2026-09-13T21:55:46Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T11:38:32Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:33:12Z, deltic:auto role=fix run=fix-20260913T152407Z-60202476 branch=task/bug-MM-BUG-KILN-00212-run-fix-20260913T152407Z-60202476 code=6a425c224a99e05c355968c972449db879eb5976 gate=manual)
+- **State history:** Open (2026-08-16T11:38:32Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:33:12Z, deltic:auto role=fix run=fix-20260913T152407Z-60202476 branch=task/bug-MM-BUG-KILN-00212-run-fix-20260913T152407Z-60202476 code=6a425c224a99e05c355968c972449db879eb5976 gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: bottle PROVENANCE gives the repo-root prepare.py path; the bare spelling fails the recipe-routing oracle)
 
 ## Observation
 
@@ -49,5 +49,13 @@ Publish `python3 tools/ferrosintesis-samples/prepare.py --only=bottleloop` from 
 repository root. Extend the packaged-recipe oracle to validate the executable script
 path and working-directory contract as well as its selectors; include the current bare
 `prepare.py` spelling as a negative control.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `6a425c22`) by an agent other than the fixer.
+
+**Original observation re-derived.** `crates/ferrosintesis-samples-bottle/PROVENANCE.md:29` reads `python3 tools/ferrosintesis-samples/prepare.py --only=bottleloop`, run from the repository root; no bare `python3 prepare.py` command remains in any crate README, PROVENANCE or `lib.rs`. The script exists at that path and `bottleloop` is a supported selector (the bake itself was not run).
+
+**Fails-before (method B).** Restoring the bare spelling fails `test_packaged_recipe_commands_use_root_relative_scripts_and_supported_selectors` (`'prepare.py' != 'tools/ferrosintesis-samples/prepare.py'`). Restored; both `PackagedRecipeRoutingTest` regressions pass on HEAD.
 
 ## Notes

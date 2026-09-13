@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00050 — Mandolin provenance still names a retired physical WAV package path
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** mandolin sample crate / packaged provenance
 - **Raised:** 2026-08-20T12:21:24Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T194535Z-9d03e62f
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00050-run-verify-20260913T194535Z-9d03e62f
-- **Owner base:** 43852a0fdc7072ac7dc7b39c18892473c525293c
-- **Owner fingerprint:** sha256:e76e0b363711c0a15b667120c6beb86a07dcccc2f1fcbce8dca1d2f0e75d35d3
-- **Owner since:** 2026-09-13T19:45:35Z
-- **Owner until:** 2026-09-13T21:45:35Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T12:21:24Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:11:08Z, deltic:auto role=fix run=fix-20260913T150730Z-28f71eea branch=task/bug-MM-BUG-CRU-00050-run-fix-20260913T150730Z-28f71eea code=b8162d01134c9adc165374e1465b61cb32f34480 gate=manual)
+- **State history:** Open (2026-08-20T12:21:24Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:11:08Z, deltic:auto role=fix run=fix-20260913T150730Z-28f71eea branch=task/bug-MM-BUG-CRU-00050-run-fix-20260913T150730Z-28f71eea code=b8162d01134c9adc165374e1465b61cb32f34480 gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: mandolin provenance separates 40 logical WAV inputs from 40 packaged FLACs; reversing the hunk fails the wording test)
 
 ## Observation
 
@@ -55,5 +55,13 @@ Reword the baked-output sentence to say that logical WAV outputs are packaged un
 `samples/*.flac`, and make the generator docstring container-neutral. Preserve the
 raw-take, committed-source, and checksum-table `.wav` names. Any cross-crate documentation
 oracle must distinguish logical/source names from physical package paths.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `b8162d01`) by an agent other than the fixer.
+
+**Original observation re-derived.** Mandolin `PROVENANCE.md:18-20` says the committed inputs are logical WAVs and the baked outputs are `samples/*.flac`; disk holds 40 `.flac` in `samples/` and 40 `.wav` in `mandolin-src/`. The `gen_crate_lib.py` docstring names both containers; the checksum-table `.wav` names are the unchanged inputs.
+
+**Fails-before (method B).** Reversing the hunk fails `MandolinProvenanceContainerTest` ("'committed logical WAV inputs' not found"). Restored; passes on HEAD.
 
 ## Notes

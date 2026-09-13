@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00187 — MuseScore-grand standalone NOTICE assigns the bank to GM0
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** MuseScore grand sample package / routing documentation
 - **Raised:** 2026-08-13T21:20:10Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T195225Z-2bffa269
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00187-run-verify-20260913T195225Z-2bffa269
-- **Owner base:** 844094d775b886826d44ec4b0fef09bfadbcfdd4
-- **Owner fingerprint:** sha256:44a42f9b4da0d69eadce3018316ae3c9391c2bef6bf7389583888f6e99980557
-- **Owner since:** 2026-09-13T19:52:25Z
-- **Owner until:** 2026-09-13T21:52:25Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-13T21:20:10Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-08-15T15:27:33Z, deltic:auto role=fix run=fix-20260815T152256Z-p32100-n802301500-c1 branch=task/bug-MM-BUG-KILN-00187-run-fix-20260815T152256Z-p32100-n802301500-c1 code=94ffc27 gate=manual)
+- **State history:** Open (2026-08-13T21:20:10Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-08-15T15:27:33Z, deltic:auto role=fix run=fix-20260815T152256Z-p32100-n802301500-c1 branch=task/bug-MM-BUG-KILN-00187-run-fix-20260815T152256Z-p32100-n802301500-c1 code=94ffc27 gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: musescore-grand NOTICE now gives GM 1 CC0=2; restoring GM0 fails the router-derived guard)
 
 ## Observation
 
@@ -28,5 +28,13 @@ Static review found that crates/ferrosintesis-samples-musescore-grand/NOTICE lin
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `94ffc27b`) by an agent other than the fixer.
+
+**Original observation re-derived.** The musescore-grand NOTICE reads "GM 1 Bright Acoustic Piano alternate use (CC0=2)", and the ydp-grand NOTICE names GM 1 CC0=1; both match the router table.
+
+**Fails-before (method B).** Reversing the NOTICE hunk fails `altbank::tests::every_gm1_alternate_parent_claim_matches_the_router` ("musescore-grand NOTICE does not state GM 1 `CC0=2`"). Restored; passes on HEAD. The guard derives program and selector from the router and rejects "GM 0" in package NOTICEs.
 
 ## Notes

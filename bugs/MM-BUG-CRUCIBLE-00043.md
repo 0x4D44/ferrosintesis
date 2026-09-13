@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00043 — Packaged licence-evidence copies are bound to no oracle, so the published legal evidence can silently diverge from its attested SHA-256
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample asset crates / provenance oracles
 - **Raised:** 2026-08-18T06:59:48Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T193921Z-b10cee1b
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00043-run-verify-20260913T193921Z-b10cee1b
-- **Owner base:** f9392c3a3e04672eeabc9f688b0972171673d3f3
-- **Owner fingerprint:** sha256:86854d06536cb096473e9a5ba8fc0843ac11f1adac69d9ef4e58fbda7d66d8a1
-- **Owner since:** 2026-09-13T19:39:21Z
-- **Owner until:** 2026-09-13T21:39:21Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T06:59:48Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-09-13T08:20:22Z, deltic:auto role=fix run=fix-20260913T081134Z-14ada163 branch=task/bug-MM-BUG-CRUCIBLE-00043-run-fix-20260913T081134Z-14ada163 code=d39c5356c4805af72fc613e0d4ad3a6e4aedd117 gate=manual)
+- **State history:** Open (2026-08-18T06:59:48Z, raised via `deltic bugs new` model=claude-fable-5) -> Fixed (2026-09-13T08:20:22Z, deltic:auto role=fix run=fix-20260913T081134Z-14ada163 branch=task/bug-MM-BUG-CRUCIBLE-00043-run-fix-20260913T081134Z-14ada163 code=d39c5356c4805af72fc613e0d4ad3a6e4aedd117 gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: one-byte mutation of the ccby licence-evidence copy reddens the new per-crate hash oracle while the old originals-only oracle stays green)
 
 ## Observation
 
@@ -63,5 +63,13 @@ mutated copy turns it red.
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `d39c5356`) by an agent other than the fixer.
+
+**Original observation re-derived.** All three packaged `licence-evidence` copies hash to their `freesound-src` originals (5b6e87bc..., 5de6b40b..., 3e75a460...), each hash appears in its own crate's PROVENANCE.md, and `cargo package --list` shows the evidence inside the ccby and orchestral2 archives.
+
+**Fails-before (adversarial mutation).** Flipping one byte of `ccby/licence-evidence/_readme_and_license_3957.txt` fails `every_packaged_licence_evidence_copy_is_pinned_by_its_crate_provenance` ("1 packaged licence-evidence file(s) have no matching SHA-256"), while the older originals-only oracle stays green, which is exactly the recorded gap. Restored; both provenance regressions pass on HEAD. Evidence directories are discovered from the filesystem, so a new copy cannot evade the scan.
 
 ## Notes

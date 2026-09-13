@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00243 — Grand sample API still documents WAV keys and bytes after FLAC conversion
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** grand sample crate / public lookup contract
 - **Raised:** 2026-08-16T22:56:37Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T195835Z-87cb6faa
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00243-run-verify-20260913T195835Z-87cb6faa
-- **Owner base:** 979b29d6ac711de490407c0e921b5ee75c09d1cf
-- **Owner fingerprint:** sha256:ce89c76a8fe13ae1ad3856531b3b1ded7b400f800bf4d9743ddde8a501a1b42a
-- **Owner since:** 2026-09-13T19:58:35Z
-- **Owner until:** 2026-09-13T21:58:35Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T22:56:37Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:03:12Z, deltic:auto role=fix run=fix-20260913T065525Z-90184756 branch=task/bug-MM-BUG-KILN-00243-run-fix-20260913T065525Z-90184756 code=1dbacabf gate=manual)
+- **State history:** Open (2026-08-16T22:56:37Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T07:03:12Z, deltic:auto role=fix run=fix-20260913T065525Z-90184756 branch=task/bug-MM-BUG-KILN-00243-run-fix-20260913T065525Z-90184756 code=1dbacabf gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: grand docs describe 54 FLACs totalling 2,361,631 bytes; pre-fix docs fail the API contract test)
 
 ## Observation
 
@@ -43,6 +43,14 @@ stale. Static review only; no app, build, test, decoder, or exploratory harness 
 <unfixed — raised only. Update rustdoc, README, and provenance to the FLAC contract
 and current aggregate; add a source-derived assertion that a documented real key
 resolves and that format claims cannot drift from the packaged inventory.>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `1dbacabf`) by an agent other than the fixer.
+
+**Original observation re-derived.** Grand `get` rustdoc says FLAC bytes and `.flac` suffix; README says 54 FLAC files; PROVENANCE gives 2,361,631 bytes (54 files), matching `EXPECTED_BYTES`, `FILE_COUNT` and disk. Remaining WAV mentions describe upstream source names and the intermediate step.
+
+**Fails-before (method A).** With README, PROVENANCE and `lib.rs` from `1dbacabf^`, `GrandSampleApiContractTest` fails on the missing byte total. It passes on HEAD, as do both grand crate tests (every key round-trips through `get`).
 
 ## Notes
 

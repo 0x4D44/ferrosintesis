@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00198 — Sax PROVENANCE says every packaged root is pinned in the sampler zone tables, but the two baritone G#3 takes are not
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** samples-sax / published provenance
 - **Raised:** 2026-08-14T08:07:54Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T195515Z-1a0eaae3
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00198-run-verify-20260913T195515Z-1a0eaae3
-- **Owner base:** 9b01f43ef3b1bb31bd212a63d9d29853c419ee2a
-- **Owner fingerprint:** sha256:cece5a6808e55e734671694566fb9f29a8ae2cb60afd7561546dec2493e5b560
-- **Owner since:** 2026-09-13T19:55:15Z
-- **Owner until:** 2026-09-13T21:55:15Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-14T08:07:54Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T16:04:26Z, deltic:auto role=fix run=fix-20260815T155727Z-p36440-n828496700-c1 branch=task/bug-MM-BUG-KILN-00198-run-fix-20260815T155727Z-p36440-n828496700-c1 code=80bec63 gate=manual)
+- **State history:** Open (2026-08-14T08:07:54Z, raised via `deltic bugs new`) -> Fixed (2026-08-15T16:04:26Z, deltic:auto role=fix run=fix-20260815T155727Z-p36440-n828496700-c1 branch=task/bug-MM-BUG-KILN-00198-run-fix-20260815T155727Z-p36440-n828496700-c1 code=80bec63 gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: 74 packaged vs 72 zoned sax takes differ only by the documented baritone G#3 pair; removing the section fails the guard)
 
 ## Observation
 
@@ -62,6 +62,14 @@ phrases asserted by
 `sampler::tests::sax_published_docs_describe_the_looped_recording_voice`
 (`crates/ferrosintesis/src/sampler.rs:5901`) intact — it checks for required and
 stale-phrase text in this exact file.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `80bec63e`) by an agent other than the fixer.
+
+**Original observation re-derived.** `sampler.rs` zone tables list 72 `sax_*.flac` entries against 74 packaged FLACs; the only two outside are `sax_bar_G#3_p/f.flac`, whose roots (208.95 / 209.52 Hz) appear only in the guard test. The sax PROVENANCE names both and says "74 packaged samples and 72 reachable zones".
+
+**Fails-before (method B).** Deleting the "Two packaged takes" section fails `sampler::tests::packaged_sax_takes_outside_the_zone_tables_are_documented` on its "never mentions it" check. Restored; passes on HEAD.
 
 ## Notes
 

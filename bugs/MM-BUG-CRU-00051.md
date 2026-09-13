@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00051 — Kawai package documents WAV output and a pure-stdlib rebake although it ships FLAC and requires ffmpeg
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** Kawai sample crate / packaged regeneration documentation
 - **Raised:** 2026-08-20T15:01:05Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T194846Z-44a38900
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00051-run-verify-20260913T194846Z-44a38900
-- **Owner base:** 7c98a40fd3c7962ae8873395b324d6390e40f60e
-- **Owner fingerprint:** sha256:79806963fbb1d6af5fb18827ef34586fa83d052ee8635b81a5db01b944e29d8a
-- **Owner since:** 2026-09-13T19:48:46Z
-- **Owner until:** 2026-09-13T21:48:46Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T15:01:05Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:17:15Z, deltic:auto role=fix run=fix-20260913T151224Z-aacaf3e2 branch=task/bug-MM-BUG-CRU-00051-run-fix-20260913T151224Z-aacaf3e2 code=782d661527539a1d1958fb6d2d47b9984461757c gate=manual)
+- **State history:** Open (2026-08-20T15:01:05Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:17:15Z, deltic:auto role=fix run=fix-20260913T151224Z-aacaf3e2 branch=task/bug-MM-BUG-CRU-00051-run-fix-20260913T151224Z-aacaf3e2 code=782d661527539a1d1958fb6d2d47b9984461757c gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: Kawai docs now describe FLAC output and pinned ffmpeg; the test's negation blindness split to MM-BUG-CRU-00061)
 
 ## Observation
 
@@ -59,5 +59,15 @@ mono 16-bit 44.1 kHz PCM stored losslessly in FLAC, and require ffmpeg on `PATH`
 filesystem-derived packaged-document oracle so every generated bank's documented
 container and recipe prerequisites follow the live publisher instead of a hand-maintained
 crate list. Coordinate the separate NOTICE sentence through `MM-BUG-CRUCIBLE-00042`.
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `782d6615`, earlier FLAC prose in `db16a45b`) by an agent other than the fixer.
+
+**Original observation re-derived.** The Kawai README and PROVENANCE no longer say "Pure stdlib (plain WAV, no ffmpeg)" or "Output: 16-bit mono WAV"; they state FLAC output and ffmpeg 8.1.1 on PATH. `samples/` holds 32 `.flac`; `want("kawai")` exists and the ffmpeg pin gate applies; "Python's stdlib handles WAV decoding and DSP" matches `read_wav`.
+
+**Fails-before (method B).** Reversing the hunk fails `KawaiPackagedDocumentContractTest` in 3 subtests. Restored; passes on HEAD.
+
+**Residual split to MM-BUG-CRU-00061.** The same ffmpeg-near-PATH regex accepts "does not need ffmpeg on `PATH`".
 
 ## Notes

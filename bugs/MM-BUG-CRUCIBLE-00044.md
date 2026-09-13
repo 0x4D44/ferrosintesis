@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00044 — Sample-bank crates' public get() rustdoc still names a .wav suffix the FLAC banks no longer use
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-samples-clavinet
 - **Raised:** 2026-08-18T19:41:02Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T194332Z-bf2584ac
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00044-run-verify-20260913T194332Z-bf2584ac
-- **Owner base:** 4eb8ad39a904df87a52411d61dd3e103436b3298
-- **Owner fingerprint:** sha256:aa94dcfc795397fa370aceff97232165539bc04db875e93180878a8614938050
-- **Owner since:** 2026-09-13T19:43:32Z
-- **Owner until:** 2026-09-13T21:43:32Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-18T19:41:02Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T14:18:42Z, deltic:auto role=fix run=fix-20260913T141751Z-c2e5deab branch=task/bug-MM-BUG-CRUCIBLE-00044-run-fix-20260913T141751Z-c2e5deab code=db16a45b32ea1e23a4a55b822011b374b6a632a4 gate=manual)
+- **State history:** Open (2026-08-18T19:41:02Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T14:18:42Z, deltic:auto role=fix run=fix-20260913T141751Z-c2e5deab branch=task/bug-MM-BUG-CRUCIBLE-00044-run-fix-20260913T141751Z-c2e5deab code=db16a45b32ea1e23a4a55b822011b374b6a632a4 gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: container oracle reddens on 23 lines with the doc hunks reversed; its predicate hole split to MM-BUG-CRU-00060)
 
 ## Observation
 
@@ -106,5 +106,15 @@ Two parts. Do the second one — the doc edits alone will drift again the same w
    *should* fail it and check that it does.
 
 Effort: ~1-2 h (mechanical edits across 12 crates plus one oracle and its negative test).
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `db16a45b`) by an agent other than the fixer.
+
+**Original observation re-derived.** Every `get()` rustdoc in the twelve crates is container-neutral, and a grep of every sample-crate README, `lib.rs` and PROVENANCE leaves only source, staging, alias or test-context WAV mentions. The new text matches the `samples/` directories (all FLAC except b1-upright).
+
+**Fails-before (method B).** Reversing the clavinet, core README, orchestral README and drumkit doc hunks fails `sample_crate_documents_match_their_packaged_containers` on 23 lines, including clavinet `lib.rs:61,63` and drumkit `lib.rs:740,742`. Restored; all three payload regressions pass on HEAD.
+
+**Residual split to MM-BUG-CRU-00060.** With the stale text back, the oracle does not flag the bug's own cited sentence (clavinet `PROVENANCE.md:9`), and it accepts "This crate ships 11 WAV files." under a source-ish heading.
 
 ## Notes

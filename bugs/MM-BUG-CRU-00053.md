@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00053 — YDP regeneration falsely claims to require no ffmpeg
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** YDP sample package / regeneration documentation
 - **Raised:** 2026-08-20T15:50:56Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T195147Z-5bc0923c
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00053-run-verify-20260913T195147Z-5bc0923c
-- **Owner base:** 459ef91b242a6ec4f35d5e848200682fa9bcef33
-- **Owner fingerprint:** sha256:21e249082450f896bc523619b71facc2b5d2c30e169ed3a4aa81ada54d23d054
-- **Owner since:** 2026-09-13T19:51:47Z
-- **Owner until:** 2026-09-13T21:51:47Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-20T15:50:56Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:26:22Z, deltic:auto role=fix run=fix-20260913T152133Z-9adb0a87 branch=task/bug-MM-BUG-CRU-00053-run-fix-20260913T152133Z-9adb0a87 code=126eda68a39decc989c86deff21d17c66c4a7a9b gate=manual)
+- **State history:** Open (2026-08-20T15:50:56Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:26:22Z, deltic:auto role=fix run=fix-20260913T152133Z-9adb0a87 branch=task/bug-MM-BUG-CRU-00053-run-fix-20260913T152133Z-9adb0a87 code=126eda68a39decc989c86deff21d17c66c4a7a9b gate=manual) -> Closed (2026-09-13T19:59:17Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: YDP docs now require pinned ffmpeg and keep the true stdlib SF2 fact; negation-blind, YDP-only test split to MM-BUG-CRU-00061)
 
 ## Observation
 
@@ -38,5 +38,15 @@ Static review only. No generator, test, build, app, render, network, or explorat
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-13, Claude Opus 5, independent)
+
+Verified on trunk `8b6a6f86` (fix `126eda68`) by an agent other than the fixer.
+
+**Original observation re-derived.** "Pure stdlib (raw-PCM SF2 — no ffmpeg)" is gone; README and PROVENANCE require ffmpeg 8.1.1 on PATH and describe FLAC output, keeping the true stdlib SF2-extraction fact. `want("ydpgrand")` exists, the ffmpeg gate runs before selection, and `ydp-grand/samples` is all FLAC.
+
+**Fails-before (method B).** Reversing the hunk fails `YdpPackagedDocumentContractTest` in 3 subtests. Restored; passes on HEAD.
+
+**Residual split to MM-BUG-CRU-00061.** The test accepts "needs no ffmpeg on `PATH`", and the cross-recipe "no ffmpeg" oracle the record suggested does not exist.
 
 ## Notes

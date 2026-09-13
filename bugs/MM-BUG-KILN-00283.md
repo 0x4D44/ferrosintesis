@@ -6,15 +6,15 @@
 - **Area:** split drum-kit sample crates / deterministic regeneration
 - **Raised:** 2026-08-17T11:39:57Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260913T202909Z-de9d68d7
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00283-run-verify-20260913T202909Z-de9d68d7
+- **Owner base:** 3ca1f7cb0d8a988212fb0adbbf16ccf1fb929422
+- **Owner fingerprint:** sha256:dc0283ad305d43b8352b93e00a168bb4a434e2dd07963a13c3bb053c11903250
+- **Owner since:** 2026-09-13T20:29:09Z
+- **Owner until:** 2026-09-13T22:29:09Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

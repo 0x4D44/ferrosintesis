@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00264 — Orchestral2 package still documents WAV keys and payloads after FLAC migration
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** orchestral2 sample crate / public package contract
 - **Raised:** 2026-08-17T04:26:06Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T163144Z-09d1c20b
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00264-run-fix-20260913T163144Z-09d1c20b
-- **Owner base:** b0e5d89b34967eedf017f7a93c03aedbd092ca27
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T16:31:44Z
-- **Owner until:** 2026-09-13T18:31:44Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T04:26:06Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T04:26:06Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T16:43:07Z, deltic:auto role=fix run=fix-20260913T163144Z-09d1c20b branch=task/bug-MM-BUG-KILN-00264-run-fix-20260913T163144Z-09d1c20b code=69cad3278718368bedfc5965e98ea5522ca7ec80 gate=manual)
 
 ## Observation
 

@@ -6,15 +6,15 @@
 - **Area:** fret-noise sample integrity gate
 - **Raised:** 2026-08-16T16:53:04Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260913T155945Z-fcf1412b
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00227-run-fix-20260913T155945Z-fcf1412b
+- **Owner base:** 47a2639dc58e8ca515c281f8096b3e532e9d56e3
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-13T15:59:45Z
+- **Owner until:** 2026-09-13T17:59:45Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

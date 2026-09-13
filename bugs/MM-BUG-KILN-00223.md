@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00223 — Core single-take aliases are decoded twice during prewarm
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** core piano sample runtime / memory
 - **Raised:** 2026-08-16T14:46:31Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T154452Z-d6eb07e1
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00223-run-fix-20260913T154452Z-d6eb07e1
-- **Owner base:** 9058e4cc9d87ad37d4bd74dbac62d6fe7837c09d
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T15:44:52Z
-- **Owner until:** 2026-09-13T17:44:52Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T14:46:31Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-16T14:46:31Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T15:54:18Z, deltic:auto role=fix run=fix-20260913T154452Z-d6eb07e1 branch=task/bug-MM-BUG-KILN-00223-run-fix-20260913T154452Z-d6eb07e1 code=6c12c7220ddf55536781cc8d8eeb9a5ef59b7f5c gate=manual)
 
 ## Observation
 

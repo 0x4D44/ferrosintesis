@@ -1853,7 +1853,7 @@ fn no_default_gate_is_paired_with_embedded_sample_coverage() {
     // this oracle failed while the contract it guards was still perfectly intact. A
     // false red teaches people to edit the oracle to match, which is how a guard stops
     // guarding. Match the invariant: both gate arrays run the workspace with default
-    // features, and ferrosintesis again with --no-default-features.
+    // features, and both published packages with --no-default-features.
     let steps: Vec<&str> = POLICY
         .lines()
         .map(str::trim)
@@ -1866,9 +1866,13 @@ fn no_default_gate_is_paired_with_embedded_sample_coverage() {
         .iter()
         .filter(|l| l.contains(r#""--workspace""#) && !modeled(l))
         .count();
-    let modeled_only = steps
+    let modeled_library = steps
         .iter()
         .filter(|l| modeled(l) && l.contains(r#""ferrosintesis""#))
+        .count();
+    let modeled_cli = steps
+        .iter()
+        .filter(|l| modeled(l) && l.contains(r#""ferrosintesis-cli""#))
         .count();
 
     assert_eq!(
@@ -1877,14 +1881,19 @@ fn no_default_gate_is_paired_with_embedded_sample_coverage() {
          cargo test steps seen: {steps:#?}"
     );
     assert_eq!(
-        modeled_only, 2,
-        "fallback and workspace gates must both retain the modeled-only test suite; \
+        modeled_library, 2,
+        "fallback and workspace gates must both retain the library modeled-only test suite; \
+         cargo test steps seen: {steps:#?}"
+    );
+    assert_eq!(
+        modeled_cli, 2,
+        "fallback and workspace gates must both retain the CLI modeled-only test suite; \
          cargo test steps seen: {steps:#?}"
     );
     // Every `cargo test` step must fall in exactly one bucket, so a third
     // configuration cannot be added without this oracle being taught about it.
     assert_eq!(
-        embedded_workspace + modeled_only,
+        embedded_workspace + modeled_library + modeled_cli,
         steps.len(),
         "unclassified cargo test step in the gate: {steps:#?}"
     );

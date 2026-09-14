@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / GM76 voice tests
 - **Raised:** 2026-09-13T19:23:17Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T212205Z-aa36c457
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00062-run-verify-20260914T212205Z-aa36c457
+- **Owner base:** 415d57e330a9d3c558f1a7c4bf73105d20ef58fc
+- **Owner fingerprint:** sha256:f4ef40672f932a38a5e4784baffcc093cc544826601b0e97501d39950e137134
+- **Owner since:** 2026-09-14T21:22:05Z
+- **Owner until:** 2026-09-14T23:22:05Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

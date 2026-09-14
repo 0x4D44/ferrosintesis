@@ -6,15 +6,15 @@
 - **Area:** fret-noise sample crate / public lookup contract
 - **Raised:** 2026-08-17T20:45:41Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T211205Z-371e391b
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00291-run-verify-20260913T211205Z-371e391b
-- **Owner base:** a24880284fb24448f3863d333aded683325e40ea
-- **Owner fingerprint:** sha256:4f83b6c9856bc08bc490aadc6119110d7e594d2c9f3f4928a85c6d505aa7d5cf
-- **Owner since:** 2026-09-13T21:12:05Z
-- **Owner until:** 2026-09-13T23:12:05Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

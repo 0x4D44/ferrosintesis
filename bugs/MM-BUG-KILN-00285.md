@@ -6,15 +6,15 @@
 - **Area:** core drum-kit sample crate / cache regression
 - **Raised:** 2026-08-17T11:40:11Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T213848Z-4c356e79
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00285-run-verify-20260914T213848Z-4c356e79
+- **Owner base:** 3d9970cf2687c8cce8374de7b90baff8a71fb61f
+- **Owner fingerprint:** sha256:1d1700198115424546bf3b70b9a294f000a784e9fef2b938ba39d354d36401cb
+- **Owner since:** 2026-09-14T21:38:48Z
+- **Owner until:** 2026-09-14T23:38:48Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

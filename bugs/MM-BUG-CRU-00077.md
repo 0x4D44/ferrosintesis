@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00077 — Sample bank publishers delete their backups on KeyboardInterrupt instead of rolling back
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** tools/ferrosintesis-samples
 - **Raised:** 2026-09-14T21:53:09Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260914T221446Z-bb4230f6
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00077-run-fix-20260914T221446Z-bb4230f6
-- **Owner base:** 3df581e8aadcca7f7257f038c6896affa53845a4
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-14T22:14:46Z
-- **Owner until:** 2026-09-15T00:14:46Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-14T21:53:09Z, raised via `deltic bugs new --land` model=claude-opus-5)
+- **State history:** Open (2026-09-14T21:53:09Z, raised via `deltic bugs new --land` model=claude-opus-5) -> Fixed (2026-09-14T22:19:58Z, deltic:auto role=fix run=fix-20260914T221446Z-bb4230f6 branch=task/bug-MM-BUG-CRU-00077-run-fix-20260914T221446Z-bb4230f6 code=b62fffadedd17cbd75dfa37f6173bd3f4c769f5d gate=manual)
 
 ## Observation
 

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00300 — The published CLI package carries no NOTICE, and the licensing oracles' enumeration predicate cannot see it
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:55:50Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T214450Z-a244677a
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00300-run-verify-20260914T214450Z-a244677a
-- **Owner base:** c6b63e10761a73b1af78ac2113a9f55586e7ed17
-- **Owner fingerprint:** sha256:0c2dffb3baa26f9b7b73c4305b6871b7a7fa9e2f1bb318e0a87ad913da7f2dd6
-- **Owner since:** 2026-09-14T21:44:50Z
-- **Owner until:** 2026-09-15T00:53:46Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:55:50Z, raised via `deltic bugs new` model=claude-opus-5@high) → Blocked (2026-09-14T01:37:15Z, Codex GPT-5.6 on CRUCIBLE; blocked pending Arthur's licensing decision on whether the published CLI package must carry a redistributable NOTICE covering its embedded audio) → Open (2026-09-14T21:19:53Z, deltic:manual host=CRUCIBLE verdict=reopen) → Fixed (2026-09-14T21:32:25Z, deltic:auto role=fix run=fix-20260914T212042Z-ddf8c918 branch=task/bug-MM-BUG-KILN-00300-run-fix-20260914T212042Z-ddf8c918 code=75f6387039b7c89c4359b9c49e4a2360e4c3566d gate=manual)
+- **State history:** Open (2026-08-17T22:55:50Z, raised via `deltic bugs new` model=claude-opus-5@high) → Blocked (2026-09-14T01:37:15Z, Codex GPT-5.6 on CRUCIBLE; blocked pending Arthur's licensing decision on whether the published CLI package must carry a redistributable NOTICE covering its embedded audio) → Open (2026-09-14T21:19:53Z, deltic:manual host=CRUCIBLE verdict=reopen) → Fixed (2026-09-14T21:32:25Z, deltic:auto role=fix run=fix-20260914T212042Z-ddf8c918 branch=task/bug-MM-BUG-KILN-00300-run-fix-20260914T212042Z-ddf8c918 code=75f6387039b7c89c4359b9c49e4a2360e4c3566d gate=manual) -> Closed (2026-09-14T23:00:27Z, independent verify by Claude Opus 5 on trunk 81252a3e: the CLI package now ships the library's NOTICE, and a manifest-derived licensing oracle fails if the file, its include entry, or the CLI's discovery goes missing)
 
 ## Observation
 
@@ -82,6 +82,28 @@ Once decided, the mechanical parts are small:
   `include`, and confirm the oracle goes red. A packaging oracle that only reads the
   filesystem will pass on a file git has but cargo does not ship — check the `include` list
   too, or check `cargo package --list`.
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified by agents other than the fixer: a verifier worker on trunk `81252a3e`, and the lead from `origin/main` git objects. The fix is `75f63870`.
+
+**Decision on record.** This bug was Blocked pending Arthur's licensing decision. The reopen note (2026-09-14T21:19:53Z, `deltic:manual`) records that Arthur decided the published CLI package must carry and package its own NOTICE. The verifiers checked the fix against that recorded decision; neither witnessed the decision itself.
+
+**Original observation, re-derived.**
+- `crates/ferrosintesis-cli/NOTICE` is committed and byte-identical to `crates/ferrosintesis/NOTICE` after line-ending normalisation (both SHA-256 `f09295a6...`).
+- `crates/ferrosintesis-cli/Cargo.toml:14` lists `"NOTICE"` in `include`.
+- The README now says 'see this package's `NOTICE`' instead of pointing at the library package.
+- `cargo package -p ferrosintesis-cli --list --allow-dirty --no-verify` lists `NOTICE` (local listing only; nothing was published).
+
+**Oracle and fails-before (adversarial).** `licensing::tests::every_published_audio_consumer_packages_the_consolidated_notice` walks `crates/*/Cargo.toml`. It treats a crate as an audio consumer when the crate is published and either declares a `[[bin]]` or directly depends on an attribution-bearing bank, then requires the file, the `include` entry and content equal to the parent NOTICE. It passes, and fails in three ways:
+- `NOTICE` dropped from the CLI `include`: 'published audio consumer(s) have a NOTICE, but Cargo does not package it: ferrosintesis-cli' (`licensing.rs:1034`);
+- the file moved aside: '... carry no NOTICE: ferrosintesis-cli' (`:1029`);
+- the CLI's `[[bin]]` stanza removed: 'the manifest-derived package census must discover ferrosintesis-cli' (`:1005`).
+All restored.
+
+**Limit, not split.** The census would miss a future published crate with an implicit binary (`src/main.rs`, no `[[bin]]`) that depends only on `ferrosintesis`, and `package_is_published` matches only the literal `publish = false` line. No such crate exists today, and the CLI stays covered by the explicit discovery anchor.
+
+**Repo gate.** The licensing test passes under `cargo test --workspace --all-targets` (run on `1d87b00f` and `011738f6` earlier in this pass); the fix adds no build dependency. The Python gate step is green on `56ba5184`.
 
 ## Notes
 

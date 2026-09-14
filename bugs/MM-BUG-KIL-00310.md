@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00310 — routed_banks() hand-maintains the 13-bank list instead of deriving from the crates' BANKS exports
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sampler / drum-kit test derivation
 - **Raised:** 2026-08-19T09:33:22Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T220737Z-61efef82
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00310-run-verify-20260914T220737Z-61efef82
-- **Owner base:** db6a1102449d226760387e4f2e237c89f18b3ca5
-- **Owner fingerprint:** sha256:fd267de86ac771283fca6aebfeb15c9d86bdf2014f8a194d67b2bcd7d9a19e45
-- **Owner since:** 2026-09-14T22:07:37Z
-- **Owner until:** 2026-09-15T00:07:37Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:22Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T00:22:50Z, deltic:auto role=fix run=fix-20260913T235329Z-2306268a branch=task/bug-MM-BUG-KIL-00310-run-fix-20260913T235329Z-2306268a code=47d3e4c9c1daea0b78e52784f298ef1c8eb3176d gate=manual)
+- **State history:** Open (2026-08-19T09:33:22Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T00:22:50Z, deltic:auto role=fix run=fix-20260913T235329Z-2306268a branch=task/bug-MM-BUG-KIL-00310-run-fix-20260913T235329Z-2306268a code=47d3e4c9c1daea0b78e52784f298ef1c8eb3176d gate=manual) -> Closed (2026-09-14T23:00:27Z, independent verify by Claude Opus 5 on trunk 81252a3e: routed_banks() is now derived from both crates' BANKS exports and cross-checked against sampled_drum's arms; dropping a bank from either side fails the new test)
 
 ## Observation
 
@@ -56,6 +56,19 @@ array, and assert the yielded set matches the banks reachable from `sampled_drum
 `sampler.rs` already uses to scan `prewarm()`'s body). Prove the derivation catches
 an omission by removing one entry from a crate's `BANKS` and watching the
 cross-check go red.
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified by agents other than the fixer: a verifier worker on trunk `81252a3e`, re-checked by the lead on `56ba5184`. The fix is `47d3e4c9`; no later commit touched `sampler.rs`.
+
+**Original observation, root cause.** `routed_banks()` was a third hand-written 13-bank list beside the two crates' `BANKS` exports. It now chains `kitbank::BANKS` and `kitbank2::BANKS` into a `Vec`. The new `sampler::tests::routed_banks_match_exports_and_sampled_drum_routes` source-scans both crates' `pub static BANKS` arrays and `sampled_drum`'s match arms and asserts the two sets are equal. It also requires `routed_banks()` to name both exports and no individual `&kitbank::X` entries. It and `sampled_drum_has_no_boundary_click` pass.
+
+**Fails-before (adversarial, both directions).**
+- Removing `&SPLASH` from drumkit2's `BANKS` (a routed arm with no export) fails at `sampler.rs:7501`: 'sampled_drum routes and packaged BANKS exports have drifted'. The lead re-ran this one.
+- Deleting the `55 => (&kit2::SPLASH, 1.0),` arm (an export with no routed arm) fails at `sampler.rs:7500` with the same message.
+Both restored.
+
+**Repo gate.** Both tests pass under `cargo test --workspace --all-targets` (run on `1d87b00f` and `011738f6` earlier in this pass). The Python gate step is green on `56ba5184`.
 
 ## Notes
 

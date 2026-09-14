@@ -6,15 +6,15 @@
 - **Area:** sample assets / onset continuity
 - **Raised:** 2026-09-13T19:23:43Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T213357Z-6d85e34d
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00066-run-verify-20260914T213357Z-6d85e34d
+- **Owner base:** 6be06ad65f71da7a65d8d1c67c3a33b1c08c9fd2
+- **Owner fingerprint:** sha256:40e98632f12604babb8c05f766ef15f9c2b8bc05c18efee9f1ffed94f7f3ae81
+- **Owner since:** 2026-09-14T21:33:57Z
+- **Owner until:** 2026-09-14T23:33:57Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

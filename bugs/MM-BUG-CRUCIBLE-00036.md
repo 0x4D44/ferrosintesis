@@ -6,15 +6,15 @@
 - **Area:** cli / test environment
 - **Raised:** 2026-08-17T16:56:43Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T214254Z-2d5e924e
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00036-run-verify-20260914T214254Z-2d5e924e
+- **Owner base:** 7f1d5befd27f9aa7a10c89df1c6c134682336d30
+- **Owner fingerprint:** sha256:264de1a3cc399639ff116a79d834885195425b6b04e04055479c64a7a2d3a69e
+- **Owner since:** 2026-09-14T21:42:54Z
+- **Owner until:** 2026-09-14T23:42:54Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

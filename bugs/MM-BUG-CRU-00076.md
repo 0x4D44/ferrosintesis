@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00076 — Windows input alias probe still aborts the render when another process holds the MIDI open for writing
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-09-14T21:48:03Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T222057Z-2b27570a
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00076-run-verify-20260914T222057Z-2b27570a
-- **Owner base:** 42fce4a3ff23a75c99e82d3f6d4fe0ef9a7c3893
-- **Owner fingerprint:** sha256:1cc1ce04fe49cba1f5f5cba4a4aa9eb2360e4d65077aa895bb5a91762c2a5a91
-- **Owner since:** 2026-09-14T22:20:57Z
-- **Owner until:** 2026-09-15T00:20:57Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-14T21:48:03Z, raised via `deltic bugs new --land` model=claude-opus-5) -> Fixed (2026-09-14T22:13:47Z, deltic:auto role=fix run=fix-20260914T220131Z-078a4888 branch=task/bug-MM-BUG-CRU-00076-run-fix-20260914T220131Z-078a4888 code=80fcde2f864ba0bcb3259a33b095f3435286e851 gate=manual)
+- **State history:** Open (2026-09-14T21:48:03Z, raised via `deltic bugs new --land` model=claude-opus-5) -> Fixed (2026-09-14T22:13:47Z, deltic:auto role=fix run=fix-20260914T220131Z-078a4888 branch=task/bug-MM-BUG-CRU-00076-run-fix-20260914T220131Z-078a4888 code=80fcde2f864ba0bcb3259a33b095f3435286e851 gate=manual) -> Closed (2026-09-14T22:23:56Z, independent verify by Claude Opus 5 on trunk f44966c6: an input held open for writing no longer aborts the render; hard-link aliases are still rejected unless a writer holds the input, where the guard is advisory and the source stays intact)
 
 ## Observation
 
@@ -31,5 +31,22 @@ Evidence fingerprint: `manual:v1:windows-input-alias-probe-still-aborts-the-rend
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunk `f44966c6` (fix `80fcde2f`) by an agent other than the fixer.
+
+**Original observation, re-run live on Windows.** Same debug CLI, a prior `score.wav` present, and `score.mid` held open for writing (Python `open(path, 'r+b')`). `ferrosintesis score.mid -o score.wav --tail 0 --no-samples -q` now exits 0 with the input bytes unchanged; before the fix it exited 1 with os error 32.
+
+**Root cause check.** If the input guard's `share_mode(1)` open hits a sharing violation, `platform_same_file` now returns 'not the same file' and lets the renderer's own input open decide, instead of aborting. Other open errors still return a path-naming error.
+
+**Fails-before (method B).** `read_write_shared_distinct_input_does_not_abort_render` passes, along with all 9 `output_safety` tests. Deleting the sharing-violation arm fails it: 'distinct output failed with a read/write-shared input: error: ...\score.mid: The process cannot access the file because it is being used by another process. (os error 32)'. Restored.
+
+**Alias protection, probed with a fresh hard link each time.**
+- No holder, and a reader-held input: `-o alias.wav`, where `alias.wav` is a hard link to `score.mid`, is still rejected with 'aliases the input ... refusing to overwrite the source MIDI'. The link and the MIDI are untouched.
+- Writer-held input: the same command exits 0. The guard is skipped, so the render replaces the `alias.wav` name with a WAV and breaks the link. `score.mid` still holds the original MIDI bytes.
+The fix commit states this advisory behaviour on purpose, and no source bytes were lost, so it is recorded here as a limit rather than a new bug.
+
+**Repo gate.** On `f44966c6`: `python3 -m unittest discover -s tools/ferrosintesis-samples` ends 'Ran 284 tests ... OK', so the Python gate step is green again, and `cargo test -p ferrosintesis-cli --locked --test output_safety` passes 9 of 9. The cargo steps were fully run on `1d87b00f` and `011738f6` earlier in this pass (fmt, all clippy steps, both no-default test steps, `cargo test --workspace --all-targets`); they were not re-run in full on `f44966c6`.
 
 ## Notes

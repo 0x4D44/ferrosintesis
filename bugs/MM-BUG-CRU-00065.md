@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / sample-bake inventory oracle
 - **Raised:** 2026-09-13T19:23:43Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T212928Z-ecbf011d
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00065-run-verify-20260914T212928Z-ecbf011d
+- **Owner base:** 13a1b2d24c141232372e47704602097cfdd7994a
+- **Owner fingerprint:** sha256:ca9848f3bffd51186ac2375b27dc5ef28c9a34f6a14032dbe534a184722151da
+- **Owner since:** 2026-09-14T21:29:28Z
+- **Owner until:** 2026-09-14T23:29:28Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

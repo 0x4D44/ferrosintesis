@@ -124,6 +124,13 @@ mod tests {
         }
     }
 
+    #[cfg(windows)]
+    fn is_missing_symlink_privilege(error: &io::Error) -> bool {
+        const ERROR_PRIVILEGE_NOT_HELD: i32 = 1314;
+
+        error.raw_os_error() == Some(ERROR_PRIVILEGE_NOT_HELD)
+    }
+
     #[test]
     fn rejects_normalized_path_alias() {
         let dir = TestDir::new("normalized");
@@ -162,7 +169,7 @@ mod tests {
         std::os::unix::fs::symlink(&input, &alias).expect("create symbolic link");
         #[cfg(windows)]
         if let Err(error) = std::os::windows::fs::symlink_file(&input, &alias) {
-            if error.kind() == io::ErrorKind::PermissionDenied {
+            if is_missing_symlink_privilege(&error) {
                 return;
             }
             panic!("create symbolic link: {error}");
@@ -171,6 +178,21 @@ mod tests {
         let error =
             reject_input_alias(&input, &alias).expect_err("symbolic-link alias should be rejected");
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn skips_only_missing_symlink_privilege() {
+        assert!(is_missing_symlink_privilege(&io::Error::from_raw_os_error(
+            1314
+        )));
+        assert!(!is_missing_symlink_privilege(
+            &io::Error::from_raw_os_error(5)
+        ));
+        assert!(!is_missing_symlink_privilege(&io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "different permission error",
+        )));
     }
 
     #[test]

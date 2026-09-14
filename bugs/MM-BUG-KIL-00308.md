@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00308 — drumkit2 inventory oracles cannot detect a take permutation: names never bound to file bytes
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drumkit2 test oracles
 - **Raised:** 2026-08-19T09:33:20Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T220248Z-0ccc4b6d
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00308-run-verify-20260914T220248Z-0ccc4b6d
-- **Owner base:** e86d837baffbf068f063bfdbad47caac51b957bb
-- **Owner fingerprint:** sha256:9bac05027d0a6b0548b022dd5364465fc4024890549f19ca8cc727e91cb38351
-- **Owner since:** 2026-09-14T22:02:48Z
-- **Owner until:** 2026-09-15T00:02:48Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:20Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T00:59:57Z, deltic:auto role=fix run=fix-20260914T005750Z-8a52adcc branch=task/bug-MM-BUG-KIL-00308-run-fix-20260914T005750Z-8a52adcc code=951514b041cb61aae5b14dcb3f3475bc3e47e580 gate=manual)
+- **State history:** Open (2026-08-19T09:33:20Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T00:59:57Z, deltic:auto role=fix run=fix-20260914T005750Z-8a52adcc branch=task/bug-MM-BUG-KIL-00308-run-fix-20260914T005750Z-8a52adcc code=951514b041cb61aae5b14dcb3f3475bc3e47e580 gate=manual) -> Closed (2026-09-14T22:59:10Z, independent verify by Claude Opus 5 on trunk 81252a3e: every sample crate now binds each embedded name to its packaged file's bytes; swapping two include_bytes paths fails the inventory test in drumkit2 and in a generated crate)
 
 ## Observation
 
@@ -63,6 +63,22 @@ wrong paths remains out of scope unless a per-take content statistic is added;
 verify any such statistic (e.g. layer-brightness monotonicity) against the real
 banks before pinning it. Prove the new assertion fails on the mutation above, then
 restore. The same binding is worth porting to the sibling crate's inventory test.
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified by agents other than the fixer: a verifier worker on trunk `81252a3e`, re-checked by the lead on `56ba5184`. The fix is `951514b0`.
+
+**Original observation, root cause.** Nothing tied an embedded name to the bytes of the file it names, so a permutation of `include_bytes!` paths survived every test. Each of the 24 `crates/ferrosintesis-samples-*/src/lib.rs` inventory tests now reads the packaged file (`fs::read(samples_dir.join(name))` or `fs::read(dir.join(name))`) and compares it to the embedded bytes. The check is derived from the table and is emitted by `gen_crate_lib.py`, so regenerated crates keep it. Later commits touched these files, and the binding loop is still present in all 24.
+
+**Fails-before (adversarial swaps, as recorded).**
+- drumkit2: swapping the `include_bytes!` paths of `china_vl1_rr1.flac` and `china_vl5_rr1.flac` (the observation's own example) fails `tests::inventory_matches_packaged_samples` at `lib.rs:424`: 'assertion `left == right` failed: china_vl1_rr1.flac'. The lead re-ran this one.
+- bass (a generated crate): swapping `fingerbass_A#1` and `fingerbass_C2` fails its inventory test at `lib.rs:101`: '...: fingerbass_A#1.flac'.
+- Python: `GenCrateLibMixedContainerTest.test_swapped_embedded_payload_fails_the_packaged_file_oracle` and the rest of that class and `GrandSampleApiContractTest` pass (Ran 7, OK).
+All restored.
+
+**Note.** The fix removed the per-row `assert_eq!(get(name), Some(bytes))`. That loses nothing material: `get` is a linear `find` over the same table.
+
+**Repo gate.** All sample-crate lib suites pass under `cargo test --workspace --all-targets` (run on `1d87b00f` and `011738f6` earlier in this pass). The Python gate step is green on `56ba5184` ('Ran 284 ... OK').
 
 ## Notes
 

@@ -6,15 +6,15 @@
 - **Area:** sample tooling / concurrent source isolation
 - **Raised:** 2026-09-13T19:26:11Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260914T214309Z-817d11a1
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00068-run-fix-20260914T214309Z-817d11a1
+- **Owner base:** 7f1d5befd27f9aa7a10c89df1c6c134682336d30
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-14T21:43:09Z
+- **Owner until:** 2026-09-14T23:43:09Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00304 — Drum-kit PROVENANCE files still describe pre-FLAC WAV payloads and byte totals
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample assets / provenance documentation
 - **Raised:** 2026-08-19T09:33:14Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T214748Z-6024f510
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00304-run-verify-20260914T214748Z-6024f510
-- **Owner base:** ebe2fdc5cac03f60191e631157e4e9c4c92be1a6
-- **Owner fingerprint:** sha256:67b247aabf5b98f039104304c6b00d67352da806e99e53a1461d96b20f34cf65
-- **Owner since:** 2026-09-14T21:47:48Z
-- **Owner until:** 2026-09-15T00:54:19Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:14Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T23:34:55Z, deltic:auto role=fix run=fix-20260913T232519Z-3bbcd0b2 branch=task/bug-MM-BUG-KIL-00304-run-fix-20260913T232519Z-3bbcd0b2 code=086841407e8f06152d609f577b174724840f48d3 gate=manual)
+- **State history:** Open (2026-08-19T09:33:14Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T23:34:55Z, deltic:auto role=fix run=fix-20260913T232519Z-3bbcd0b2 branch=task/bug-MM-BUG-KIL-00304-run-fix-20260913T232519Z-3bbcd0b2 code=086841407e8f06152d609f577b174724840f48d3 gate=manual) -> Closed (2026-09-14T22:56:40Z, independent verify by Claude Opus 5 on trunk 81252a3e: both drum-kit PROVENANCE files and the prepare_drumkit.py docstring now describe FLAC payloads, .flac names and the committed byte totals, re-derived from git objects)
 
 ## Observation
 
@@ -66,6 +66,21 @@ docstring in the same pass. Prefer stating the byte figures as "see
 `EXPECTED_BYTES` in `src/lib.rs`" so the document cannot disagree with the derived
 oracle again; 00044's proposed container-word oracle would then cover the rest of
 this class.
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified by agents other than the fixer: a verifier worker on trunk `81252a3e`, and the lead from `origin/main` git objects. The fix is `08684140`; the core-kit PROVENANCE was already corrected by `24e9c6b1`.
+
+**Each recorded claim, re-derived.**
+- drumkit2: `git ls-tree` shows 36 `.flac` and no `.wav` under `samples/`, and their blob sizes sum to 4 301 372 bytes. That equals `EXPECTED_BYTES` (`src/lib.rs:484`) and PROVENANCE's '36 mono 16-bit 44.1 kHz FLACs (4,301,372 raw bytes)', which replaced the recorded 7 647 408. File naming is `<articulation>_vl{L}_rr{R}.flac` with example `crash_vl2_rr3.flac`. The output line says staging is WAV and the published assets are FLAC.
+- drumkit: 128 `.flac`, no `.wav`, 5 428 756 bytes, equal to `EXPECTED_BYTES` (`src/lib.rs:1163`) and PROVENANCE line 19.
+- Neither PROVENANCE file mentions `.wav` or 'WAVs' any more. The `prepare_drumkit.py` docstring mentions WAV only as the staging format that is encoded and bit-exactly verified as FLAC.
+
+**Fails-before (method A).** `08684140^:crates/ferrosintesis-samples-drumkit2/PROVENANCE.md` still says '(7,647,408 raw bytes)', which does not match the committed 4 301 372. The other recorded items had already been corrected by earlier commits, so this one-line fix closed the last stale item. For drumkit the figure is pinned by `documented_flac_lookup_contract_matches_packaged_inventory` (`provenance.contains("5,428,756 raw bytes")`).
+
+**Not split.** No oracle pins drumkit2's PROVENANCE byte figure the way drumkit's is pinned, so it could drift again; that is a missing guard, not wrong behaviour today.
+
+**Repo gate.** This is a docs-only fix. On `f44966c6` the Python gate step passes ('Ran 284 ... OK'). The cargo steps were fully run on `1d87b00f` and `011738f6` earlier in this pass.
 
 ## Notes
 

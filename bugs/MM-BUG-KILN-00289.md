@@ -6,15 +6,15 @@
 - **Area:** orchestral sample crate / public package contract
 - **Raised:** 2026-08-17T13:41:05Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T211103Z-795775aa
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00289-run-verify-20260913T211103Z-795775aa
-- **Owner base:** 8adf7022fd4471be6cf2f5052fa38777b2655565
-- **Owner fingerprint:** sha256:e67599e6a30aab1edc0d25adebf8e4a654839bac9ae56d9956444c2d012f1075
-- **Owner since:** 2026-09-13T21:11:03Z
-- **Owner until:** 2026-09-13T23:11:03Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

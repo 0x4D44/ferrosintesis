@@ -1,6 +1,6 @@
 # MM-BUG-KILN-00300 — The published CLI package carries no NOTICE, and the licensing oracles' enumeration predicate cannot see it
 
-- **State:** Open
+- **State:** Blocked
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli
@@ -19,7 +19,7 @@
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:55:50Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-17T22:55:50Z, raised via `deltic bugs new` model=claude-opus-5@high) → Blocked (2026-09-14T01:37:15Z, Codex GPT-5.6 on CRUCIBLE; blocked pending Arthur's licensing decision on whether the published CLI package must carry a redistributable NOTICE covering its embedded audio)
 
 ## Observation
 

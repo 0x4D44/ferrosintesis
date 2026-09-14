@@ -6,15 +6,15 @@
 - **Area:** sample assets / provenance documentation
 - **Raised:** 2026-08-19T09:33:14Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T214748Z-6024f510
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KIL-00304-run-verify-20260914T214748Z-6024f510
+- **Owner base:** ebe2fdc5cac03f60191e631157e4e9c4c92be1a6
+- **Owner fingerprint:** sha256:67b247aabf5b98f039104304c6b00d67352da806e99e53a1461d96b20f34cf65
+- **Owner since:** 2026-09-14T21:47:48Z
+- **Owner until:** 2026-09-14T23:47:48Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00301 — Integration gate never runs example tests and never builds the CLI's advertised --no-default-features config, leaving its only unit test vacuous
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:56:22Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260914T213401Z-1134b160
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00301-run-fix-20260914T213401Z-1134b160
-- **Owner base:** 6be06ad65f71da7a65d8d1c67c3a33b1c08c9fd2
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-14T21:34:01Z
-- **Owner until:** 2026-09-14T23:34:01Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:56:22Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T23:15:40Z, deltic:auto role=fix run=fix-20260913T224848Z-329ad481 branch=task/bug-MM-BUG-KILN-00301-run-fix-20260913T224848Z-329ad481 code=f5d6035931c5539eb98842641645c72e96597ccb gate=manual) -> Open (2026-09-14T21:33:15Z, independent verify by Claude Opus 5 on trunk 1d87b00f: the new gate steps are right and load-bearing, but the added CLI no-default test step fails the gate's own no_default_gate_is_paired_with_embedded_sample_coverage oracle (unclassified cargo test step, left 4 right 6))
+- **State history:** Open (2026-08-17T22:56:22Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T23:15:40Z, deltic:auto role=fix run=fix-20260913T224848Z-329ad481 branch=task/bug-MM-BUG-KILN-00301-run-fix-20260913T224848Z-329ad481 code=f5d6035931c5539eb98842641645c72e96597ccb gate=manual) -> Open (2026-09-14T21:33:15Z, independent verify by Claude Opus 5 on trunk 1d87b00f: the new gate steps are right and load-bearing, but the added CLI no-default test step fails the gate's own no_default_gate_is_paired_with_embedded_sample_coverage oracle (unclassified cargo test step, left 4 right 6)) -> Fixed (2026-09-14T21:40:52Z, deltic:auto role=fix run=fix-20260914T213401Z-1134b160 branch=task/bug-MM-BUG-KILN-00301-run-fix-20260914T213401Z-1134b160 code=7571c98b9e9b3035b921f145d1860c5590562792 gate=manual)
 
 ## Observation
 

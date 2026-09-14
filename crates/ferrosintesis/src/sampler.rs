@@ -7301,24 +7301,217 @@ mod tests {
         );
     }
 
-    /// The thirteen GM-routed drum banks (35/36, 37, 38/40, 41/43, 42, 44,
-    /// 45/47/48/50, 46, 49/57, 51/59, 53, 52, 55).
-    fn routed_banks() -> [&'static kitbank::Bank; 13] {
-        [
-            &kitbank2::CRASH,
-            &kitbank::RIDE,
-            &kitbank::RIDE_BELL,
-            &kitbank2::CHINA,
-            &kitbank2::SPLASH,
-            &kitbank::KICK,
-            &kitbank::SNARE,
-            &kitbank::SIDESTICK,
-            &kitbank::TOM_HI,
-            &kitbank::TOM_LO,
-            &kitbank::HH_CLOSED,
-            &kitbank::HH_OPEN,
-            &kitbank::HH_PEDAL,
-        ]
+    /// Every bank exported by either packaged drum-kit half.
+    fn routed_banks() -> Vec<&'static kitbank::Bank> {
+        kitbank::BANKS
+            .iter()
+            .chain(kitbank2::BANKS.iter())
+            .copied()
+            .collect()
+    }
+
+    /// MM-BUG-KIL-00310: the boundary-click sweep must cover exactly the banks
+    /// both packages export and `sampled_drum()` can route. Keep the expected
+    /// sets independent from `routed_banks()`: otherwise the test would repeat
+    /// the same hand-maintained omission under a different name.
+    #[cfg(ferrosintesis_repository_tests)]
+    #[test]
+    fn routed_banks_match_exports_and_sampled_drum_routes() {
+        fn strip_comments(source: &str) -> String {
+            let bytes = source.as_bytes();
+            let mut output = String::with_capacity(source.len());
+            let mut pos = 0;
+            while pos < bytes.len() {
+                if bytes[pos] == b'/' && bytes.get(pos + 1) == Some(&b'/') {
+                    pos += 2;
+                    while pos < bytes.len() && bytes[pos] != b'\n' {
+                        pos += 1;
+                    }
+                    continue;
+                }
+                if bytes[pos] == b'/' && bytes.get(pos + 1) == Some(&b'*') {
+                    pos += 2;
+                    let mut terminated = false;
+                    while pos < bytes.len() {
+                        if bytes[pos] == b'*' && bytes.get(pos + 1) == Some(&b'/') {
+                            pos += 2;
+                            terminated = true;
+                            break;
+                        }
+                        if bytes[pos] == b'\n' {
+                            output.push('\n');
+                        }
+                        pos += 1;
+                    }
+                    assert!(terminated, "source scanner found an unterminated comment");
+                    continue;
+                }
+                let character = source[pos..]
+                    .chars()
+                    .next()
+                    .expect("source scanner position must be on a character");
+                output.push(character);
+                pos += character.len_utf8();
+            }
+            output
+        }
+
+        fn bank_source(crate_dir: &str) -> String {
+            std::fs::read_to_string(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("..")
+                    .join(crate_dir)
+                    .join("src")
+                    .join("lib.rs"),
+            )
+            .expect("sample-bank source is readable from the workspace")
+        }
+
+        fn bank_ids_from_export(source: &str) -> std::collections::BTreeSet<String> {
+            let array = source
+                .split_once("pub static BANKS:")
+                .expect("sample bank must export BANKS")
+                .1
+                .split_once("= [")
+                .expect("BANKS must be an array literal")
+                .1
+                .split_once("];")
+                .expect("BANKS array must terminate")
+                .0;
+            assert!(
+                !array.contains("//") && !array.contains("/*"),
+                "BANKS export scanner refuses commented-out entries"
+            );
+            let mut ids = std::collections::BTreeSet::new();
+            for entry in strip_comments(array)
+                .split(',')
+                .map(str::trim)
+                .filter(|entry| !entry.is_empty())
+            {
+                let id = entry
+                    .strip_prefix('&')
+                    .expect("BANKS export contains an unrecognized entry");
+                assert!(
+                    !id.is_empty()
+                        && id
+                            .chars()
+                            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'),
+                    "BANKS export contains an unrecognized entry: {entry:?}"
+                );
+                assert!(
+                    ids.insert(id.to_owned()),
+                    "BANKS export contains {id} twice"
+                );
+            }
+            assert!(!ids.is_empty(), "BANKS export scanner found no entries");
+            ids
+        }
+
+        fn bank_ids_from_sampled_drum(source: &str) -> std::collections::BTreeSet<String> {
+            let match_body = source
+                .split_once("pub fn sampled_drum(")
+                .expect("sampled_drum must exist")
+                .1
+                .split_once("#[cfg(not(feature = \"embedded-samples\"))]")
+                .expect("the embedded sampled_drum must precede its modeled-only sibling")
+                .0
+                .split_once("= match key {")
+                .expect("sampled_drum must match on its key")
+                .1
+                .split_once("\n    };")
+                .expect("sampled_drum route match must terminate")
+                .0;
+            assert!(
+                !match_body.contains("/*"),
+                "sampled_drum route scanner refuses block comments"
+            );
+            let mut ids = std::collections::BTreeSet::new();
+            for raw_line in match_body.lines() {
+                let trimmed = raw_line.trim_start();
+                assert!(
+                    !trimmed.starts_with("//"),
+                    "sampled_drum route scanner refuses commented-out entries"
+                );
+                let line = strip_comments(raw_line);
+                let Some((_, right)) = line.split_once("=>") else {
+                    continue;
+                };
+                let right = right.trim();
+                if right.starts_with("return None") {
+                    continue;
+                }
+                let route = right
+                    .strip_prefix("(&")
+                    .expect("sampled_drum contains an unrecognized route arm");
+                let (alias, rest) = route
+                    .split_once("::")
+                    .expect("sampled_drum route must name a bank constant");
+                assert!(
+                    alias == "kit" || alias == "kit2",
+                    "sampled_drum route uses an unrecognized crate alias: {alias:?}"
+                );
+                let id_len = rest
+                    .char_indices()
+                    .find_map(|(index, character)| {
+                        (!character.is_ascii_uppercase()
+                            && !character.is_ascii_digit()
+                            && character != '_')
+                            .then_some(index)
+                    })
+                    .unwrap_or(rest.len());
+                let id = &rest[..id_len];
+                assert!(
+                    !id.is_empty(),
+                    "sampled_drum route names an empty bank constant"
+                );
+                assert!(
+                    rest[id_len..].trim_start().starts_with(','),
+                    "sampled_drum route has an unrecognized bank expression: {right:?}"
+                );
+                ids.insert(format!("{alias}::{id}"));
+            }
+            assert!(!ids.is_empty(), "sampled_drum route scanner found no banks");
+            ids
+        }
+
+        let sampler = sampler_source();
+        let routed_body = sampler
+            .split_once("fn routed_banks()")
+            .expect("routed_banks must exist")
+            .1
+            .split_once("\n    }")
+            .expect("routed_banks must have a body")
+            .0;
+        assert!(
+            routed_body.contains("kitbank::BANKS") && routed_body.contains("kitbank2::BANKS"),
+            "routed_banks must derive from both packaged BANKS exports"
+        );
+        assert!(
+            !routed_body.contains("&kitbank::") && !routed_body.contains("&kitbank2::"),
+            "routed_banks must not hand-maintain individual bank references"
+        );
+
+        let mut exported_ids = std::collections::BTreeSet::new();
+        for id in bank_ids_from_export(&bank_source("ferrosintesis-samples-drumkit")) {
+            exported_ids.insert(format!("kit::{id}"));
+        }
+        for id in bank_ids_from_export(&bank_source("ferrosintesis-samples-drumkit2")) {
+            exported_ids.insert(format!("kit2::{id}"));
+        }
+        assert_eq!(
+            bank_ids_from_sampled_drum(&sampler),
+            exported_ids,
+            "sampled_drum routes and packaged BANKS exports have drifted"
+        );
+
+        let exported_names: std::collections::BTreeSet<&str> = kitbank::BANKS
+            .iter()
+            .chain(kitbank2::BANKS.iter())
+            .map(|bank| bank.name)
+            .collect();
+        let routed_names: std::collections::BTreeSet<&str> =
+            routed_banks().iter().map(|bank| bank.name).collect();
+        assert_eq!(routed_names, exported_names);
     }
 
     /// MM-BUG-KILN-00008: the sampled electric snare (key 40) must not be the

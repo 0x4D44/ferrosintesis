@@ -7,6 +7,19 @@ fn wav_bytes(format: u16, channels: u16, bits: u16, sample_rate: u32, data: &[u8
     let bytes_per_sample = bits / 8;
     let block_align = channels * bytes_per_sample;
     let byte_rate = sample_rate * block_align as u32;
+    wav_bytes_with_byte_rate(format, channels, bits, sample_rate, byte_rate, data)
+}
+
+fn wav_bytes_with_byte_rate(
+    format: u16,
+    channels: u16,
+    bits: u16,
+    sample_rate: u32,
+    byte_rate: u32,
+    data: &[u8],
+) -> Vec<u8> {
+    let bytes_per_sample = bits / 8;
+    let block_align = channels * bytes_per_sample;
     let mut wav = Vec::new();
     wav.extend_from_slice(b"RIFF");
     wav.extend_from_slice(&(36 + data.len() as u32).to_le_bytes());
@@ -24,19 +37,39 @@ fn wav_bytes(format: u16, channels: u16, bits: u16, sample_rate: u32, data: &[u8
     wav
 }
 
+struct TestDir(std::path::PathBuf);
+
+impl TestDir {
+    fn new(label: &str) -> Self {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock is after the Unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "ferrosintesis-cli-{label}-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&path).expect("create test directory");
+        Self(path)
+    }
+
+    fn join(&self, name: &str) -> std::path::PathBuf {
+        self.0.join(name)
+    }
+}
+
+impl Drop for TestDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 #[test]
 fn file_reader_uses_the_shared_decoder() {
-    let unique = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("system clock is after the Unix epoch")
-        .as_nanos();
-    let path = std::env::temp_dir().join(format!(
-        "ferrosintesis-wav-reader-{}-{unique}.wav",
-        std::process::id()
-    ));
+    let dir = TestDir::new("wav-reader");
+    let path = dir.join("fixture.wav");
     std::fs::write(&path, wav_bytes(1, 2, 16, 48_000, &[0; 4])).expect("write WAV fixture");
     let result = wav::read_wav(path.to_str().expect("temporary path is UTF-8"), true);
-    std::fs::remove_file(&path).expect("remove WAV fixture");
 
     assert_eq!(result.expect("read PCM stereo").sr, 48_000);
 }
@@ -85,11 +118,11 @@ fn rejects_missing_or_truncated_format_and_missing_data() {
         .unwrap_err()
         .contains("missing fmt chunk"));
 
-    let mut truncated_format = Vec::from(&b"RIFF\x18\0\0\0WAVEfmt \x10\0\0\0"[..]);
+    let mut truncated_format = Vec::from(&b"RIFF\x10\0\0\0WAVEfmt \x04\0\0\0"[..]);
     truncated_format.extend_from_slice(&[1, 0, 2, 0]);
     assert!(decode_wav("truncated-fmt.wav", &truncated_format, true)
         .unwrap_err()
-        .contains("truncated"));
+        .contains("truncated fmt chunk"));
 
     let mut missing_data = wav_bytes(1, 2, 16, 44_100, &[]);
     missing_data.truncate(36);
@@ -97,6 +130,46 @@ fn rejects_missing_or_truncated_format_and_missing_data() {
     assert!(decode_wav("missing-data.wav", &missing_data, true)
         .unwrap_err()
         .contains("missing data chunk"));
+}
+
+#[test]
+fn rejects_bad_headers_chunks_channels_and_byte_rate() {
+    // On this 64-bit target, the RIFF size is u32, so adding its maximum to 8
+    // cannot overflow usize. The padding checked-add would require a materialized
+    // slice of usize::MAX bytes, which no valid in-memory fixture can provide.
+    assert!(decode_wav("not-wav", b"not a WAV", true)
+        .unwrap_err()
+        .contains("not a RIFF/WAVE file"));
+
+    let mut bad_riff_size = Vec::from(&b"RIFF\x09\0\0\0WAVE"[..]);
+    bad_riff_size.extend_from_slice(&[0; 5]);
+    assert!(decode_wav("chunk-header.wav", &bad_riff_size, true)
+        .unwrap_err()
+        .contains("truncated WAV chunk header"));
+
+    let truncated_chunk = b"RIFF\x0c\0\0\0WAVEJUNK\x04\0\0\0";
+    assert!(decode_wav("chunk-body.wav", truncated_chunk, true)
+        .unwrap_err()
+        .contains("truncated JUNK chunk"));
+
+    // The odd JUNK body reaches the padding check: the RIFF size matches the
+    // bytes present, but the required one-byte pad is absent.
+    let missing_padding = b"RIFF\x0d\0\0\0WAVEJUNK\x01\0\0\0x";
+    assert!(decode_wav("missing-padding.wav", missing_padding, true)
+        .unwrap_err()
+        .contains("truncated padding after WAV chunk"));
+
+    for channels in [0, 3] {
+        let bytes = wav_bytes(1, channels, 16, 44_100, &[]);
+        assert!(decode_wav("channel-count.wav", &bytes, false)
+            .unwrap_err()
+            .contains(&format!("need mono or stereo, got {channels} channels")));
+    }
+
+    let bad_byte_rate = wav_bytes_with_byte_rate(1, 2, 16, 44_100, 1, &[0; 4]);
+    assert!(decode_wav("byte-rate.wav", &bad_byte_rate, true)
+        .unwrap_err()
+        .contains("inconsistent byte rate 1 (expected 176400)"));
 }
 
 #[test]

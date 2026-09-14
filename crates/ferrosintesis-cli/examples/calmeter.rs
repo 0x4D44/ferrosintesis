@@ -173,13 +173,15 @@ mod tests {
     struct TestWav(PathBuf);
 
     impl TestWav {
-        fn at_rate(sample_rate: u32) -> Self {
+        fn at_rate(label: &str, sample_rate: u32) -> Self {
             let nonce = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock before Unix epoch")
                 .as_nanos();
-            let path = std::env::temp_dir()
-                .join(format!("calmeter-rate-{}-{nonce}.wav", std::process::id()));
+            let path = std::env::temp_dir().join(format!(
+                "calmeter-rate-{label}-{}-{nonce}.wav",
+                std::process::id()
+            ));
             let mut wav = Vec::new();
             wav.extend_from_slice(b"RIFF");
             wav.extend_from_slice(&40u32.to_le_bytes());
@@ -211,7 +213,7 @@ mod tests {
 
     #[test]
     fn read_wav_rejects_a_one_hz_meter_input() {
-        let wav = TestWav::at_rate(1);
+        let wav = TestWav::at_rate("one-hz", 1);
         let error = match read_wav(wav.path(), false) {
             Ok(_) => panic!("1 Hz must be rejected"),
             Err(error) => error,
@@ -224,7 +226,7 @@ mod tests {
 
     #[test]
     fn read_wav_accepts_the_lowest_supported_rate() {
-        let wav = TestWav::at_rate(8_000);
+        let wav = TestWav::at_rate("lowest-supported", 8_000);
         let decoded = read_wav(wav.path(), false).expect("8 kHz is supported");
         assert_eq!(decoded.sr, 8_000);
         assert_eq!(decoded.samples.len(), 2);

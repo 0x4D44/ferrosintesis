@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / clavinet sample bank
 - **Raised:** 2026-09-13T19:23:18Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260913T210310Z-0232661d
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00064-run-verify-20260913T210310Z-0232661d
-- **Owner base:** 61d22b82c43cf9791fc040aec35726bcc7be8855
-- **Owner fingerprint:** sha256:7de46bd41119d630c7a5f46f4a97781475ab90b53ed725312985a4bda0277ccf
-- **Owner since:** 2026-09-13T21:03:10Z
-- **Owner until:** 2026-09-13T23:03:10Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

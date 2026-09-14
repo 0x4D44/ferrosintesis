@@ -427,7 +427,7 @@ def publish_staged(staging_root, repo_root, plans):
         for part, destination in pending:
             atomic_replace(part, destination)
             published.append(destination)
-    except Exception as error:
+    except BaseException as error:
         rollback_errors = []
         for destination in reversed(published):
             try:

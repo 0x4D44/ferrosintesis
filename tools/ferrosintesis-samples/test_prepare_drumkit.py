@@ -296,6 +296,78 @@ class DrumkitOutputPlanTests(unittest.TestCase):
                     ) as committed:
                         self.assertEqual(committed.read(), b"old-flac")
 
+    def test_publish_keyboard_interrupt_rolls_back_both_packages(self):
+        plans = {
+            prepare_drumkit.CORE_PACKAGE: {"core.wav"},
+            prepare_drumkit.ACCENT_PACKAGE: {"accent.wav"},
+        }
+        with tempfile.TemporaryDirectory() as root, \
+                tempfile.TemporaryDirectory() as staging:
+            for package, names in plans.items():
+                staged_dir = os.path.join(staging, package)
+                output_dir = os.path.join(root, "crates", package, "samples")
+                os.makedirs(staged_dir)
+                os.makedirs(output_dir)
+                for name in names:
+                    with open(os.path.join(staged_dir, name), "wb") as staged:
+                        staged.write(b"staged-wav")
+                    with open(
+                        os.path.join(output_dir, prepare_drumkit.packaged_name(name)),
+                        "wb",
+                    ) as committed:
+                        committed.write(b"old-flac")
+
+            def fake_encode(_source, destination):
+                with open(destination, "wb") as encoded:
+                    encoded.write(b"new-flac")
+
+            real_replace = prepare_drumkit.atomic_replace
+            publication_swaps = 0
+            output_dirs = {
+                os.path.join(root, "crates", package, "samples")
+                for package in plans
+            }
+
+            def interrupt_on_second_publication(source, destination):
+                nonlocal publication_swaps
+                if (
+                    os.path.dirname(destination) in output_dirs
+                    and destination.endswith(".flac")
+                    and source.endswith(".part")
+                ):
+                    publication_swaps += 1
+                    if publication_swaps == 2:
+                        raise KeyboardInterrupt()
+                return real_replace(source, destination)
+
+            with mock.patch.object(
+                prepare_drumkit, "_encode_flac", side_effect=fake_encode
+            ), mock.patch.object(
+                prepare_drumkit, "_decode_flac_pcm", return_value=b"pcm"
+            ), mock.patch.object(
+                prepare_drumkit, "_read_wav_pcm", return_value=b"pcm"
+            ), mock.patch.object(
+                prepare_drumkit,
+                "atomic_replace",
+                side_effect=interrupt_on_second_publication,
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    prepare_drumkit.publish_staged(staging, root, plans)
+
+            self.assertEqual(publication_swaps, 2)
+            for package, names in plans.items():
+                output_dir = os.path.join(root, "crates", package, "samples")
+                expected = {
+                    prepare_drumkit.packaged_name(name) for name in names
+                }
+                self.assertEqual(set(os.listdir(output_dir)), expected)
+                for name in names:
+                    with open(
+                        os.path.join(output_dir, prepare_drumkit.packaged_name(name)),
+                        "rb",
+                    ) as committed:
+                        self.assertEqual(committed.read(), b"old-flac")
+
     def test_publish_success_uses_packaged_flac_names_for_both_packages(self):
         plans = {
             prepare_drumkit.CORE_PACKAGE: {"core.wav"},

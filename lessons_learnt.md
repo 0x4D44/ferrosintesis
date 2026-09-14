@@ -10,6 +10,9 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.14 — **Catch `BaseException` before sample-bank cleanup** (`prepare.py:_publish_staged_flac_bank`).
+  - `KeyboardInterrupt` and `SystemExit` can interrupt the swap outside `except Exception`, leaving a mixed bank.
+
 - 2026.09.14 — **Pre-load alias checks must attach the path to I/O failures** (`output.rs:path_error`).
   - `canonicalize` reports only the OS error, so wrap each input/output probe with its path.
 

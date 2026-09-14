@@ -4705,7 +4705,7 @@ def _publish_staged_flac_bank(staging_dir, output_dir, logical_names, label):
                 atomic_replace(parts[packaged], destination)
                 parts[packaged] = None
                 published.append(destination)
-        except Exception as error:
+        except BaseException as error:
             rollback_errors = []
             for destination in reversed(published):
                 try:
@@ -5356,7 +5356,7 @@ def _publish_ydp_bank(staging_dir, output_dir, logical_names):
                 atomic_replace(parts[packaged], destination)
                 parts[packaged] = None
                 published.append(destination)
-        except Exception as error:
+        except BaseException as error:
             rollback_errors = []
             for destination in reversed(published):
                 try:

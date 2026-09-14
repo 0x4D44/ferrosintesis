@@ -2029,6 +2029,44 @@ class YdpWholeBankPublicationTest(unittest.TestCase):
             [],
         )
 
+    def test_keyboard_interrupt_rolls_back_replacements(self):
+        before = self.snapshot_bank()
+        replace_calls = 0
+        real_replace = prepare.atomic_replace
+
+        def fake_encode(_wav, flac):
+            with open(flac, "wb") as output:
+                output.write(b"new-flac")
+
+        def interrupt_during_publication(source, destination):
+            nonlocal replace_calls
+            replace_calls += 1
+            if replace_calls == len(self.roots) + 2:
+                raise KeyboardInterrupt()
+            return real_replace(source, destination)
+
+        with (
+            mock.patch.object(prepare, "_encode_flac", side_effect=fake_encode),
+            mock.patch.object(prepare, "_decode_flac_pcm", return_value=b"pcm"),
+            mock.patch.object(prepare, "_read_wav_pcm", return_value=b"pcm"),
+            mock.patch.object(
+                prepare, "atomic_replace", side_effect=interrupt_during_publication
+            ),
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                self.run_bake(self.roots)
+
+        self.assertGreaterEqual(replace_calls, len(self.roots) + 2)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assertEqual(
+            [name for name in os.listdir(self.sample_dir) if name.endswith(".wav")],
+            [],
+        )
+        self.assertEqual(
+            [name for name in os.listdir(self.sample_dir) if name.endswith(".part")],
+            [],
+        )
+
 
 class ClavinetWholeBankPublicationTest(unittest.TestCase):
     """MM-BUG-KILN-00220: a failed clavinet rebake preserves the whole bank."""
@@ -5059,6 +5097,40 @@ class GenericFamilyWholeBankPublicationTest(unittest.TestCase):
 
         with self.assertRaisesRegex(OSError, "injected generic publication failure"):
             self.run_main(self.staged_sample, atomic_replace=fail_on_second_publish)
+
+        self.assertGreaterEqual(replacements, 2)
+        self.assertEqual(self.snapshot_bank(), before)
+        self.assertEqual(
+            [
+                name
+                for name in os.listdir(self.sample_dir)
+                if name.endswith((".wav", ".part"))
+                or name.startswith(".harp-")
+            ],
+            [],
+        )
+
+    def test_keyboard_interrupt_rolls_back_every_selected_file(self):
+        before = self.snapshot_bank()
+        replacements = 0
+        real_replace = prepare.atomic_replace
+
+        def interrupt_on_second_publish(source, destination):
+            nonlocal replacements
+            if (
+                os.path.dirname(destination) == self.sample_dir
+                and destination.endswith(".flac")
+            ):
+                replacements += 1
+                if replacements == 2:
+                    raise KeyboardInterrupt()
+            return real_replace(source, destination)
+
+        with self.assertRaises(KeyboardInterrupt):
+            self.run_main(
+                self.staged_sample,
+                atomic_replace=interrupt_on_second_publish,
+            )
 
         self.assertGreaterEqual(replacements, 2)
         self.assertEqual(self.snapshot_bank(), before)

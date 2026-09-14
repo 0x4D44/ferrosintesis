@@ -6,15 +6,15 @@
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:55:50Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T214450Z-a244677a
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00300-run-verify-20260914T214450Z-a244677a
+- **Owner base:** c6b63e10761a73b1af78ac2113a9f55586e7ed17
+- **Owner fingerprint:** sha256:0c2dffb3baa26f9b7b73c4305b6871b7a7fa9e2f1bb318e0a87ad913da7f2dd6
+- **Owner since:** 2026-09-14T21:44:50Z
+- **Owner until:** 2026-09-14T23:44:50Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

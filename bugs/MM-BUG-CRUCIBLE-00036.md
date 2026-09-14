@@ -1,25 +1,25 @@
 # MM-BUG-CRUCIBLE-00036 — ferrosintesis-cli symlink-alias test cannot pass without SeCreateSymbolicLinkPrivilege
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** cli / test environment
 - **Raised:** 2026-08-17T16:56:43Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260914T010621Z-09bfbef0
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRUCIBLE-00036-run-fix-20260914T010621Z-09bfbef0
-- **Owner base:** 6afe11260591427e1d84759082d5aaeede4b8d78
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-14T01:06:21Z
-- **Owner until:** 2026-09-14T03:06:21Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T16:56:43Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-17T16:56:43Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T01:17:50Z, deltic:auto role=fix run=fix-20260914T010621Z-09bfbef0 branch=task/bug-MM-BUG-CRUCIBLE-00036-run-fix-20260914T010621Z-09bfbef0 code=2799d1d468dd2bb33f504562cff6e8464b487305 gate=manual)
 
 ## Observation
 

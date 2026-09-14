@@ -6,15 +6,15 @@
 - **Area:** drum-kit sample generation / failure atomicity
 - **Raised:** 2026-09-13T19:26:12Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T213912Z-0f436e15
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00071-run-verify-20260914T213912Z-0f436e15
+- **Owner base:** 8c2d0c67e6b82aaed38b1f95f961706b59585182
+- **Owner fingerprint:** sha256:68372a3f12f27851eaff233559bdf0d105b72c86634ad85a5cfd421db4d6d9ad
+- **Owner since:** 2026-09-14T21:39:12Z
+- **Owner until:** 2026-09-14T23:39:12Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

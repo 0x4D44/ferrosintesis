@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00307 — Re-exec cold-cache probes pass vacuously when the child test-name filter matches nothing
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drum-kit test oracles
 - **Raised:** 2026-08-19T09:33:16Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T214226Z-1867c172
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00307-run-verify-20260914T214226Z-1867c172
-- **Owner base:** 2bba82a62324706d6ca5b2b2a2e09e42fbb7afb5
-- **Owner fingerprint:** sha256:298374d801218caae71915e71498d13ec34f49a02838718daa9509af9fc720a5
-- **Owner since:** 2026-09-14T21:42:26Z
-- **Owner until:** 2026-09-14T23:42:26Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:16Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T00:56:35Z, deltic:auto role=fix run=fix-20260914T005509Z-dae62fb8 branch=task/bug-MM-BUG-KIL-00307-run-fix-20260914T005509Z-dae62fb8 code=0517847f846ab227031c56cc04b33ac80a0fdc75 gate=manual)
+- **State history:** Open (2026-08-19T09:33:16Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T00:56:35Z, deltic:auto role=fix run=fix-20260914T005509Z-dae62fb8 branch=task/bug-MM-BUG-KIL-00307-run-fix-20260914T005509Z-dae62fb8 code=0517847f846ab227031c56cc04b33ac80a0fdc75 gate=manual) -> Closed (2026-09-14T21:50:03Z, independent verify by Claude Opus 5 on trunk 1d87b00f: both drum-kit re-exec parents now require child evidence in stdout; a drifted child test name fails each parent)
 
 ## Observation
 
@@ -54,6 +54,16 @@ Assert on the captured stdout in addition to exit status — require `"1 passed"
 (or the exact `test <NAME> ... ok` line) in the child output, in both crates. Prove
 it fails first by pointing `NAME` at a non-existent test. Fixing MM-BUG-KILN-00202
 in the same pass is natural, since both live in the same dozen lines.
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunk `1d87b00f` by an agent other than the fixer. The core-kit half was fixed by `0517847f`; the drumkit2 half (the observation's primary site) had already been changed by `50696dc2`.
+
+**Original observation.** Both parents used to judge the child only by exit status, and libtest exits 0 when `--exact` matches nothing. Both now also require `FERRO_DRUMKIT_PCM_MISS_CHILD_RAN` / `FERRO_DRUMKIT2_PCM_MISS_CHILD_RAN` in the child's stdout, printed by the child test itself.
+
+**Fails-before (method B, the recorded drift).** Renaming the child filter string in each parent to a name that matches no test makes the child print 'running 0 tests ... 0 passed' and exit 0, and each parent now fails: 'the isolated PCM lookup probe did not provide child evidence' (core `lib.rs:1236`, drumkit2 `lib.rs:515`). Before the fix that exact drift passed. Restored.
+
+**Repo gate on `1d87b00f`.** Green: fmt, all three clippy steps, `cargo test -p ferrosintesis-cli --no-default-features`, and `cargo test --workspace --all-targets`. Red, not caused by this fix: `cargo test -p ferrosintesis --no-default-features` fails `no_default_gate_is_paired_with_embedded_sample_coverage` (MM-BUG-KILN-00301 reopened), and 4 `test_prepare.py` tests error (MM-BUG-CRU-00068 reopened).
 
 ## Notes
 

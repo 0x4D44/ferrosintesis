@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00288 — Sample inventory guard skips multi-family aggregation crates
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** sample inventory / public package surfaces
 - **Raised:** 2026-08-17T13:41:00Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T214143Z-feff5e7a
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00288-run-verify-20260914T214143Z-feff5e7a
-- **Owner base:** 1288b14f33a2da2eaf010856db609febc4b77ae7
-- **Owner fingerprint:** sha256:dc097a43b901f4f46964bf4d9ccea3b82561a0affa5248c896fee26a042c0829
-- **Owner since:** 2026-09-14T21:41:43Z
-- **Owner until:** 2026-09-14T23:41:43Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T13:41:00Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:31:31Z, deltic:auto role=fix run=fix-20260913T190749Z-15df7645 branch=task/bug-MM-BUG-KILN-00288-run-fix-20260913T190749Z-15df7645 code=fd4768c77ca50a8d14b8b84ead17057767b8980d gate=manual)
+- **State history:** Open (2026-08-17T13:41:00Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:31:31Z, deltic:auto role=fix run=fix-20260913T190749Z-15df7645 branch=task/bug-MM-BUG-KILN-00288-run-fix-20260913T190749Z-15df7645 code=fd4768c77ca50a8d14b8b84ead17057767b8980d gate=manual) -> Closed (2026-09-14T21:50:03Z, independent verify by Claude Opus 5 on trunk 1d87b00f: the eight-family bail is gone; restoring it fails both 15-family adversarial tests, and the live orchestral crate is now checked)
 
 ## Observation
 
@@ -49,6 +49,18 @@ none. Static source review only; the repository test was not run.
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunk `1d87b00f` (fix `fd4768c7`) by an agent other than the fixer.
+
+**Original observation.** `partial_summary_error` no longer returns `None` for packages with more than eight families, and an empty mention set on such a package is an error unless that surface delegates to `PROVENANCE.md`. The new `public_inventory_oracle_rejects_partial_large_summary` (4 of 15 families named) and `public_inventory_oracle_rejects_empty_large_summary` pass, as does the delegation control.
+
+**Fails-before (method B).** Re-inserting `if packaged.len() > 8 { return None; }` fails both adversarial tests. Restored.
+
+**Live coverage (the crate the observation named).** While verifying MM-BUG-CRU-00074, reverting the orchestral manifest description and README delegation produced 'ferrosintesis-samples-orchestral: manifest description summary names no packaged families (omits ... 15 families)' and a partial-family README error. Those errors come only from the path this fix opened, so the 15-family crate is now genuinely checked.
+
+**Repo gate on `1d87b00f`.** Green: fmt, all three clippy steps, `cargo test -p ferrosintesis-cli --no-default-features`, and `cargo test --workspace --all-targets`. Red, not caused by this fix: `cargo test -p ferrosintesis --no-default-features` fails `no_default_gate_is_paired_with_embedded_sample_coverage` (MM-BUG-KILN-00301 reopened), and 4 `test_prepare.py` tests error (MM-BUG-CRU-00068 reopened).
 
 ## Notes
 

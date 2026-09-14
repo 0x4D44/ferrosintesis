@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00284 — Core drum-kit audio oracle omits 33 routed takes
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** core drum-kit sample crate / audio validation
 - **Raised:** 2026-08-17T11:40:04Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T213534Z-79417402
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00284-run-verify-20260914T213534Z-79417402
-- **Owner base:** 07b10bf8647927fa84fc40f754e36615f9c761d6
-- **Owner fingerprint:** sha256:44a15d3310c1430c6ca5c1c3c30a8d16ed7223f9485f3b41061466089d9139e3
-- **Owner since:** 2026-09-14T21:35:34Z
-- **Owner until:** 2026-09-14T23:35:34Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T11:40:04Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:09:35Z, deltic:auto role=fix run=fix-20260913T185158Z-892715cf branch=task/bug-MM-BUG-KILN-00284-run-fix-20260913T185158Z-892715cf code=4687d7dc15d4b9c674243e3f9135e2bff8c7261b gate=manual)
+- **State history:** Open (2026-08-17T11:40:04Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:09:35Z, deltic:auto role=fix run=fix-20260913T185158Z-892715cf branch=task/bug-MM-BUG-KILN-00284-run-fix-20260913T185158Z-892715cf code=4687d7dc15d4b9c674243e3f9135e2bff8c7261b gate=manual) -> Closed (2026-09-14T21:50:03Z, independent verify by Claude Opus 5 on trunk 1d87b00f: all ten core drum-kit banks now go through the duration/peak/RMS oracle; dropping RIDE_BELL from the bounds table fails three tests)
 
 ## Observation
 
@@ -47,5 +47,15 @@ from the enumerated test table.
 duration bounds as data, and assert that the bounds table covers every registered
 bank exactly once. Add a negative silent or badly normalized omitted-bank fixture.
 Estimated effort: Small.>
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunk `1d87b00f` (fix `4687d7dc`) by an agent other than the fixer.
+
+**Original observation.** `decoded_banks_are_valid_audio` now iterates `BANKS` (all ten routed banks, including `RIDE_BELL`, `HH_OPEN` and `HH_PEDAL`) and applies `validate_decoded_take` to every take. `audio_bounds_cover_every_registered_bank_once` ties the bounds table to `BANKS` by pointer identity, and `decoded_audio_oracle_rejects_silent_omitted_bank_control` shows a same-length silent ride-bell take is rejected. All pass in `cargo test --workspace --all-targets --locked`, so every one of the 128 real takes meets its bounds.
+
+**Fails-before (method B).** Removing the `RIDE_BELL` row (and shrinking the array to 9) fails three tests: `audio_bounds_cover_every_registered_bank_once` and `decoded_banks_are_valid_audio` (left 9, right 10) and the silent control ('ride-bell duration bounds must be registered'). Restored.
+
+**Repo gate on `1d87b00f`.** Green: fmt, all three clippy steps, `cargo test -p ferrosintesis-cli --no-default-features`, and `cargo test --workspace --all-targets`. Red, not caused by this fix: `cargo test -p ferrosintesis --no-default-features` fails `no_default_gate_is_paired_with_embedded_sample_coverage` (MM-BUG-KILN-00301 reopened), and 4 `test_prepare.py` tests error (MM-BUG-CRU-00068 reopened).
 
 ## Notes

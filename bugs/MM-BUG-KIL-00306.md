@@ -6,15 +6,15 @@
 - **Area:** sample assets / drumkit2 test oracles
 - **Raised:** 2026-08-19T09:33:16Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260914T004509Z-08a42c1d
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KIL-00306-run-fix-20260914T004509Z-08a42c1d
+- **Owner base:** d46f96b351a52a0f71b818bf65b0e2c268aebcef
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-14T00:45:09Z
+- **Owner until:** 2026-09-14T02:45:09Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

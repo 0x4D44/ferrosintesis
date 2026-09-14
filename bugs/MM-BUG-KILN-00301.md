@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00301 — Integration gate never runs example tests and never builds the CLI's advertised --no-default-features config, leaving its only unit test vacuous
 
-- **State:** Fixed
+- **State:** Open
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:56:22Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T212529Z-d0276317
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00301-run-verify-20260914T212529Z-d0276317
-- **Owner base:** b64d5ec799240621f80eff590a2521a4d57380d5
-- **Owner fingerprint:** sha256:aaa09487b11455575357f903f465ee26efcdaefc354b841b871d0a3f2d74332f
-- **Owner since:** 2026-09-14T21:25:29Z
-- **Owner until:** 2026-09-14T23:25:29Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:56:22Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T23:15:40Z, deltic:auto role=fix run=fix-20260913T224848Z-329ad481 branch=task/bug-MM-BUG-KILN-00301-run-fix-20260913T224848Z-329ad481 code=f5d6035931c5539eb98842641645c72e96597ccb gate=manual)
+- **State history:** Open (2026-08-17T22:56:22Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T23:15:40Z, deltic:auto role=fix run=fix-20260913T224848Z-329ad481 branch=task/bug-MM-BUG-KILN-00301-run-fix-20260913T224848Z-329ad481 code=f5d6035931c5539eb98842641645c72e96597ccb gate=manual) -> Open (2026-09-14T21:33:15Z, independent verify by Claude Opus 5 on trunk 1d87b00f: the new gate steps are right and load-bearing, but the added CLI no-default test step fails the gate's own no_default_gate_is_paired_with_embedded_sample_coverage oracle (unclassified cargo test step, left 4 right 6))
 
 ## Observation
 
@@ -90,6 +90,16 @@ CLI's README offers users.
    combination was not built — it pulls all 24 asset crates.)
 4. Prove step 2 is worth having: break the forwarding deliberately (point the CLI's
    `embedded-samples` feature at nothing), confirm the new step goes red, restore.
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunk `1d87b00f` (fix `f5d60359`) by an agent other than the fixer. **Reopened.**
+
+**What the fix gets right.** Both gaps in the observation are closed. `cargo test --workspace --all-targets --locked` now runs the five `calmeter` example tests, and all pass (the `read_wav_*` temp-name race did not fire in this run). The new `-p ferrosintesis-cli --no-default-features` test step is load-bearing: with the CLI's `ferrosintesis` dependency switched to default features, that step fails `embedded_samples_feature_is_forwarded_to_the_library` (left true, right false), while the default-feature CLI test stays green. The new CLI no-default clippy step passes.
+
+**Why reopened.** This fix turned the gate red. `cargo test -p ferrosintesis --no-default-features --locked` fails `testutil::no_default_gate_is_paired_with_embedded_sample_coverage` at `testutil.rs:1886`: 'unclassified cargo test step in the gate', left 4, right 6. The oracle sorts `cargo test` steps into a `--workspace` bucket and a `--no-default-features` bucket matched on the exact token `"ferrosintesis"`. The two new `"ferrosintesis-cli"` steps fit neither, and the oracle's own comment says a new configuration must be taught to it. Pinned by method A: the oracle's predicate passes on `f5d60359^:.deltic-integrate.toml` (2 + 2 of 4 steps) and fails on `f5d60359` (2 + 2 of 6).
+
+**To close.** Teach the oracle the CLI modeled-only bucket (one step per gate array) and keep its every-step-classified assertion, so the gate's `cargo test -p ferrosintesis --no-default-features` step is green again.
 
 ## Notes
 

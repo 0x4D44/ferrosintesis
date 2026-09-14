@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / MIDI parser tests
 - **Raised:** 2026-09-13T19:19:46Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T212112Z-003bc0af
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00055-run-verify-20260914T212112Z-003bc0af
+- **Owner base:** 1d87b00ffa704a9fb740b5fce27b059540f9c95b
+- **Owner fingerprint:** sha256:6a4fd13c066c95b74ad23859bb4edc385d0ea40638000ae0c701a527936e8427
+- **Owner since:** 2026-09-14T21:21:12Z
+- **Owner until:** 2026-09-14T23:21:12Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

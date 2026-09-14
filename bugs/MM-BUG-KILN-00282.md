@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00282 — Drumkit public API still documents WAV keys and bytes after FLAC conversion
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** core drum-kit sample crate / public package contract
 - **Raised:** 2026-08-17T11:39:51Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T213251Z-a001dbfd
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00282-run-verify-20260914T213251Z-a001dbfd
-- **Owner base:** 49c5c051c8b0f7dd2712c79718cba91fe4347428
-- **Owner fingerprint:** sha256:93f206765f07b774bac07955ee6c8864182f887093e20e03e13b231192cce3c2
-- **Owner since:** 2026-09-14T21:32:51Z
-- **Owner until:** 2026-09-14T23:32:51Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T11:39:51Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:01:44Z, deltic:auto role=fix run=fix-20260913T183617Z-401f80e3 branch=task/bug-MM-BUG-KILN-00282-run-fix-20260913T183617Z-401f80e3 code=24e9c6b1e6e08760a7dea4944d7202321e8457d gate=manual)
+- **State history:** Open (2026-08-17T11:39:51Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:01:44Z, deltic:auto role=fix run=fix-20260913T183617Z-401f80e3 branch=task/bug-MM-BUG-KILN-00282-run-fix-20260913T183617Z-401f80e3 code=24e9c6b1e6e08760a7dea4944d7202321e8457d gate=manual) -> Closed (2026-09-14T21:41:42Z, independent verify by Claude Opus 5 on trunk 1d87b00f: drumkit rustdoc, README and PROVENANCE now describe .flac keys and FLAC bytes, re-derived against the table, the files and a passing doctest)
 
 ## Observation
 
@@ -51,5 +51,15 @@ package-local surfaces together, and add a source-derived check proving a
 documented real key resolves and the documented container matches its magic.
 Aliases must not return FLAC under a name that still promises WAV bytes. Estimated
 effort: Small.>
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunk `1d87b00f` (fix `24e9c6b1`) by an agent other than the fixer.
+
+**Original observation, re-derived against the code and files.** The package's `samples/` directory holds 128 files, all `.flac`, totalling 5 428 756 bytes, which is the figure PROVENANCE now states in place of 9 632 990. `inventory_matches_packaged_flac_samples` asserts every key ends in `.flac`, and `get("kick_vl1_rr1.wav")` returning `None` is asserted, not just documented. `documented_flac_lookup_contract_matches_packaged_inventory` checks that `get` and `Bank::wav` return the same bytes starting with `fLaC`. The new rustdoc example `get("kick_vl1_rr1.flac")` runs and passes (`cargo test -p ferrosintesis-samples-drumkit --doc`, 1 passed; the gate's `--all-targets` does not run doctests). Every remaining 'wav' in the public docs describes the kept `Bank::wav`/`BankSource::wav` compatibility name or the legacy RIFF decoder, which is accurate.
+
+**Fails-before (method B, needle only).** Restoring the old `get` doc line fails the contract test. That proves only that the test reads the doc text. The re-derivation above is what supports closure.
+
+**Repo gate on `1d87b00f`.** Green: fmt, all three clippy steps, `cargo test -p ferrosintesis-cli --no-default-features`, and `cargo test --workspace --all-targets`. Red, not caused by this fix: `cargo test -p ferrosintesis --no-default-features` fails `no_default_gate_is_paired_with_embedded_sample_coverage` (MM-BUG-KILN-00301 reopened), and 4 `test_prepare.py` tests error (MM-BUG-CRU-00068 reopened).
 
 ## Notes

@@ -6,15 +6,15 @@
 - **Area:** fret-noise sample generation / output inventory
 - **Raised:** 2026-08-17T20:46:02Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T213634Z-9f94d643
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00293-run-verify-20260914T213634Z-9f94d643
+- **Owner base:** d580c5d8b5336ea402f2d20abc7985de908ed978
+- **Owner fingerprint:** sha256:2f99135fd51809121244818be7ae15c6ba9e6c313b7145120b2952e327a11816
+- **Owner since:** 2026-09-14T21:36:34Z
+- **Owner until:** 2026-09-14T23:36:34Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

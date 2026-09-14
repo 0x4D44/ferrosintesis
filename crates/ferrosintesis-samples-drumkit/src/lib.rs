@@ -832,7 +832,15 @@ fn decode_riff_wav(bytes: &[u8]) -> Vec<i16> {
     while pos + 8 <= bytes.len() {
         let id = &bytes[pos..pos + 4];
         let len = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().unwrap()) as usize;
-        let body = &bytes[pos + 8..(pos + 8 + len).min(bytes.len())];
+        let body_start = pos + 8;
+        let available = bytes.len() - body_start;
+        assert!(
+            len <= available,
+            "RIFF chunk {} body is {} bytes short",
+            String::from_utf8_lossy(id),
+            len.saturating_sub(available),
+        );
+        let body = &bytes[body_start..body_start + len];
         if id == b"fmt " {
             let channels = u16::from_le_bytes(body[2..4].try_into().unwrap());
             let sr = u32::from_le_bytes(body[4..8].try_into().unwrap());
@@ -859,6 +867,27 @@ mod tests {
     use std::ffi::OsStr;
     use std::fs;
     use std::path::Path;
+
+    #[test]
+    #[should_panic(expected = "RIFF chunk data body is 2 bytes short")]
+    fn riff_walker_rejects_overdeclared_data_chunk() {
+        let mut bytes = b"RIFF\0\0\0\0WAVE".to_vec();
+        bytes.extend_from_slice(b"fmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&[
+            1, 0, // PCM
+            1, 0, // mono
+            0x44, 0xac, 0, 0, // 44.1 kHz
+            0x88, 0x58, 0x01, 0, // byte rate
+            2, 0, // block alignment
+            16, 0, // bits per sample
+        ]);
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&4u32.to_le_bytes());
+        bytes.extend_from_slice(&[0, 0]);
+
+        decode_wav(&bytes);
+    }
 
     #[test]
     fn inventory_matches_packaged_flac_samples() {

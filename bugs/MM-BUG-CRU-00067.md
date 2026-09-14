@@ -6,15 +6,15 @@
 - **Area:** sample tooling / crate lib generator
 - **Raised:** 2026-09-13T19:23:49Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T213431Z-3eb22655
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00067-run-verify-20260914T213431Z-3eb22655
+- **Owner base:** 7feb1d38d066638dc487d3f6c6c0b637e71bff6f
+- **Owner fingerprint:** sha256:b2553ae54229c9b7235ea60cfd1421342e0adaf356c62407fc806a4e2503fd97
+- **Owner since:** 2026-09-14T21:34:31Z
+- **Owner until:** 2026-09-14T23:34:31Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

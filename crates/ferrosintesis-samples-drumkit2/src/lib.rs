@@ -456,11 +456,25 @@ mod tests {
     #[test]
     fn layer_for_velocity_respects_the_sfz_splits() {
         assert_eq!(CHINA.layer_for_velocity(25), 0);
+        assert_eq!(CHINA.layer_for_velocity(51), 1);
+        assert_eq!(CHINA.layer_for_velocity(52), 2);
+        assert_eq!(CHINA.layer_for_velocity(76), 2);
+        assert_eq!(CHINA.layer_for_velocity(77), 3);
+        assert_eq!(CHINA.layer_for_velocity(101), 3);
         assert_eq!(CHINA.layer_for_velocity(102), 4);
+        assert_eq!(SPLASH.layer_for_velocity(0), 0);
         assert_eq!(SPLASH.layer_for_velocity(64), 0);
+        assert_eq!(SPLASH.layer_for_velocity(127), 0);
         assert_eq!(CRASH.layer_for_velocity(42), 0);
         assert_eq!(CRASH.layer_for_velocity(43), 1);
+        assert_eq!(CRASH.layer_for_velocity(85), 1);
+        assert_eq!(CRASH.layer_for_velocity(86), 2);
         assert_eq!(CRASH.layer_for_velocity(127), 2);
+
+        for bank in BANKS {
+            assert_eq!(*bank.vel_hi.last().unwrap(), 127, "{}", bank.name);
+            assert!(bank.vel_hi.windows(2).all(|w| w[0] < w[1]), "{}", bank.name);
+        }
     }
 
     /// Aggregate embedded size, pinned. Catches a sample silently replaced by a

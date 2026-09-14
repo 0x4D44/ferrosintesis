@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00307 — Re-exec cold-cache probes pass vacuously when the child test-name filter matches nothing
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drum-kit test oracles
 - **Raised:** 2026-08-19T09:33:16Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260914T005509Z-dae62fb8
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00307-run-fix-20260914T005509Z-dae62fb8
-- **Owner base:** 5dfd4ab0d2594e1de6807c213abba0603e49f035
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-14T00:55:09Z
-- **Owner until:** 2026-09-14T02:55:09Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:16Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-19T09:33:16Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T00:56:35Z, deltic:auto role=fix run=fix-20260914T005509Z-dae62fb8 branch=task/bug-MM-BUG-KIL-00307-run-fix-20260914T005509Z-dae62fb8 code=0517847f846ab227031c56cc04b33ac80a0fdc75 gate=manual)
 
 ## Observation
 

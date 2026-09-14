@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00310 — routed_banks() hand-maintains the 13-bank list instead of deriving from the crates' BANKS exports
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sampler / drum-kit test derivation
 - **Raised:** 2026-08-19T09:33:22Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260913T235329Z-2306268a
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00310-run-fix-20260913T235329Z-2306268a
-- **Owner base:** 539453f4f2b5dfb1aeb6ac1f442b9f559e5c2e55
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-13T23:53:29Z
-- **Owner until:** 2026-09-14T01:53:29Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:22Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-19T09:33:22Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T00:22:50Z, deltic:auto role=fix run=fix-20260913T235329Z-2306268a branch=task/bug-MM-BUG-KIL-00310-run-fix-20260913T235329Z-2306268a code=47d3e4c9c1daea0b78e52784f298ef1c8eb3176d gate=manual)
 
 ## Observation
 

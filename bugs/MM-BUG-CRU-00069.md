@@ -6,15 +6,15 @@
 - **Area:** sample tooling / concurrent cache isolation
 - **Raised:** 2026-09-13T19:26:11Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T213601Z-139210ca
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00069-run-verify-20260914T213601Z-139210ca
+- **Owner base:** 9977b9e498e8170c136d90b28260e9cf2d601891
+- **Owner fingerprint:** sha256:5be59716993484d79f39fe3d731dbdc865696eac5c8cecc11ce313722710adec
+- **Owner since:** 2026-09-14T21:36:01Z
+- **Owner until:** 2026-09-14T23:36:01Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

@@ -4982,7 +4982,7 @@ class GenericFamilyWholeBankPublicationTest(unittest.TestCase):
         }
 
     @staticmethod
-    def staged_sample(name, _src):
+    def staged_sample(name, _src, _source_name=None):
         segment = [0.0, 0.25, -0.25, 0.0]
         row = (name, 440.0, 440.0, 440.0, 0.0, 1.0, len(segment) / prepare.OUT_SR)
         return segment, prepare.OUT_SR, row
@@ -5019,7 +5019,7 @@ class GenericFamilyWholeBankPublicationTest(unittest.TestCase):
         before = self.snapshot_bank()
         calls = 0
 
-        def fail_on_third(name, src):
+        def fail_on_third(name, src, _source_name=None):
             nonlocal calls
             calls += 1
             if calls == 3:
@@ -5097,7 +5097,7 @@ class StringsGenericScopedPublicationTest(unittest.TestCase):
         def fake_ensure_source(name, _url, _src):
             source_calls.append(name)
 
-        def fake_transform(name, _src):
+        def fake_transform(name, _src, _source_name=None):
             segment = [0.0, 0.25, -0.25, 0.0]
             row = (name, 440.0, 440.0, 440.0, 0.0, 1.0, len(segment) / prepare.OUT_SR)
             return segment, prepare.OUT_SR, row
@@ -5169,7 +5169,7 @@ class SteinwayGenericScopedPublicationTest(unittest.TestCase):
             for name, url in source_map.items():
                 source_calls.append((name, url))
 
-        def fake_transform(name, src):
+        def fake_transform(name, src, _source_name=None):
             transform_calls.append((name, src))
             segment = [0.0, 0.25, -0.25, 0.0]
             row = (name, 440.0, 440.0, 440.0, 0.0, 1.0, len(segment) / prepare.OUT_SR)

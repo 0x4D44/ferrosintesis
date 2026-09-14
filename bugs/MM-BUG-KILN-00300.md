@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00300 — The published CLI package carries no NOTICE, and the licensing oracles' enumeration predicate cannot see it
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:55:50Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260914T212042Z-ddf8c918
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00300-run-fix-20260914T212042Z-ddf8c918
-- **Owner base:** 1d87b00ffa704a9fb740b5fce27b059540f9c95b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-14T21:20:42Z
-- **Owner until:** 2026-09-14T23:20:42Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:55:50Z, raised via `deltic bugs new` model=claude-opus-5@high) → Blocked (2026-09-14T01:37:15Z, Codex GPT-5.6 on CRUCIBLE; blocked pending Arthur's licensing decision on whether the published CLI package must carry a redistributable NOTICE covering its embedded audio) → Open (2026-09-14T21:19:53Z, deltic:manual host=CRUCIBLE verdict=reopen)
+- **State history:** Open (2026-08-17T22:55:50Z, raised via `deltic bugs new` model=claude-opus-5@high) → Blocked (2026-09-14T01:37:15Z, Codex GPT-5.6 on CRUCIBLE; blocked pending Arthur's licensing decision on whether the published CLI package must carry a redistributable NOTICE covering its embedded audio) → Open (2026-09-14T21:19:53Z, deltic:manual host=CRUCIBLE verdict=reopen) → Fixed (2026-09-14T21:32:25Z, deltic:auto role=fix run=fix-20260914T212042Z-ddf8c918 branch=task/bug-MM-BUG-KILN-00300-run-fix-20260914T212042Z-ddf8c918 code=75f6387039b7c89c4359b9c49e4a2360e4c3566d gate=manual)
 
 ## Observation
 

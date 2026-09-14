@@ -6,15 +6,15 @@
 - **Area:** sample assets / drumkit2 audio validation
 - **Raised:** 2026-09-13T19:32:32Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T213146Z-3c576c54
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00073-run-verify-20260914T213146Z-3c576c54
+- **Owner base:** 1ffad60d0cbf1ff603e8eb863ce317afb570b0b2
+- **Owner fingerprint:** sha256:346dc53d7a90a8c3c4ad8274b833342a040feead29fe7d7c828fbedf63727708
+- **Owner since:** 2026-09-14T21:31:46Z
+- **Owner until:** 2026-09-14T23:31:46Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

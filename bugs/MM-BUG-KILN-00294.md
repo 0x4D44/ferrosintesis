@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00294 — Windows identity probe's exclusive input open aborts the render when any process is reading the MIDI
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:47:52Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T215909Z-3bdf524f
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00294-run-verify-20260914T215909Z-3bdf524f
-- **Owner base:** 74a8ba3c8c7297319c3ab71b782a8920d34c693f
-- **Owner fingerprint:** sha256:331ad7fc05f6ac63f4e060ceee6177c3a4eb914d81754fb6c643f39dfcb29383
-- **Owner since:** 2026-09-14T21:59:09Z
-- **Owner until:** 2026-09-14T23:59:09Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:47:52Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:46:15Z, deltic:auto role=fix run=fix-20260913T222304Z-5f794e50 branch=task/bug-MM-BUG-KILN-00294-run-fix-20260913T222304Z-5f794e50 code=b5bc0ae5ef7edc0fb4981be054dcd486577704f5 gate=manual)
+- **State history:** Open (2026-08-17T22:47:52Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:46:15Z, deltic:auto role=fix run=fix-20260913T222304Z-5f794e50 branch=task/bug-MM-BUG-KILN-00294-run-fix-20260913T222304Z-5f794e50 code=b5bc0ae5ef7edc0fb4981be054dcd486577704f5 gate=manual) -> Closed (2026-09-14T22:04:11Z, independent verify by Claude Opus 5 on trunk 1d87b00f: a reader-held input no longer aborts the render (live re-run and new tests; an exclusive-guard mutant fails both); an input held open for writing still aborts, split to MM-BUG-CRU-00076)
 
 ## Observation
 
@@ -99,6 +99,20 @@ exclusive open **conditional and non-fatal**.
 Note stable Rust does not expose `volume_serial_number`/`file_index` (the `windows_by_handle`
 feature is unstable), so the probe cannot simply be replaced with real identity —
 `MM-BUG-KILN-00120.md:107-109` records that constraint and it still holds.
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunk `1d87b00f` (fix `b5bc0ae5`) by an agent other than the fixer.
+
+**Original observation, re-run live on Windows.** Debug CLI built from `1d87b00f`, a prior `score.wav` present, and `score.mid` held open by a reader (Python `open(path, 'rb')`): `ferrosintesis score.mid -o score.wav --tail 0 --no-samples -q` exits 0. With no holder it also exits 0. The new `read_shared_distinct_input_does_not_abort_render` and `hard_link_alias_is_rejected_with_a_permissive_input_reader` pass in the gate.
+
+**Root cause check.** `platform_same_file` now holds the input with `share_mode(1)` (FILE_SHARE_READ) instead of `share_mode(0)`, and probes the output with a write open that shares everything. That probe conflicts with the guard only when the output name resolves to the guarded input, and a sharing violation still counts as an alias only if it clears once the guard is dropped.
+
+**Fails-before (method B).** Changing the input guard back to `share_mode(0)` fails both new tests with os error 32: 'distinct output failed with a read-shared input', and the hard-link test 'stderr did not explain the alias rejection'. Restored.
+
+**Residual split to MM-BUG-CRU-00076.** With the input held open for writing (Python `open(path, 'r+b')`) and a prior output present, the same command exits 1: 'error: <dir>\score.mid: The process cannot access the file because it is being used by another process. (os error 32)'. This bug's expected result says a sharing condition on the input must not abort a render the synthesizer can perform. The diagnostic now names the path (MM-BUG-KILN-00298), so the reader case this bug recorded is fixed and the writer case is tracked separately.
+
+**Repo gate on `1d87b00f`.** Green: fmt, all three clippy steps, `cargo test -p ferrosintesis-cli --no-default-features`, and `cargo test --workspace --all-targets`. Red, not caused by this fix: `cargo test -p ferrosintesis --no-default-features` fails `no_default_gate_is_paired_with_embedded_sample_coverage` (MM-BUG-KILN-00301 reopened), and 4 `test_prepare.py` tests error (MM-BUG-CRU-00068 reopened).
 
 ## Notes
 

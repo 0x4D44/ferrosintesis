@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00298 — Pre-load I/O errors from the alias check drop the file path the library deliberately preserves
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:50:18Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T215437Z-a6b70898
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00298-run-verify-20260914T215437Z-a6b70898
-- **Owner base:** 7d1ae0eca548bb63f155fe3336404226a5d7b7ed
-- **Owner fingerprint:** sha256:c035f3e9c7faa5ccaef84acaf982755bb2cc1149d1824e9e14b3b044eebe2372
-- **Owner since:** 2026-09-14T21:54:37Z
-- **Owner until:** 2026-09-14T23:54:37Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:50:18Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T23:06:18Z, deltic:auto role=fix run=fix-20260913T225802Z-54eaf8ae branch=task/bug-MM-BUG-KILN-00298-run-fix-20260913T225802Z-54eaf8ae code=f77f24488512b6f5296bde611018a8dd3f963c19 gate=manual)
+- **State history:** Open (2026-08-17T22:50:18Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T23:06:18Z, deltic:auto role=fix run=fix-20260913T225802Z-54eaf8ae branch=task/bug-MM-BUG-KILN-00298-run-fix-20260913T225802Z-54eaf8ae code=f77f24488512b6f5296bde611018a8dd3f963c19 gate=manual) -> Closed (2026-09-14T22:04:11Z, independent verify by Claude Opus 5 on trunk 011738f6: pre-load I/O errors from the alias check now carry the path; ferrosintesis missing.mid names missing.mid, and dropping the wrap fails the regression test)
 
 ## Observation
 
@@ -69,6 +69,20 @@ have `main.rs:112-115` print `error: {}: {e}` naming whichever path the check wa
 The first is better — `output.rs` knows which of the two paths failed and the caller does
 not. Add a regression asserting the missing-input message contains the filename; confirm it
 fails first.
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunks `258e957b` (verifier worker) and `011738f6` (lead) by agents other than the fixer (fix `f77f2448`).
+
+**Original observation, re-run live by the lead.** `ferrosintesis missing.mid` exits 1 with `error: missing.mid: The system cannot find the file specified. (os error 2)`, the exact message the record expected. On Windows the MM-BUG-KILN-00294 sharing violation now names `...\score.mid` too.
+
+**Root cause check.** `output.rs` wraps every I/O error the alias check can raise with `path_error`: input and output `canonicalize`, the unix metadata calls, and the Windows input guard and output probe. The library's comment 'Display keeps the path, which is what the CLI prints' is true again for failures before load.
+
+**Fails-before (method B).** `output_safety::missing_input_error_names_the_input_path` passes. Reverting `fs::canonicalize(input).map_err(|error| path_error(input, error))?` to `fs::canonicalize(input)?` fails it: 'missing input path was dropped: error: The system cannot find the file specified. (os error 2)'. Restored.
+
+**Not split.** Only the input-canonicalize wrap has a test; the output and Windows-probe wraps are correct by reading. The Windows input-guard wrap was also observed in the MM-BUG-KILN-00294 live probe.
+
+**Repo gate.** On `258e957b`: `cargo test -p ferrosintesis-cli --locked --all-targets` 32 passed, and the CLI no-default run 27 passed. On `1d87b00f`: fmt, all three clippy steps and `cargo test --workspace --all-targets` green. Still red on trunk, not caused by this fix: 4 `test_prepare.py` errors (MM-BUG-CRU-00068, reopened).
 
 ## Notes
 

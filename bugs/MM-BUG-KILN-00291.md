@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00291 — Fret-noise public API still documents WAV keys and bytes after FLAC conversion
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** fret-noise sample crate / public lookup contract
 - **Raised:** 2026-08-17T20:45:41Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T214853Z-ba345098
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00291-run-verify-20260914T214853Z-ba345098
-- **Owner base:** 510a20972b69225c5e709eb2910f18227b5708ef
-- **Owner fingerprint:** sha256:4f83b6c9856bc08bc490aadc6119110d7e594d2c9f3f4928a85c6d505aa7d5cf
-- **Owner since:** 2026-09-14T21:48:53Z
-- **Owner until:** 2026-09-14T23:48:53Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T20:45:41Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:32:20Z, deltic:auto role=fix run=fix-20260913T192808Z-986c2aa3 branch=task/bug-MM-BUG-KILN-00291-run-fix-20260913T192808Z-986c2aa3 code=84b6a05dcc286fc0974bd7c416a0bdd941ac77c2 gate=manual)
+- **State history:** Open (2026-08-17T20:45:41Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:32:20Z, deltic:auto role=fix run=fix-20260913T192808Z-986c2aa3 branch=task/bug-MM-BUG-KILN-00291-run-fix-20260913T192808Z-986c2aa3 code=84b6a05dcc286fc0974bd7c416a0bdd941ac77c2 gate=manual) -> Closed (2026-09-14T22:04:11Z, independent verify by Claude Opus 5 on trunk 1d87b00f: fret-noise rustdoc, README and PROVENANCE now describe .flac keys and FLAC bytes; a positive documented-key lookup test passes)
 
 ## Observation
 
@@ -28,5 +28,15 @@ Static review found that the published fret-noise asset crate still documents WA
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunk `1d87b00f` (fix `84b6a05d`) by an agent other than the fixer.
+
+**Original observation, re-derived.** The crate's `samples/` holds 12 files, `fretnoise_rr01.flac` to `fretnoise_rr12.flac`. The `get` rustdoc now says it returns FLAC bytes for an exact `.flac` name; the README shows `get("fretnoise_rr01.flac")` asserting `fLaC`; PROVENANCE documents the `.flac` lookup key. `public_lookup_accepts_the_documented_flac_name` passes: the documented key resolves to `fLaC` bytes and `fretnoise_rr01.wav` returns `None`. The remaining 'wav' mentions describe the tracked source cuts (`cuts/fret_rrNN.wav` hashes, restoring source WAVs) or name `sampler::parse_wav`, which is accurate.
+
+**Fails-before (method A).** Against `84b6a05d^`, the README lacks the `.flac` example and `fLaC` check and the rustdoc lacks the FLAC wording, so `FretnoisePackagedContractTest` fails there; it passes on the fix and in the gate's Python suite. The fix is docs-only, so the new Rust lookup test pins behaviour that was already correct; closure rests on the re-derivation above.
+
+**Repo gate on `1d87b00f`.** Green: fmt, all three clippy steps, `cargo test -p ferrosintesis-cli --no-default-features`, and `cargo test --workspace --all-targets`. Red, not caused by this fix: `cargo test -p ferrosintesis --no-default-features` fails `no_default_gate_is_paired_with_embedded_sample_coverage` (MM-BUG-KILN-00301 reopened), and 4 `test_prepare.py` tests error (MM-BUG-CRU-00068 reopened).
 
 ## Notes

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00302 — WAV decoder tests: byte-rate check unreachable by construction, a mis-named truncation test, uncovered error arms, and a temp-path race
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:56:53Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T220048Z-698c68b2
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00302-run-verify-20260914T220048Z-698c68b2
-- **Owner base:** e9ec0dff9bd6ec9176f2ac2b1a3db0d318c75460
-- **Owner fingerprint:** sha256:8863ab19c0c26e783ccaaea9b2a3dc61171c9d72c44a8f4487f9db2e47797a0a
-- **Owner since:** 2026-09-14T22:00:48Z
-- **Owner until:** 2026-09-15T00:00:48Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:56:53Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-14T00:34:47Z, deltic:auto role=fix run=fix-20260914T002403Z-4dcbac32 branch=task/bug-MM-BUG-KILN-00302-run-fix-20260914T002403Z-4dcbac32 code=4655cbd6 gate=manual)
+- **State history:** Open (2026-08-17T22:56:53Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-14T00:34:47Z, deltic:auto role=fix run=fix-20260914T002403Z-4dcbac32 branch=task/bug-MM-BUG-KILN-00302-run-fix-20260914T002403Z-4dcbac32 code=4655cbd6 gate=manual) -> Closed (2026-09-14T22:04:11Z, independent verify by Claude Opus 5 on trunk 258e957b: each of the four WAV-decoder test gaps now fails on a decoder mutation or is closed by construction; two overflow arms stay uncovered by design)
 
 ## Observation
 
@@ -81,6 +81,20 @@ temp helper here — `remove_file` sits between the write and the assertion, so 
 4. Add a `label: &str` to `TestWav::at_rate` and thread it through both call sites, matching
    the sibling helpers. Wrap `tests/wav_reader.rs:33-39` in the same `TestDir`/`Drop` shape
    the rest of the crate uses.
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunk `258e957b` by an independent verifier worker in this pass, other than the fixer (fix `4655cbd6`). This is a test-only bug, so each numbered item was checked by mutating the decoder in `examples/support/wav.rs` and watching the named test go red. Every mutation was restored.
+
+**Item 1, unreachable byte-rate check.** A fixture can now state a wrong byte rate (`wav_bytes_with_byte_rate`). Disabling the check (`if false && ...`) fails `rejects_bad_headers_chunks_channels_and_byte_rate` at `wav_reader.rs:171`: `unwrap_err()` on an `Ok` value.
+
+**Item 2, mis-targeted truncation test.** The truncated-fmt fixture now has a consistent RIFF size and asserts the exact 'truncated fmt chunk' message. Renaming that message fails `rejects_missing_or_truncated_format_and_missing_data` at `:123`.
+
+**Item 3, uncovered arms.** 'not a RIFF/WAVE file', 'truncated WAV chunk header', 'truncated {} chunk', 'truncated padding after WAV chunk', and 'need mono or stereo' (0 and 3 channels) each fail their own assertion (`:140`, `:146`, `:151`, `:158`, `:164`) when their message changes. 'RIFF size overflows this platform' and 'WAV padding offset overflow' stay uncovered: neither is reachable on 64-bit with in-memory fixtures, and a test comment says so.
+
+**Item 4, temp-name race.** Checked by reading, not by a red run. `TestWav::at_rate(label, rate)` now takes a label, and the two calmeter tests pass 'one-hz' and 'lowest-supported', so their paths cannot collide. The `wav_reader` temp file sits in an RAII `TestDir`, so a panic no longer leaks it. Both calmeter tests pass in the gate's `--all-targets` run (MM-BUG-KILN-00301 made them run).
+
+**Repo gate.** On `258e957b`: `cargo test -p ferrosintesis-cli --locked --all-targets` 32 passed (wav_reader 8, calmeter 5), and the CLI no-default run 27 passed. On `1d87b00f`: fmt, all three clippy steps and `cargo test --workspace --all-targets` green. Still red on trunk, not caused by this fix: 4 `test_prepare.py` errors (MM-BUG-CRU-00068, reopened).
 
 ## Notes
 

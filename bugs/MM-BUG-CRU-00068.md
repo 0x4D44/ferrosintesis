@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00068 — Freesound and Eastman source intakes copy into the shared vsco2ce_src temp directory with no lock or per-run path
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** sample tooling / concurrent source isolation
 - **Raised:** 2026-09-13T19:26:11Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260914T214309Z-817d11a1
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00068-run-fix-20260914T214309Z-817d11a1
-- **Owner base:** 7f1d5befd27f9aa7a10c89df1c6c134682336d30
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-14T21:43:09Z
-- **Owner until:** 2026-09-14T23:43:09Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-13T19:26:11Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T21:45:03Z, deltic:auto role=fix run=fix-20260913T212430Z-44a85e6e branch=task/bug-MM-BUG-CRU-00068-run-fix-20260913T212430Z-44a85e6e code=d44a74e37c6fec84052d83eac7bb713962f44ea7 gate=manual) -> Open (2026-09-14T21:33:15Z, independent verify by Claude Opus 5 on trunk 1d87b00f: the committed-source isolation is right, but the new three-argument _prepare_generic_source_sample call breaks four existing test_prepare.py tests, leaving the gate's unittest step red)
+- **State history:** Open (2026-09-13T19:26:11Z, raised via `deltic bugs new` model=claude-opus-5) -> Fixed (2026-09-13T21:45:03Z, deltic:auto role=fix run=fix-20260913T212430Z-44a85e6e branch=task/bug-MM-BUG-CRU-00068-run-fix-20260913T212430Z-44a85e6e code=d44a74e37c6fec84052d83eac7bb713962f44ea7 gate=manual) -> Open (2026-09-14T21:33:15Z, independent verify by Claude Opus 5 on trunk 1d87b00f: the committed-source isolation is right, but the new three-argument _prepare_generic_source_sample call breaks four existing test_prepare.py tests, leaving the gate's unittest step red) -> Fixed (2026-09-14T21:55:07Z, deltic:auto role=fix run=fix-20260914T214309Z-817d11a1 branch=task/bug-MM-BUG-CRU-00068-run-fix-20260914T214309Z-817d11a1 code=7d0a7437ec3f2c12c12908ea7164556b1b26cf44 gate=manual)
 
 ## Observation
 

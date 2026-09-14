@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00305 — decode_riff_wav silently truncates an over-declared data chunk instead of panicking
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drum-kit RIFF fallback decoder
 - **Raised:** 2026-08-19T09:33:15Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260914T003625Z-ced54b4c
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00305-run-fix-20260914T003625Z-ced54b4c
-- **Owner base:** 310274470f5cee6668fdb11c84eecbae28d1274b
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-14T00:36:25Z
-- **Owner until:** 2026-09-14T02:36:25Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:15Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-19T09:33:15Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T00:44:11Z, deltic:auto role=fix run=fix-20260914T003625Z-ced54b4c branch=task/bug-MM-BUG-KIL-00305-run-fix-20260914T003625Z-ced54b4c code=530be42c gate=manual)
 
 ## Observation
 

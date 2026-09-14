@@ -6,15 +6,15 @@
 - **Area:** ferrosintesis / realtime voice test probes
 - **Raised:** 2026-09-13T19:23:18Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T212319Z-ed9103c7
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00063-run-verify-20260914T212319Z-ed9103c7
+- **Owner base:** 66d79b5442ca7d81cd7826c4a28fd8edc0a81b97
+- **Owner fingerprint:** sha256:3358966524f5dbdbeeee6fa179ea167db55d33a0ebff2e36f71fa89f87fb29c9
+- **Owner since:** 2026-09-14T21:23:19Z
+- **Owner until:** 2026-09-14T23:23:19Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

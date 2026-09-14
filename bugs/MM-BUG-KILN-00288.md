@@ -6,15 +6,15 @@
 - **Area:** sample inventory / public package surfaces
 - **Raised:** 2026-08-17T13:41:00Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T214143Z-feff5e7a
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KILN-00288-run-verify-20260914T214143Z-feff5e7a
+- **Owner base:** 1288b14f33a2da2eaf010856db609febc4b77ae7
+- **Owner fingerprint:** sha256:dc097a43b901f4f46964bf4d9ccea3b82561a0affa5248c896fee26a042c0829
+- **Owner since:** 2026-09-14T21:41:43Z
+- **Owner until:** 2026-09-14T23:41:43Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

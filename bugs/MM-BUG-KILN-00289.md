@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00289 — Orchestral package publishes stale inventory, routing, and FLAC contracts
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** orchestral sample crate / public package contract
 - **Raised:** 2026-08-17T13:41:05Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T214644Z-c66fc9c8
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00289-run-verify-20260914T214644Z-c66fc9c8
-- **Owner base:** e48af046b959850afd0a8c15215b6a3422e7390d
-- **Owner fingerprint:** sha256:e67599e6a30aab1edc0d25adebf8e4a654839bac9ae56d9956444c2d012f1075
-- **Owner since:** 2026-09-14T21:46:44Z
-- **Owner until:** 2026-09-14T23:46:44Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T13:41:05Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:27:08Z, deltic:auto role=fix run=fix-20260913T191728Z-96ba64bb branch=task/bug-MM-BUG-KILN-00289-run-fix-20260913T191728Z-96ba64bb code=900d8cd2f2e9d3cdf15e5fee038d2666a7c7fcc6 gate=manual)
+- **State history:** Open (2026-08-17T13:41:05Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T19:27:08Z, deltic:auto role=fix run=fix-20260913T191728Z-96ba64bb branch=task/bug-MM-BUG-KILN-00289-run-fix-20260913T191728Z-96ba64bb code=900d8cd2f2e9d3cdf15e5fee038d2666a7c7fcc6 gate=manual) -> Closed (2026-09-14T22:01:21Z, independent verify by Claude Opus 5 on trunk 1d87b00f: orchestral README, PROVENANCE, manifest and module docs re-derived against the payload, the sampler routes and the pinned VCSL revision)
 
 ## Observation
 
@@ -62,6 +62,21 @@ review only; the example, decoder, app, and package command were not run.
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunk `1d87b00f` (fix `900d8cd2`) by an agent other than the fixer.
+
+**Each recorded claim, re-derived against code and files.**
+- Payload: 158 files, all `.flac`; the README's `get("trumpet_C3_f.flac")` example names a real key (`src/lib.rs:480`) and asserts `fLaC`.
+- Bagpipe: README counts two `drone_*` and fifteen `chanter_*`, matching the table. It now says `LoopVoice` plays those files as whole loops, which matches `sampler.rs:3089` (`bagpipe_chanter_loop -> LoopVoice`) and the looped drone banks at `sampler.rs:2950-2967`.
+- Routes: PROVENANCE maps `celens_*` to the GM 48-49 string sections' low split, matching `sampler.rs:962-970`; GM 42 uses the separate solo-cello attack at `sampler.rs:1196`.
+- Harpsichord: the README names VCSL revision `c1ea7bcc...`, equal to `prepare.py` `VCSL_REV`.
+- Manifest names harpsichord and bagpipe; module docs say onset and looped-sustain samples; PROVENANCE says the payloads are FLAC.
+
+**Fails-before (method A).** Against `900d8cd2^`, six of the eight checks in `OrchestralPackagedContractTest` fail (LoopVoice wording, harpsichord source, FLAC note, GM 42 celens row, manifest, module docs); all eight hold on the fix. The FLAC `get` example and the chanter count were already right before this commit. These are text needles, so the re-derivation above is what supports closure. The test passes in the gate's Python suite (its 4 errors are the MM-BUG-CRU-00068 classes).
+
+**Repo gate on `1d87b00f`.** Green: fmt, all three clippy steps, `cargo test -p ferrosintesis-cli --no-default-features`, and `cargo test --workspace --all-targets`. Red, not caused by this fix: `cargo test -p ferrosintesis --no-default-features` fails `no_default_gate_is_paired_with_embedded_sample_coverage` (MM-BUG-KILN-00301 reopened), and 4 `test_prepare.py` tests error (MM-BUG-CRU-00068 reopened).
 
 ## Notes
 

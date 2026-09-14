@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00296 — CLI prints and silently accepts option values the render did not use
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Medium
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:49:17Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T214717Z-4a8a7839
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00296-run-verify-20260914T214717Z-4a8a7839
-- **Owner base:** 81252a3ea5b476cef5fce2e960de6a185a639f9c
-- **Owner fingerprint:** sha256:6d24165d2564799ff1adc72d2d885d6568b93ad2f5b51f73bc333c3552d4980f
-- **Owner since:** 2026-09-14T21:47:17Z
-- **Owner until:** 2026-09-14T23:47:17Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:49:17Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:47:30Z, deltic:auto role=fix run=fix-20260913T223726Z-cb762c16 branch=task/bug-MM-BUG-KILN-00296-run-fix-20260913T223726Z-cb762c16 code=da4e3b87c5f8f65fc2792894bf43e9ad97b9229a gate=manual)
+- **State history:** Open (2026-08-17T22:49:17Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:47:30Z, deltic:auto role=fix run=fix-20260913T223726Z-cb762c16 branch=task/bug-MM-BUG-KILN-00296-run-fix-20260913T223726Z-cb762c16 code=da4e3b87c5f8f65fc2792894bf43e9ad97b9229a gate=manual) -> Closed (2026-09-14T22:01:21Z, independent verify by Claude Opus 5 on trunk 011738f6: the CLI now warns for every clamped knob and its summary prints the effective echo; reversing either change fails the regression tests)
 
 ## Observation
 
@@ -92,6 +92,22 @@ library's own doc-comment tells callers to do:
    warns. Confirm both fail before the fix. The crate currently has **no** test of argument
    handling at all — `src/main.rs` holds one test and it is about the `embedded-samples`
    feature flag (`main.rs:191-200`).
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunks `258e957b` (verifier worker) and `011738f6` (lead) by agents other than the fixer (fix `da4e3b87`).
+
+**Original observation, re-run live.** The lead ran the debug CLI on a one-note MIDI:
+- `--delay 60000` warns 'warning: --delay 60000 ms is out of range; using 10000 ms', and the summary line ends '(echo 10000 ms)', where it used to print 60000;
+- `--delay nan` warns 'using 375 ms' and the summary says '(echo 375 ms)';
+- `--wet 5 -q` warns 'warning: --wet 5 is out of range; using 1'.
+The worker also saw `--rate 500000` -> 384000, `--rate 100` -> 8000, `--tail 99999` -> 3600, `--wet nan` -> 0.32 and `--tail inf` -> 6. Each warns, even under `-q`, and exits 0.
+
+**Root cause check.** `opt` is now built before the summary. The summary prints `opt.echo()`, and each requested knob is compared with its accessor, which is the reporting path the library's own docs name.
+
+**Fails-before (method B).** `reports_effective_clamped_options` (`tests/output_safety.rs`) and `tests::reports_each_changed_option_against_the_effective_value` pass. Printing the pre-clamp `delay_s * 1000.0` again fails the first at `output_safety.rs:179`: 'summary did not report the effective echo'. Suppressing the warning print fails it at `:167`: 'wet clamp was not reported'. Both restored.
+
+**Repo gate on `1d87b00f`.** Green: fmt, all three clippy steps, `cargo test -p ferrosintesis-cli --no-default-features`, and `cargo test --workspace --all-targets`. The library no-default step red there (MM-BUG-KILN-00301) is green on `011738f6`. Still red, not caused by this fix: 4 `test_prepare.py` errors (MM-BUG-CRU-00068, reopened).
 
 ## Notes
 

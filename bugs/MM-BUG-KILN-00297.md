@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00297 — CLI argument handling breaks conventions: --help to stderr with exit 2, no --version, unknown flags taken as the input path
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:49:50Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T214830Z-4b39deb5
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00297-run-verify-20260914T214830Z-4b39deb5
-- **Owner base:** 011738f6019292d2e359ee34c42f69ea43d439cf
-- **Owner fingerprint:** sha256:1ac66abd4693261d9572919a049a58f3917e287e6af0c1078e565e0bd69543e5
-- **Owner since:** 2026-09-14T21:48:30Z
-- **Owner until:** 2026-09-14T23:48:30Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:49:50Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:57:12Z, deltic:auto role=fix run=fix-20260913T224834Z-f41a6f70 branch=task/bug-MM-BUG-KILN-00297-run-fix-20260913T224834Z-f41a6f70 code=03e7af68c7d75415e6d542a22e1e375950309ee4 gate=manual)
+- **State history:** Open (2026-08-17T22:49:50Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:57:12Z, deltic:auto role=fix run=fix-20260913T224834Z-f41a6f70 branch=task/bug-MM-BUG-KILN-00297-run-fix-20260913T224834Z-f41a6f70 code=03e7af68c7d75415e6d542a22e1e375950309ee4 gate=manual) -> Closed (2026-09-14T22:01:21Z, independent verify by Claude Opus 5 on trunk 011738f6: --help prints to stdout and exits 0, --version exists, and an unknown option is named whatever its position; reversing each change fails its CLI test)
 
 ## Observation
 
@@ -84,6 +84,26 @@ Suggested shape, no new dependency (the workspace forbids registry deps):
    Confirm each fails before the fix. The crate has **no** argument-parsing test today —
    `src/main.rs` holds a single test, about the `embedded-samples` feature flag
    (`main.rs:191-200`).
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunks `258e957b` (verifier worker) and `011738f6` (lead) by agents other than the fixer (fix `03e7af68`).
+
+**Original observation, re-run live by the lead.**
+- `ferrosintesis --help` exits 0, with `usage: ferrosintesis <input.mid> ...` on stdout and nothing on stderr.
+- `--version` exits 0 and prints `ferrosintesis 0.14.4`.
+- `--bogus score.mid` and `score.mid --bogus` both exit 2 with 'error: unknown option `--bogus`' plus usage.
+The worker also saw `-h` and `-V` behave the same, and `-- -x.mid` treat `-x.mid` as the input path.
+
+**Root cause check.** Requested help (stdout, exit 0) and usage errors (stderr, exit 2) now have separate exits. A `--version`/`-V` arm exists. Any token starting with `-` that matches no flag is rejected by name before the input-path arm, and `--` ends option parsing. All three symptoms were fixed at their shared cause, the argument loop.
+
+**Fails-before (method B).** `tests/cli_arguments.rs` has four tests, all passing. With help routed back to the usage error, the `--version` arm deleted and the unknown-option arm deleted:
+- `help_is_successful_on_stdout` fails (exit 2, empty stdout);
+- `version_is_successful_and_names_the_package` fails with the recorded symptom: exit 1, 'The system cannot find the file specified. (os error 2)';
+- `unknown_option_is_named_regardless_of_position` fails.
+`end_of_options_allows_a_dash_prefixed_input_path` stays green, as expected. Restored.
+
+**Repo gate.** On `258e957b`: `cargo test -p ferrosintesis-cli --locked --all-targets` 32 passed, and the CLI no-default run 27 passed. On `1d87b00f`: fmt, all three clippy steps and `cargo test --workspace --all-targets` green. Still red on trunk, not caused by this fix: 4 `test_prepare.py` errors (MM-BUG-CRU-00068, reopened).
 
 ## Notes
 

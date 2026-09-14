@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00229 — Fret-noise regeneration can publish a partial mixed bank after a late write failure
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** fret-noise sample generation / failure atomicity
 - **Raised:** 2026-08-16T16:53:19Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T214025Z-2eb751a6
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00229-run-verify-20260914T214025Z-2eb751a6
-- **Owner base:** 0df2e3542d5ef3aa9cdbbdaf2328bd4875f7bda4
-- **Owner fingerprint:** sha256:f59aa7f3f817b3ff975818146f03f6b66cf080da2a70326dff99b799070aaa28
-- **Owner since:** 2026-09-14T21:40:25Z
-- **Owner until:** 2026-09-14T23:40:25Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-16T16:53:19Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T05:41:55Z, deltic:auto role=fix run=fix-20260913T053018Z-56ab7513 branch=task/bug-MM-BUG-KILN-00229-run-fix-20260913T053018Z-56ab7513 code=b30f9fc89a0488fcd825b7ad71312de48789700a gate=manual) -> Open (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: the code fix works, but reverting main() to its direct-to-out_dir loop leaves all seven committed tests green, so the regression does not cover the fix) -> Fixed (2026-09-13T22:05:46Z, deltic:auto role=fix run=fix-20260913T220044Z-d005d852 branch=task/bug-MM-BUG-KILN-00229-run-fix-20260913T220044Z-d005d852 code=e71819f98707814bbcbe536c2a37d8cea3ad6ab5 gate=manual)
+- **State history:** Open (2026-08-16T16:53:19Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-13T05:41:55Z, deltic:auto role=fix run=fix-20260913T053018Z-56ab7513 branch=task/bug-MM-BUG-KILN-00229-run-fix-20260913T053018Z-56ab7513 code=b30f9fc89a0488fcd825b7ad71312de48789700a gate=manual) -> Open (2026-09-13T20:22:13Z, independent verify by Claude Opus 5 on trunk 8b6a6f86: the code fix works, but reverting main() to its direct-to-out_dir loop leaves all seven committed tests green, so the regression does not cover the fix) -> Fixed (2026-09-13T22:05:46Z, deltic:auto role=fix run=fix-20260913T220044Z-d005d852 branch=task/bug-MM-BUG-KILN-00229-run-fix-20260913T220044Z-d005d852 code=e71819f98707814bbcbe536c2a37d8cea3ad6ab5 gate=manual) -> Closed (2026-09-14T22:01:21Z, independent verify by Claude Opus 5 on trunk 011738f6: the re-fix test drives main(); the exact mutant that reopened this bug (main encoding straight into out_dir) now fails it)
 
 ## Observation
 
@@ -47,6 +47,18 @@ validate exact inventory, hashes, and WAV structure there, then publish the bank
 with backups and rollback if any replacement fails. Add negative controls for a
 late staged write failure and a late final replacement failure; both must leave
 every pre-existing destination byte-identical.
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified by agents other than the fixer on trunks `00990a87` and `011738f6` (re-fix `e71819f9`, after this bug's reopen of `b30f9fc8`). The lead reproduced the reopen mutant.
+
+**Reopen reason resolved.** The previous verifier reopened this because reverting `main()` to its direct-to-`out_dir` loop left every test green. `test_fretnoise_bake.FretNoiseBakeTests.test_main_late_encode_failure_preserves_published_bank` now calls `main()` with an encode that fails late.
+
+**Fails-before (method B, the recorded mutant).** Replacing the stage-then-publish block in `main()` with `for name, payload, *_ in payloads: encode_flac(payload, out_dir / name)` fails that test. The published bank holds `b'new payload 1'` where `b'old bank: fretnoise_rr01.flac'` should remain. Restored; the worktree was clean afterwards.
+
+**Original observation.** A late write failure no longer leaves a partial bank: `main()` stages into a temp directory beside the crate and publishes through `publish_fretnoise_bank`, which restores the old bank on failure. All 10 `test_fretnoise_bake` tests pass with no skips (numpy present).
+
+**Repo gate.** The Python suite on `1d87b00f` and `00990a87` ends 'Ran 281 ... FAILED (errors=4)', all four in the MM-BUG-CRU-00068 classes (reopened), none in `test_fretnoise_bake.py`. The cargo gate steps do not build `tools/`.
 
 ## Notes
 

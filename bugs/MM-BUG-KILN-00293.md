@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00293 — Successful fret-noise rebake retains obsolete packaged outputs
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** fret-noise sample generation / output inventory
 - **Raised:** 2026-08-17T20:46:02Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T213634Z-9f94d643
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00293-run-verify-20260914T213634Z-9f94d643
-- **Owner base:** d580c5d8b5336ea402f2d20abc7985de908ed978
-- **Owner fingerprint:** sha256:2f99135fd51809121244818be7ae15c6ba9e6c313b7145120b2952e327a11816
-- **Owner since:** 2026-09-14T21:36:34Z
-- **Owner until:** 2026-09-14T23:36:34Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T20:46:02Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T22:25:43Z, deltic:auto role=fix run=fix-20260913T222146Z-4ed9d0d2 branch=task/bug-MM-BUG-KILN-00293-run-fix-20260913T222146Z-4ed9d0d2 code=9936535ba2d81172b36d869dfa3e500be06f1f84 gate=manual)
+- **State history:** Open (2026-08-17T20:46:02Z, raised via `deltic bugs new`) -> Fixed (2026-09-13T22:25:43Z, deltic:auto role=fix run=fix-20260913T222146Z-4ed9d0d2 branch=task/bug-MM-BUG-KILN-00293-run-fix-20260913T222146Z-4ed9d0d2 code=9936535ba2d81172b36d869dfa3e500be06f1f84 gate=manual) -> Closed (2026-09-14T22:01:21Z, independent verify by Claude Opus 5 on trunk 011738f6: a successful fret-noise publish now removes obsolete generated takes; removing that step fails the regression test)
 
 ## Observation
 
@@ -28,5 +28,15 @@ A successful normal fret-noise bake does not reconcile the packaged output set. 
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunks `00990a87` and `011738f6` (fix `9936535b`) by agents other than the fixer: a verifier worker ran the mutation, and the lead re-ran the test.
+
+**Original observation.** A successful rebake no longer keeps obsolete packaged outputs. `publish_fretnoise_bank` removes generated `fretnoise_rr*.flac` files that are not in the new bank. `test_successful_publish_removes_obsolete_generated_files` passes.
+
+**Fails-before (method B).** Removing the obsolete-file unlink loop fails it: 'Items in the first set but not the second: fretnoise_rr99.flac'. Restored.
+
+**Repo gate.** The Python suite on `1d87b00f` and `00990a87` ends 'Ran 281 ... FAILED (errors=4)', all four in the MM-BUG-CRU-00068 classes (reopened), none in `test_fretnoise_bake.py`. The cargo gate steps do not build `tools/`.
 
 ## Notes

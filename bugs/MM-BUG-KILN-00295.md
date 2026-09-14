@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00295 — the_cli_help_text_states_the_real_defaults never binds a default to its flag, and does not read the help text
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** crates/ferrosintesis
 - **Raised:** 2026-08-17T22:48:36Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T214421Z-efb4d6ec
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00295-run-verify-20260914T214421Z-efb4d6ec
-- **Owner base:** 9a5950b1d1a9039f9b310c4e42c72f6db66b71f5
-- **Owner fingerprint:** sha256:4d92ad528527b8f7a7ba0233ee288f8de9d004c6ab5b4d29a3c4bbb4c28471f8
-- **Owner since:** 2026-09-14T21:44:21Z
-- **Owner until:** 2026-09-14T23:44:21Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:48:36Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:36:29Z, deltic:auto role=fix run=fix-20260913T222640Z-883bf95f branch=task/bug-MM-BUG-KILN-00295-run-fix-20260913T222640Z-883bf95f code=63414e87dade028bc763832918bd5571ae471aa8 gate=manual)
+- **State history:** Open (2026-08-17T22:48:36Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-13T22:36:29Z, deltic:auto role=fix run=fix-20260913T222640Z-883bf95f branch=task/bug-MM-BUG-KILN-00295-run-fix-20260913T222640Z-883bf95f code=63414e87dade028bc763832918bd5571ae471aa8 gate=manual) -> Closed (2026-09-14T22:01:21Z, independent verify by Claude Opus 5 on trunk 011738f6: the help-default oracle now reads the printed HELP_TEXT and binds each default to the token after its flag; swapped, missing and cross-assigned defaults all fail it)
 
 ## Observation
 
@@ -88,6 +88,22 @@ Suggested shape:
    failure, not a silent pass.
 3. Before landing, verify the fixed oracle **fails** on the swapped-flag counterexample
    above and on a help text with the defaults removed, then restore.
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunks `258e957b` (verifier worker) and `011738f6` (lead) by agents other than the fixer (fix `63414e87`; `03e7af68` later moved the help into `HELP_TEXT`, and the oracle follows it).
+
+**Original observation, re-run.** `ferrosintesis --help` exits 0 and prints `usage: ferrosintesis <input.mid> [-o out.wav] [--rate 44100] [--wet 0.32] [--delay MS] [--tail 6] ...`. The help text the user sees now states the defaults, and `the_cli_help_text_states_the_real_defaults` reads only that `HELP_TEXT` const, taking the token right after each flag. A missing flag fails.
+
+**Adversarial inputs (the fix IS the oracle).**
+- The record's own counterexample, `[--rate 0.32] [--wet 44100] ... [--tail 6]`, fails at `render_profile.rs:402`: 'the CLI's own documentation never states the default for `--rate` (sr = 44100)'. The lead reproduced this.
+- Defaults removed from `HELP_TEXT` while the `//!` comment still states 44100 / 0.32 / 6 fails with the same message, so hole 2 (reading a comment users never see) is closed.
+- `[--rate 44100] [--wet 6] [--tail 0.32]` fails on `--wet`.
+All restored.
+
+**Limit, not split.** The oracle scans the source const rather than the running binary's `--help` output; `cli_arguments::help_is_successful_on_stdout` checks only the `usage: ferrosintesis` prefix. `help()` prints `HELP_TEXT` directly today.
+
+**Repo gate on `1d87b00f`.** Green: fmt, all three clippy steps, `cargo test -p ferrosintesis-cli --no-default-features`, and `cargo test --workspace --all-targets`. The library no-default step red there (MM-BUG-KILN-00301) is green on `011738f6`. Still red, not caused by this fix: 4 `test_prepare.py` errors (MM-BUG-CRU-00068, reopened).
 
 ## Notes
 

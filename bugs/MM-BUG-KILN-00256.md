@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00256 — Concurrent MuseScore-grand regenerations race fixed shared intermediates
 
-- **State:** Fixed
+- **State:** Closed
 - **Priority:** Should
 - **Severity:** Low
 - **Area:** MuseScore grand sample generation / concurrent cache isolation
 - **Raised:** 2026-08-17T02:30:29Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** verify
-- **Owner run:** verify-20260914T213418Z-cc1ca6c9
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00256-run-verify-20260914T213418Z-cc1ca6c9
-- **Owner base:** 6be06ad65f71da7a65d8d1c67c3a33b1c08c9fd2
-- **Owner fingerprint:** sha256:546e69851c6da92140bafd9b2d511438ee8d884bed5335fce8499a76b52cfbb7
-- **Owner since:** 2026-09-14T21:34:18Z
-- **Owner until:** 2026-09-14T23:34:18Z
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
+- **Owner fingerprint:** -
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T02:30:29Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-14T01:31:25Z, deltic:auto role=fix run=fix-20260914T012002Z-b63c0f51 branch=task/bug-MM-BUG-KILN-00256-run-fix-20260914T012002Z-b63c0f51 code=305f6fb6b560c4dee23d10c90d49f55e14ba4cd7 gate=manual)
+- **State history:** Open (2026-08-17T02:30:29Z, raised via `deltic bugs new` model=gpt-5.6-sol@high) -> Fixed (2026-09-14T01:31:25Z, deltic:auto role=fix run=fix-20260914T012002Z-b63c0f51 branch=task/bug-MM-BUG-KILN-00256-run-fix-20260914T012002Z-b63c0f51 code=305f6fb6b560c4dee23d10c90d49f55e14ba4cd7 gate=manual) -> Closed (2026-09-14T22:01:21Z, independent verify by Claude Opus 5 on trunk 011738f6: MuseScore-grand Ogg/WAV decodes are now per-run; pointing them back at the shared cache fails the concurrent-bake test)
 
 ## Observation
 
@@ -28,5 +28,15 @@ Every worktree selects the same system-temp directory `tempfile.gettempdir()/mus
 ## Fix
 
 <unfixed — raised only>
+
+### Verification summary (2026-09-14, Claude Opus 5, independent)
+
+Verified on trunks `00990a87` and `011738f6` (fix `305f6fb6`) by agents other than the fixer: a verifier worker ran the mutation, and the lead re-ran the test.
+
+**Original observation.** Concurrent MuseScore-grand regenerations no longer share fixed decode intermediates. `MuseScoreGrandWholeBankPublicationTest.test_concurrent_bakes_isolate_decode_intermediates_and_reads` runs two concurrent bakes against one shared cache and passes.
+
+**Fails-before (method B).** Pointing the Ogg/WAV intermediates back at the shared `src` fails it: 'worker B failed: RuntimeError: B: consumed another process's decoded WAV ...\shared-cache\msgrand_40.wav'. Restored.
+
+**Repo gate.** The Python suite on `1d87b00f` and `00990a87` ends 'Ran 281 ... FAILED (errors=4)', all four in the MM-BUG-CRU-00068 classes (reopened); none touch this bake. The cargo gate steps do not build `tools/`.
 
 ## Notes

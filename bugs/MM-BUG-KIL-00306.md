@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00306 — drumkit2 velocity-split oracle pins too few boundaries and lacks the structural vel_hi invariant
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drumkit2 test oracles
 - **Raised:** 2026-08-19T09:33:16Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260914T004509Z-08a42c1d
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00306-run-fix-20260914T004509Z-08a42c1d
-- **Owner base:** d46f96b351a52a0f71b818bf65b0e2c268aebcef
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-14T00:45:09Z
-- **Owner until:** 2026-09-14T02:45:09Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:16Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-19T09:33:16Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T00:50:41Z, deltic:auto role=fix run=fix-20260914T004509Z-08a42c1d branch=task/bug-MM-BUG-KIL-00306-run-fix-20260914T004509Z-08a42c1d code=091b98f8 gate=manual)
 
 ## Observation
 

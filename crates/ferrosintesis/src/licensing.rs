@@ -997,6 +997,137 @@ mod tests {
         );
     }
 
+    /// Every published package that can redistribute the sampled binary carries the
+    /// consolidated notice in the package Cargo actually publishes.
+    #[test]
+    fn every_published_audio_consumer_packages_the_consolidated_notice() {
+        let consumers = published_audio_consumers();
+        assert!(
+            consumers.iter().any(|krate| krate == "ferrosintesis-cli"),
+            "the manifest-derived package census must discover ferrosintesis-cli"
+        );
+
+        let expected = read(&crates_dir().join("ferrosintesis").join("NOTICE"));
+        let mut missing = Vec::new();
+        let mut unbundled = Vec::new();
+        let mut divergent = Vec::new();
+        for krate in consumers {
+            let notice = crates_dir().join(&krate).join("NOTICE");
+            if !notice.is_file() {
+                missing.push(krate);
+                continue;
+            }
+            if !notice_packaged(&krate) {
+                unbundled.push(krate);
+                continue;
+            }
+            if normalize_line_endings(&read(&notice)) != normalize_line_endings(&expected) {
+                divergent.push(krate);
+            }
+        }
+
+        assert!(
+            missing.is_empty(),
+            "published audio consumer(s) carry no NOTICE:\n  {}",
+            missing.join("\n  ")
+        );
+        assert!(
+            unbundled.is_empty(),
+            "published audio consumer(s) have a NOTICE, but Cargo does not package it:\n  {}",
+            unbundled.join("\n  ")
+        );
+        assert!(
+            divergent.is_empty(),
+            "published audio consumer(s) do not carry the consolidated ferrosintesis notice:\n  {}",
+            divergent.join("\n  ")
+        );
+    }
+
+    /// Find package directories from the workspace tree instead of maintaining a list of
+    /// binary or audio consumers beside the manifests that define them.
+    fn published_audio_consumers() -> Vec<String> {
+        let attribution_bearing = attribution_bearing_sample_crates();
+        let mut consumers = Vec::new();
+        let entries = std::fs::read_dir(crates_dir()).unwrap_or_else(|e| {
+            panic!(
+                "licensing oracle cannot enumerate workspace packages under {}: {e}",
+                crates_dir().display()
+            )
+        });
+
+        for entry in entries {
+            let entry = entry.expect("licensing oracle could not read a workspace package entry");
+            let path = entry.path();
+            let manifest_path = path.join("Cargo.toml");
+            if !manifest_path.is_file() {
+                continue;
+            }
+            let manifest = read(&manifest_path);
+            if !package_is_published(&manifest) {
+                continue;
+            }
+            let name = package_name(&manifest);
+            let has_binary = manifest.lines().any(|line| line.trim() == "[[bin]]");
+            let depends_on_attribution_bearing = attribution_bearing
+                .iter()
+                .any(|krate| dependency_declared(&manifest, krate));
+            if has_binary || depends_on_attribution_bearing {
+                consumers.push(name);
+            }
+        }
+
+        consumers.sort_unstable();
+        consumers.dedup();
+        assert!(
+            !consumers.is_empty(),
+            "manifest-derived published audio consumer census is empty"
+        );
+        consumers
+    }
+
+    fn normalize_line_endings(text: &str) -> String {
+        text.replace("\r\n", "\n")
+    }
+
+    fn package_name(manifest: &str) -> String {
+        let mut in_package = false;
+        for line in manifest.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') {
+                in_package = trimmed == "[package]";
+                continue;
+            }
+            if in_package && trimmed.starts_with("name") {
+                if let Some(name) = quoted(trimmed) {
+                    return name.to_string();
+                }
+            }
+        }
+        panic!("workspace package manifest declares no [package] name");
+    }
+
+    fn package_is_published(manifest: &str) -> bool {
+        !manifest
+            .lines()
+            .any(|line| line.trim() == "publish = false")
+    }
+
+    fn dependency_declared(manifest: &str, dependency: &str) -> bool {
+        let mut in_dependencies = false;
+        for line in manifest.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') {
+                in_dependencies = trimmed == "[dependencies]";
+                continue;
+            }
+            if !in_dependencies || !trimmed.starts_with(dependency) {
+                continue;
+            }
+            return trimmed[dependency.len()..].trim_start().starts_with('=');
+        }
+        false
+    }
+
     /// Does the crate's `include` list actually package its `NOTICE`?
     fn notice_packaged(krate: &str) -> bool {
         let manifest = read(&crates_dir().join(krate).join("Cargo.toml"));

@@ -58,4 +58,4 @@ one — see the library's README for which programs have a sampled layer.
 ## License
 
 MIT OR Apache-2.0, at your option. The embedded audio shipped by the library's asset
-crates carries its own terms; see the library's `NOTICE`.
+crates carries its own terms; see this package's `NOTICE`.

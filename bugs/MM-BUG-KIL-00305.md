@@ -6,15 +6,15 @@
 - **Area:** sample assets / drum-kit RIFF fallback decoder
 - **Raised:** 2026-08-19T09:33:15Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
-- **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner:** deltic:manual
+- **Owner role:** verify
+- **Owner run:** verify-20260914T214943Z-e3eee00c
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-KIL-00305-run-verify-20260914T214943Z-e3eee00c
+- **Owner base:** fd9bc4482f2f3604013a94dec1cd61ac453cb5e7
+- **Owner fingerprint:** sha256:95268bd3921cd411e0739009d8b8b962130be646433616c7425994ae328050d0
+- **Owner since:** 2026-09-14T21:49:43Z
+- **Owner until:** 2026-09-14T23:49:43Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

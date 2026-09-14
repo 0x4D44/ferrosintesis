@@ -278,6 +278,52 @@ fn read_shared_distinct_input_does_not_abort_render() {
 
 #[cfg(windows)]
 #[test]
+fn read_write_shared_distinct_input_does_not_abort_render() {
+    use std::fs::OpenOptions;
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let dir = TestDir::new("read-write-shared-input");
+    let input = dir.join("score.mid");
+    let output = dir.join("score.wav");
+    fs::write(&input, SHORT_MIDI).expect("write MIDI fixture");
+    fs::write(&output, vec![b'P'; SHORT_MIDI.len()]).expect("write prior output");
+    let input_guard = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .share_mode(3)
+        .open(&input)
+        .expect("hold input with read/write sharing");
+
+    let result = Command::new(env!("CARGO_BIN_EXE_ferrosintesis"))
+        .arg(&input)
+        .args(["-o"])
+        .arg(&output)
+        .args(["--tail", "0", "--no-samples", "-q"])
+        .output()
+        .expect("run ferrosintesis");
+
+    assert!(
+        result.status.success(),
+        "distinct output failed with a read/write-shared input: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(
+        fs::read(&output)
+            .expect("read rendered output")
+            .starts_with(b"RIFF"),
+        "output is not a WAV"
+    );
+    assert_eq!(
+        fs::read(&input).expect("read source after render"),
+        SHORT_MIDI,
+        "successful render changed its input"
+    );
+
+    drop(input_guard);
+}
+
+#[cfg(windows)]
+#[test]
 fn hard_link_alias_is_rejected_with_a_permissive_input_reader() {
     use std::fs::OpenOptions;
     use std::os::windows::fs::OpenOptionsExt;

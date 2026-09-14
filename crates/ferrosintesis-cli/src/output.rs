@@ -59,12 +59,14 @@ fn platform_same_file(input: &Path, output: &Path) -> io::Result<bool> {
     const ERROR_SHARING_VIOLATION: i32 = 32;
 
     // Hold the input for reading while allowing other readers. A write-only probe then conflicts
-    // with this guard only when the output name resolves to the same file.
-    let input_guard = OpenOptions::new()
-        .read(true)
-        .share_mode(1)
-        .open(input)
-        .map_err(|error| path_error(input, error))?;
+    // with this guard only when the output name resolves to the same file. A third-party writer
+    // can itself block this stricter advisory guard, even when the renderer could read the input;
+    // let the renderer's real input open decide that case instead of aborting the render here.
+    let input_guard = match OpenOptions::new().read(true).share_mode(1).open(input) {
+        Ok(guard) => guard,
+        Err(error) if error.raw_os_error() == Some(ERROR_SHARING_VIOLATION) => return Ok(false),
+        Err(error) => return Err(path_error(input, error)),
+    };
     let probe_output = || {
         OpenOptions::new()
             .write(true)

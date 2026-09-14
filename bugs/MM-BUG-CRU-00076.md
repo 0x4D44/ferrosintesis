@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00076 — Windows input alias probe still aborts the render when another process holds the MIDI open for writing
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-09-14T21:48:03Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260914T220131Z-078a4888
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00076-run-fix-20260914T220131Z-078a4888
-- **Owner base:** f0c85450461bcea3aebb5993bef7ab0c00d9db09
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-14T22:01:31Z
-- **Owner until:** 2026-09-15T00:01:31Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-14T21:48:03Z, raised via `deltic bugs new --land` model=claude-opus-5)
+- **State history:** Open (2026-09-14T21:48:03Z, raised via `deltic bugs new --land` model=claude-opus-5) -> Fixed (2026-09-14T22:13:47Z, deltic:auto role=fix run=fix-20260914T220131Z-078a4888 branch=task/bug-MM-BUG-CRU-00076-run-fix-20260914T220131Z-078a4888 code=80fcde2f864ba0bcb3259a33b095f3435286e851 gate=manual)
 
 ## Observation
 

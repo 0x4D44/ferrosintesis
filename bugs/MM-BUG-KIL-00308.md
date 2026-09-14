@@ -1,25 +1,25 @@
 # MM-BUG-KIL-00308 — drumkit2 inventory oracles cannot detect a take permutation: names never bound to file bytes
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** sample assets / drumkit2 test oracles
 - **Raised:** 2026-08-19T09:33:20Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260914T005750Z-8a52adcc
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KIL-00308-run-fix-20260914T005750Z-8a52adcc
-- **Owner base:** a7744307e1f12cd81a5e38cd59a67221b7238bb1
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-14T00:57:50Z
-- **Owner until:** 2026-09-14T02:57:50Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-19T09:33:20Z, raised via `deltic bugs new`)
+- **State history:** Open (2026-08-19T09:33:20Z, raised via `deltic bugs new`) -> Fixed (2026-09-14T00:59:57Z, deltic:auto role=fix run=fix-20260914T005750Z-8a52adcc branch=task/bug-MM-BUG-KIL-00308-run-fix-20260914T005750Z-8a52adcc code=951514b041cb61aae5b14dcb3f3475bc3e47e580 gate=manual)
 
 ## Observation
 

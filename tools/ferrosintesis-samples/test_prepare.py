@@ -5794,6 +5794,135 @@ class MuseScoreGrandWholeBankPublicationTest(unittest.TestCase):
         self.assertGreater(replacements, fail_at)
         self.assert_exact_old_bank(before)
 
+    def test_concurrent_bakes_isolate_decode_intermediates_and_reads(self):
+        """MM-BUG-KILN-00256: concurrent grand bakes isolate Ogg/WAV decodes."""
+        worker = textwrap.dedent(
+            """
+            import os
+            import sys
+            import time
+            from unittest import mock
+
+            import prepare
+
+            src, repo_root, sync, token = sys.argv[1:]
+            other = "B" if token == "A" else "A"
+            roots = (40, 52, 64)
+            token_bytes = token.encode("ascii")
+
+            def fake_run(command, check):
+                del check
+                ogg = command[command.index("-i") + 1]
+                wav = command[-1]
+                with open(wav, "wb") as output:
+                    output.write(token_bytes)
+                if ogg.endswith("msgrand_40.ogg"):
+                    with open(
+                            os.path.join(sync, f"path-{token}"),
+                            "w", encoding="ascii") as path:
+                        path.write(f"{ogg}\\n{wav}")
+                    open(os.path.join(sync, f"ready-{token}"), "wb").close()
+                    deadline = time.monotonic() + 10
+                    while not os.path.exists(os.path.join(sync, f"ready-{other}")):
+                        if time.monotonic() >= deadline:
+                            raise RuntimeError("concurrent grand barrier timed out")
+                        time.sleep(0.01)
+
+            def fake_read(path):
+                with open(path, "rb") as source:
+                    payload = source.read()
+                if payload != token_bytes:
+                    raise RuntimeError(
+                        f"{token}: consumed another process's decoded WAV {path}")
+                return [0.0, 0.25], prepare.OUT_SR
+
+            with (
+                mock.patch.object(prepare, "REPO_ROOT", repo_root),
+                mock.patch.object(
+                    prepare,
+                    "ensure_musescore_general_sf3",
+                    return_value=os.path.join(src, "MuseScore_General.sf3"),
+                ),
+                mock.patch.object(prepare.subprocess, "run", side_effect=fake_run),
+                mock.patch.object(prepare, "read_wav", side_effect=fake_read),
+                mock.patch.object(
+                    prepare, "trim_to_onset", return_value=[0.0, 0.25, -0.25, 0.0]
+                ),
+                mock.patch.object(prepare, "measure_f0", return_value=(440.0, 1.0)),
+                mock.patch.object(prepare, "_validate_generated_output_families"),
+                mock.patch.object(prepare, "_validate_generated_output_inventory"),
+                mock.patch.object(prepare, "_publish_staged_flac_bank"),
+            ):
+                prepare._bake_musescore_grand(src)
+            """
+        )
+        with tempfile.TemporaryDirectory() as temp_root:
+            src = os.path.join(temp_root, "shared-cache")
+            repo_root = os.path.join(temp_root, "repo")
+            sync = os.path.join(temp_root, "sync")
+            os.makedirs(src)
+            os.makedirs(repo_root)
+            os.makedirs(sync)
+            source_bytes = pathlib.Path(self.sf3_path).read_bytes()
+            pathlib.Path(src, "MuseScore_General.sf3").write_bytes(source_bytes)
+            script = os.path.join(temp_root, "concurrent_musescore_grand_worker.py")
+            pathlib.Path(script).write_text(worker, encoding="utf-8")
+
+            module_dir = os.path.abspath(os.path.dirname(prepare.__file__))
+            child_env = os.environ.copy()
+            child_env["PYTHONPATH"] = (
+                module_dir + os.pathsep + child_env.get("PYTHONPATH", "")
+            )
+            processes = [
+                subprocess.Popen(
+                    [sys.executable, script, src, repo_root, sync, token],
+                    cwd=module_dir,
+                    env=child_env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                for token in ("A", "B")
+            ]
+            results = []
+            try:
+                for process in processes:
+                    results.append(process.communicate(timeout=15))
+            except subprocess.TimeoutExpired:
+                for process in processes:
+                    if process.poll() is None:
+                        process.kill()
+                for process in processes:
+                    process.communicate()
+                self.fail("concurrent MuseScore-grand worker timed out")
+
+            for token, process, (stdout, stderr) in zip(
+                    ("A", "B"), processes, results):
+                self.assertEqual(
+                    process.returncode,
+                    0,
+                    f"worker {token} failed:\nstdout={stdout}\nstderr={stderr}",
+                )
+
+            paths = {}
+            for token in ("A", "B"):
+                with open(os.path.join(sync, f"path-{token}"), encoding="ascii") as path:
+                    paths[token] = path.read().splitlines()
+            ogg_a, wav_a = paths["A"]
+            ogg_b, wav_b = paths["B"]
+            self.assertNotEqual(ogg_a, ogg_b)
+            self.assertNotEqual(wav_a, wav_b)
+            source_root = os.path.normcase(os.path.realpath(src))
+            for path in (ogg_a, wav_a, ogg_b, wav_b):
+                decoded = os.path.normcase(os.path.realpath(path))
+                self.assertFalse(
+                    decoded == source_root or decoded.startswith(source_root + os.sep)
+                )
+                self.assertFalse(os.path.exists(path))
+            self.assertEqual(
+                pathlib.Path(src, "MuseScore_General.sf3").read_bytes(), source_bytes
+            )
+
 
 class SoundfontOnsetWholeBankPublicationTest(unittest.TestCase):
     """MM-BUG-KILN-00260: a failed SF onset bake preserves its whole bank."""

@@ -5226,10 +5226,12 @@ def _bake_musescore_grand(src):
         output_dir=out_dir)
     rows = []
     with tempfile.TemporaryDirectory(prefix=".musescoregrand-bank-") as staging:
+        decode_dir = os.path.join(staging, "decode")
+        os.makedirs(decode_dir)
         for root in sorted(best):
             start, end = best[root]
-            ogg = os.path.join(src, f"msgrand_{root}.ogg")
-            wav = os.path.join(src, f"msgrand_{root}.wav")
+            ogg = os.path.join(decode_dir, f"msgrand_{root}.ogg")
+            wav = os.path.join(decode_dir, f"msgrand_{root}.wav")
             with open(ogg, "wb") as f:
                 f.write(sf3[smpl_off + start:smpl_off + end])
             subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",

@@ -1,25 +1,25 @@
 # MM-BUG-KILN-00302 — WAV decoder tests: byte-rate check unreachable by construction, a mis-named truncation test, uncovered error arms, and a temp-path race
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-cli
 - **Raised:** 2026-08-17T22:56:53Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260914T002403Z-4dcbac32
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-KILN-00302-run-fix-20260914T002403Z-4dcbac32
-- **Owner base:** 2aebca56944df1948bbbd402567b62454b907f88
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-14T00:24:03Z
-- **Owner until:** 2026-09-14T02:24:03Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-08-17T22:56:53Z, raised via `deltic bugs new` model=claude-opus-5@high)
+- **State history:** Open (2026-08-17T22:56:53Z, raised via `deltic bugs new` model=claude-opus-5@high) -> Fixed (2026-09-14T00:34:47Z, deltic:auto role=fix run=fix-20260914T002403Z-4dcbac32 branch=task/bug-MM-BUG-KILN-00302-run-fix-20260914T002403Z-4dcbac32 code=4655cbd6 gate=manual)
 
 ## Observation
 

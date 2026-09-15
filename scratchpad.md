@@ -1,5 +1,12 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
+- [ ] 2026.09.15 — **The core drumkit velocity-split test has the same one-sided gap as
+  drumkit2 had (MM-BUG-CRU-00078).** `D:\language\ferrosintesis\crates\ferrosintesis-samples-drumkit\src\lib.rs:layer_for_velocity_respects_the_sfz_splits`
+  hand-lists probes, and leaves most boundaries unpinned: HH_CLOSED 63/64 and 95/96, SNARE
+  41/42 through 105/106, KICK 63/64 and 95/96, TOM_LO, SIDESTICK, RIDE_BELL, HH_OPEN, HH_PEDAL
+  and TOM_HI. Copy drumkit2's table-driven both-ends probe, but take each row from the
+  source SFZ `hivel` values, not from the `vel_hi` tables it guards.
+
 - [ ] 2026.09.13 — **Verification pass: regression coverage gaps noted on closed bugs.** All
   from the independent two-eyes pass on trunk 8b6a6f86 (not defects in shipped behaviour):
   KILN-00192 and KILN-00268 docs are correct but unguarded (pre-fix text passes every oracle;

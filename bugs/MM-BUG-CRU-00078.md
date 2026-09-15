@@ -6,15 +6,15 @@
 - **Area:** crates/ferrosintesis-samples-drumkit2
 - **Raised:** 2026-09-14T22:58:47Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260915T001713Z-6be1fb97
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00078-run-fix-20260915T001713Z-6be1fb97
+- **Owner base:** c5b9aa6ca36333c85411d2a76ace081a898f7a1d
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-15T00:17:13Z
+- **Owner until:** 2026-09-15T02:17:13Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

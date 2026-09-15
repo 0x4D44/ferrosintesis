@@ -6,15 +6,15 @@
 - **Area:** tools/ferrosintesis-samples
 - **Raised:** 2026-09-14T23:40:11Z
 - **Discovery source:** Agent
-- **Owner:** -
-- **Owner role:** -
-- **Owner run:** -
-- **Owner host:** -
-- **Owner branch:** -
-- **Owner base:** -
+- **Owner:** deltic:manual
+- **Owner role:** fix
+- **Owner run:** fix-20260915T002316Z-42795cbb
+- **Owner host:** CRUCIBLE
+- **Owner branch:** task/bug-MM-BUG-CRU-00079-run-fix-20260915T002316Z-42795cbb
+- **Owner base:** aba231c800c2688d9dcba812a38e1b187f12c6ff
 - **Owner fingerprint:** -
-- **Owner since:** -
-- **Owner until:** -
+- **Owner since:** 2026-09-15T00:23:16Z
+- **Owner until:** 2026-09-15T02:23:16Z
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -

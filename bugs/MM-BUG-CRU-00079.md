@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00079 — gen_crate_lib.py custom-API guard misses attribute-prefixed and non-pub hand-written items
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** tools/ferrosintesis-samples
 - **Raised:** 2026-09-14T23:40:11Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260915T002316Z-42795cbb
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00079-run-fix-20260915T002316Z-42795cbb
-- **Owner base:** aba231c800c2688d9dcba812a38e1b187f12c6ff
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-15T00:23:16Z
-- **Owner until:** 2026-09-15T02:23:16Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-14T23:40:11Z, raised via `deltic bugs new --land` model=claude-opus-5)
+- **State history:** Open (2026-09-14T23:40:11Z, raised via `deltic bugs new --land` model=claude-opus-5) -> Fixed (2026-09-15T00:31:01Z, deltic:auto role=fix run=fix-20260915T002316Z-42795cbb branch=task/bug-MM-BUG-CRU-00079-run-fix-20260915T002316Z-42795cbb code=0bd9b71f476dfecf27f95de3fd0028d05351b82f gate=manual)
 
 ## Observation
 

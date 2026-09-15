@@ -7278,6 +7278,59 @@ pub fn get(name: &str) -> Option<&'static [u8]> { match name { \"alias.wav\" => 
 
             self.assertEqual(lib.read_text(encoding="utf-8"), before)
 
+    def test_generic_generator_refuses_hand_written_items_it_does_not_emit(self):
+        """MM-BUG-CRU-00079: the guard recognised only lines that START with `pub`.
+
+        An attribute in front of the item, an exported macro, a private helper or a
+        hand-written test module all read as generator-owned, so whole-file
+        generation would have erased them. Any item the generator does not emit
+        must refuse, whatever its visibility or attributes.
+        """
+        cases = {
+            "attribute-prefixed public fn": "#[inline] pub fn fast() {}\n",
+            "exported macro": "#[macro_export] macro_rules! sample { () => {} }\n",
+            "hand-written test module": "#[cfg(test)] mod tests { #[test] fn t() {} }\n",
+            "private helper": "fn helper() -> u8 { 1 }\n",
+            "trait impl": "impl core::fmt::Debug for Sample {}\n",
+            "public re-export": "pub use core::fmt::Write;\n",
+        }
+        for label, source in cases.items():
+            with self.subTest(label):
+                self.assertIsNotNone(gen_crate_lib.custom_inventory_reason(source))
+
+    def test_generator_output_is_accepted_until_hand_written_code_is_added(self):
+        """The guard's allow-list is checked against the generator's real output."""
+        for with_aliases in (False, True):
+            with self.subTest(with_aliases=with_aliases), \
+                    tempfile.TemporaryDirectory() as crate:
+                crate_path = pathlib.Path(crate)
+                (crate_path / "samples").mkdir()
+                (crate_path / "Cargo.toml").write_text(
+                    '[package]\ninclude = ["LICENSE-MIT"]\n', encoding="utf-8"
+                )
+                (crate_path / "LICENSE-MIT").write_text(
+                    "fixture license\n", encoding="utf-8"
+                )
+                (crate_path / "samples" / "a.flac").write_bytes(b"fLaC" + b"a" * 8)
+                if with_aliases:
+                    (crate_path / "ALIASES").write_text(
+                        "alias.flac a.flac\n", encoding="utf-8"
+                    )
+                with mock.patch.object(
+                    gen_crate_lib.sys,
+                    "argv",
+                    ["gen_crate_lib.py", crate, "--doc", "Guard fixture."],
+                ), mock.patch.object(gen_crate_lib.subprocess, "run"):
+                    gen_crate_lib.main()
+                generated = (crate_path / "src" / "lib.rs").read_text(encoding="utf-8")
+
+            self.assertIsNone(gen_crate_lib.custom_inventory_reason(generated))
+            self.assertIsNotNone(
+                gen_crate_lib.custom_inventory_reason(
+                    generated + "\n#[inline] pub fn fast() {}\n"
+                )
+            )
+
 
 class B1InventoryRegenerationTest(unittest.TestCase):
     """MM-BUG-KILN-00169: B1 regeneration must preserve its natural-tail oracle."""

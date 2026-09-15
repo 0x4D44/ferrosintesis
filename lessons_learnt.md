@@ -10,6 +10,9 @@ belong in `CLAUDE.md`, not here.
 
 <!-- lessons-format: index-v1 -->
 
+- 2026.09.15 — **A generator's erase guard must allow-list what it emits, not match `pub`** (`gen_crate_lib.py:custom_inventory_reason`).
+  - Matching `pub` at line start missed attributes, macros, private tests and `pub use`; 7 committed crates were exposed.
+
 - 2026.09.14 — **Catch `BaseException` before sample-bank cleanup** (`prepare.py:_publish_staged_flac_bank`).
   - `KeyboardInterrupt` and `SystemExit` can interrupt the swap outside `except Exception`, leaving a mixed bank.
 

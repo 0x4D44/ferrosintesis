@@ -23,34 +23,75 @@ GENERATED_INVENTORY_MARKERS = (
     "// BEGIN GENERATED SAMPLE INVENTORY",
     "// END GENERATED SAMPLE INVENTORY",
 )
-GENERATED_PUBLIC_ITEMS = frozenset(("FILE_COUNT", "LOGICAL_FILE_COUNT", "get"))
-PUBLIC_ITEM_RE = re.compile(
-    r"^\s*pub(?:\([^)]*\))?\s+"
-    r"(?:(?:const|static|fn|struct|enum|type|trait|mod)\s+)?"
-    r"([A-Za-z_][A-Za-z0-9_]*)",
-    re.MULTILINE,
+# Every named item and attribute `main` emits. The guard refuses anything else,
+# whatever its visibility: an item it does not emit is hand-written, and whole-file
+# generation would erase it. Keying off lines that begin with `pub` missed
+# attribute-prefixed items, exported macros, private helpers and hand-written
+# tests (MM-BUG-CRU-00079). `test_generator_output_is_accepted_until_hand_written_code_is_added`
+# checks these sets against the generator's real output.
+GENERATED_ITEMS = frozenset((
+    "FILE_COUNT",
+    "LOGICAL_FILE_COUNT",
+    "SAMPLES",
+    "ALIASES",
+    "get",
+    "tests",
+    "EXPECTED_BYTES",
+    "inventory_matches_packaged_samples",
+    "every_sample_is_a_nonempty_bank_file_with_the_expected_size",
+    "aliases_resolve_without_duplicate_physical_payloads",
+))
+GENERATED_ATTRIBUTES = frozenset(("#![forbid(unsafe_code)]", "#[cfg(test)]", "#[test]"))
+GENERATED_USES = frozenset(("super::*", "std::ffi::OsStr", "std::fs", "std::path::Path"))
+USE_RE = re.compile(r"\buse\s+([^;]+);")
+# Comments, then string, raw-string and char literals, matched in one pass so a `//`
+# inside a string is not read as a comment, or a `#` inside a literal as an attribute.
+COMMENT_OR_LITERAL_RE = re.compile(
+    r"//[^\n]*|/\*.*?\*/|r(#*)\".*?\"\1|\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\\n])'",
+    re.DOTALL,
 )
+LIFETIME_RE = re.compile(r"'[A-Za-z_][A-Za-z0-9_]*")
+ITEM_RE = re.compile(
+    r"\b(?:fn|const|static|struct|enum|union|type|trait|mod)\s+(?:(?:mut|fn)\s+)?"
+    r"([A-Za-z_][A-Za-z0-9_]*)"
+    r"|\bmacro_rules!\s*([A-Za-z_][A-Za-z0-9_]*)"
+    r"|\b(impl|extern|unsafe)\b"
+)
+ATTRIBUTE_RE = re.compile(r"#!?\[[^\]]*\]")
 
 
 def custom_inventory_reason(source):
     """Explain why a lib.rs is not safe for whole-file generation.
 
-    The generic output owns only the small public surface in
-    ``GENERATED_PUBLIC_ITEMS``. Region-managed crates and crates with any other
-    public item carry API that this tool would erase, so fail closed before the
-    output file is staged.
+    The generic output owns exactly the items in ``GENERATED_ITEMS`` and the
+    attributes in ``GENERATED_ATTRIBUTES``. Region-managed crates, and crates with
+    any other item, attribute or impl, carry code this tool would erase, so fail
+    closed before the output file is staged.
     """
     if any(marker in source for marker in GENERATED_INVENTORY_MARKERS):
         return "it contains a managed generated-inventory region"
-    custom = sorted(
-        {
-            match.group(1)
-            for match in PUBLIC_ITEM_RE.finditer(source)
-            if match.group(1) not in GENERATED_PUBLIC_ITEMS
-        }
-    )
+    code = COMMENT_OR_LITERAL_RE.sub(" ", source)
+    code = LIFETIME_RE.sub(" ", code)
+    custom = set()
+    for match in ITEM_RE.finditer(code):
+        name = match.group(1) or match.group(2)
+        if name is None:
+            custom.add(match.group(3))
+        elif name not in GENERATED_ITEMS:
+            custom.add(name)
+    for match in USE_RE.finditer(code):
+        path = re.sub(r"\s+", "", match.group(1))
+        if path not in GENERATED_USES:
+            custom.add(f"use {path}")
+    for match in ATTRIBUTE_RE.finditer(code):
+        attribute = re.sub(r"\s+", "", match.group(0))
+        if attribute not in GENERATED_ATTRIBUTES:
+            custom.add(attribute)
     if custom:
-        return "it declares non-generated public items: " + ", ".join(custom)
+        return (
+            "it declares items the generator does not emit: "
+            + ", ".join(sorted(custom))
+        )
     return None
 
 

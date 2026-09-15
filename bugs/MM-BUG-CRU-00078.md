@@ -1,25 +1,25 @@
 # MM-BUG-CRU-00078 — drumkit2 velocity-split oracle still pins CHINA's first boundary on one side only
 
-- **State:** Open
+- **State:** Fixed
 - **Priority:** Could
 - **Severity:** Low
 - **Area:** crates/ferrosintesis-samples-drumkit2
 - **Raised:** 2026-09-14T22:58:47Z
 - **Discovery source:** Agent
-- **Owner:** deltic:manual
-- **Owner role:** fix
-- **Owner run:** fix-20260915T001713Z-6be1fb97
-- **Owner host:** CRUCIBLE
-- **Owner branch:** task/bug-MM-BUG-CRU-00078-run-fix-20260915T001713Z-6be1fb97
-- **Owner base:** c5b9aa6ca36333c85411d2a76ace081a898f7a1d
+- **Owner:** -
+- **Owner role:** -
+- **Owner run:** -
+- **Owner host:** -
+- **Owner branch:** -
+- **Owner base:** -
 - **Owner fingerprint:** -
-- **Owner since:** 2026-09-15T00:17:13Z
-- **Owner until:** 2026-09-15T02:17:13Z
+- **Owner since:** -
+- **Owner until:** -
 - **Verify retry after:** -
 - **Held branch:** -
 - **Legacy fixed run:** -
 - **Attempts:** fix=0, doubt=0, indeterminate=0
-- **State history:** Open (2026-09-14T22:58:47Z, raised via `deltic bugs new --land` model=claude-opus-5)
+- **State history:** Open (2026-09-14T22:58:47Z, raised via `deltic bugs new --land` model=claude-opus-5) -> Fixed (2026-09-15T00:20:35Z, deltic:auto role=fix run=fix-20260915T001713Z-6be1fb97 branch=task/bug-MM-BUG-CRU-00078-run-fix-20260915T001713Z-6be1fb97 code=66b2a3e5754239b61a7e939cdac1399fc031b154 gate=manual)
 
 ## Observation
 

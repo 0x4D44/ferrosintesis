@@ -453,27 +453,37 @@ mod tests {
 
     /// Velocity splits, carried over from the core crate's test when these banks
     /// banks moved here. Parsed from the source SFZ `hivel` bounds, not guessed.
+    ///
+    /// Every layer is probed at BOTH ends of its range, so every boundary is pinned
+    /// on both sides. A hand-listed probe set left CHINA's first boundary (25/26)
+    /// free: moving it to 30 kept the table ascending and passed (MM-BUG-CRU-00078).
     #[test]
     fn layer_for_velocity_respects_the_sfz_splits() {
-        assert_eq!(CHINA.layer_for_velocity(25), 0);
-        assert_eq!(CHINA.layer_for_velocity(51), 1);
-        assert_eq!(CHINA.layer_for_velocity(52), 2);
-        assert_eq!(CHINA.layer_for_velocity(76), 2);
-        assert_eq!(CHINA.layer_for_velocity(77), 3);
-        assert_eq!(CHINA.layer_for_velocity(101), 3);
-        assert_eq!(CHINA.layer_for_velocity(102), 4);
-        assert_eq!(SPLASH.layer_for_velocity(0), 0);
-        assert_eq!(SPLASH.layer_for_velocity(64), 0);
-        assert_eq!(SPLASH.layer_for_velocity(127), 0);
-        assert_eq!(CRASH.layer_for_velocity(42), 0);
-        assert_eq!(CRASH.layer_for_velocity(43), 1);
-        assert_eq!(CRASH.layer_for_velocity(85), 1);
-        assert_eq!(CRASH.layer_for_velocity(86), 2);
-        assert_eq!(CRASH.layer_for_velocity(127), 2);
+        const SFZ_SPLITS: &[(&str, &[u8])] = &[
+            ("crash", &[42, 85, 127]),
+            ("splash", &[127]),
+            ("china", &[25, 51, 76, 101, 127]),
+        ];
+        assert_eq!(SFZ_SPLITS.len(), BANKS.len());
 
         for bank in BANKS {
-            assert_eq!(*bank.vel_hi.last().unwrap(), 127, "{}", bank.name);
-            assert!(bank.vel_hi.windows(2).all(|w| w[0] < w[1]), "{}", bank.name);
+            let splits = SFZ_SPLITS
+                .iter()
+                .find_map(|(name, splits)| (*name == bank.name).then_some(*splits))
+                .unwrap_or_else(|| panic!("{} has no SFZ split row", bank.name));
+            let mut lo = 0;
+            for (layer, &hi) in splits.iter().enumerate() {
+                for velocity in [lo, hi] {
+                    assert_eq!(
+                        bank.layer_for_velocity(velocity),
+                        layer,
+                        "{} velocity {velocity}",
+                        bank.name
+                    );
+                }
+                lo = hi.saturating_add(1);
+            }
+            assert_eq!(bank.vel_hi.len(), splits.len(), "{}", bank.name);
         }
     }
 

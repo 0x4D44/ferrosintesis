@@ -1006,7 +1006,41 @@ impl Drive {
         self.chain(x) * self.post
     }
 
+    /// Per-block denormal flush (MM-BUG-KILN-00027) for the insert's IIR stages.
+    /// The insert runs on every block of a program-29/30 or XG amp channel,
+    /// voices or not, so after the last note its biquads park and churn
+    /// subnormals for the rest of the render; this is the strip-owned analogue
+    /// of the bus flushes. The `MicroCab` is a feed-forward FIR: it drains to
+    /// exact zero on its own once these stages do.
+    fn flush(&mut self) {
+        self.pre.flush();
+        self.voice.flush();
+        self.tilt.flush();
+        self.dcb.flush();
+        for c in &mut self.cab {
+            c.flush();
+        }
+    }
+
+    /// Test-only: visit every filter state and stored sample of the insert.
+    #[cfg(test)]
+    fn visit_state(&self, visit: &mut dyn FnMut(&'static str, f32)) {
+        for bq in [&self.pre, &self.voice, &self.tilt, &self.dcb]
+            .into_iter()
+            .chain(&self.cab)
+        {
+            for x in bq.debug_state() {
+                visit("drive biquad", x);
+            }
+        }
+        for &x in &self.micro.buf {
+            visit("drive micro-cab line", x);
+        }
+        visit("drive upsampler", self.prev);
+    }
+
     fn process(&mut self, buf: &mut [f32]) {
+        self.flush();
         if !self.active {
             // No amp NRPN authored on this channel: no slew, no branches — the
             // inertness invariant is that an unauthored channel takes exactly the
@@ -3840,6 +3874,21 @@ impl EngineCore {
             let buf = &mut self.ch_buf[ci];
             let legacy = &mut self.legacy_buf[ci];
             let cathedral = &mut self.cathedral_buf[ci];
+            // Per-block denormal flush (MM-BUG-KILN-00027) for the strip-owned
+            // CC74 filters: once authored they run every block, voices or not,
+            // and park below the floor after the last note. `wah_r` is the ch-9
+            // drum pair's second filter, run later in `render_and_mix_drums`.
+            for wah in [
+                &mut strip.wah,
+                &mut strip.wah_legacy,
+                &mut strip.wah_cathedral,
+                &mut strip.wah_r,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                wah.flush();
+            }
             if let Some((xg, wet)) = &mut strip.xg_insert {
                 // XG Amp-Simulator insertion REPLACES the program drive on this
                 // channel (one amp+cabinet, never two in series). Dry/Wet blend
@@ -4125,6 +4174,11 @@ impl EngineCore {
                 &mut self.mix_r[..n],
             );
         }
+        // Per-block denormal flush (MM-BUG-KILN-00027). The hall's own tanks
+        // flush, but this send high-pass sits in front of them: left unflushed
+        // it parked after every song and fed a subnormal stream into the
+        // pre-delay line and early-reflection taps for the rest of the session.
+        self.rev_hp.flush();
         for x in self.send_rev[..n].iter_mut() {
             *x = self.rev_hp.process(*x);
         }
@@ -4153,6 +4207,74 @@ impl EngineCore {
         }
         self.glue
             .process(&mut self.mix_l[..n], &mut self.mix_r[..n]);
+    }
+
+    /// Test-only: visit the state of everything that runs on every block
+    /// whether or not a voice is sounding — the master buses and each strip's
+    /// inserts and filters. Voices are excluded: they die and are dropped.
+    #[cfg(test)]
+    fn visit_always_running_state(&self, visit: &mut dyn FnMut(&'static str, f32)) {
+        for x in self.rev_hp.debug_state() {
+            visit("reverb send high-pass", x);
+        }
+        self.reverb.visit_state(visit);
+        self.drum_room.visit_state(visit);
+        self.cathedral.visit_state(visit);
+        for &x in self.chorus.dl.debug_buf() {
+            visit("chorus line", x);
+        }
+        if let Some(echo) = &self.echo {
+            for &x in echo.left.debug_buf().iter().chain(echo.right.debug_buf()) {
+                visit("echo line", x);
+            }
+            visit("echo damp", echo.lp_l.debug_state());
+            visit("echo damp", echo.lp_r.debug_state());
+        }
+        for symp in [&self.symp, &self.gtr_symp, &self.sitar_symp] {
+            for x in symp.hp.debug_state() {
+                visit("sympathetic high-pass", x);
+            }
+            for (line, _, damp) in &symp.combs {
+                visit("sympathetic damp", damp.debug_state());
+                for &x in line.debug_buf() {
+                    visit("sympathetic comb line", x);
+                }
+            }
+        }
+        visit("glue envelope", self.glue.env);
+        for x in self
+            .glue
+            .shelf_l
+            .debug_state()
+            .into_iter()
+            .chain(self.glue.shelf_r.debug_state())
+        {
+            visit("glue shelf", x);
+        }
+        for strip in &self.strips {
+            if let Some(drive) = &strip.drive {
+                drive.visit_state(visit);
+            }
+            if let Some((drive, _)) = &strip.xg_insert {
+                drive.visit_state(visit);
+            }
+            for wah in [
+                &strip.wah,
+                &strip.wah_legacy,
+                &strip.wah_cathedral,
+                &strip.wah_r,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                for x in wah.debug_state() {
+                    visit("strip CC74 filter", x);
+                }
+            }
+            for &x in strip.haas.debug_buf() {
+                visit("strip Haas line", x);
+            }
+        }
     }
 
     /// Add the finished stereo mix into the caller's output buffer and
@@ -4413,6 +4535,74 @@ pub fn normalize_loudness(
 mod tests {
     use super::*;
     use crate::midi::Ev;
+
+    /// After a song ends, nothing that runs on every block may keep churning
+    /// subnormals (the mdem sound-cost survey: a post-song realtime tail cost
+    /// 3-6x idle until the CPU was put in flush-to-zero). Play a short phrase
+    /// through every always-running path — the hall's send high-pass, authored
+    /// CC74 filters (melodic and the ch-9 drum pair), a program-29 drive
+    /// insert, the three sympathetic buses, chorus, echo, drum room and
+    /// cathedral — then all-sound-off and render silence. Every state must end
+    /// exactly zero or normal. Red without the per-block flushes of `rev_hp`,
+    /// the strip CC74 filters, and `Drive`: each parks for good, not briefly.
+    #[test]
+    fn silent_session_state_never_parks_subnormal() {
+        let sr = 44_100.0;
+        let mut core = EngineCore::new(CoreOptions {
+            sr,
+            wet: 0.32,
+            delay_s: 0.375,
+            samples: false,
+            solo: 0xFFFF,
+            gtr_symp_on: true,
+            drum_room_on: true,
+            sitar_symp_on: true,
+        });
+        let cc = |ch, num, val| EvKind::Cc { ch, num, val };
+        for (ch, prog) in [(0, 0), (1, 29), (2, 24), (3, 104), (4, 19), (5, 48)] {
+            core.handle_event(EvKind::Prog { ch, prog });
+        }
+        for ch in 0..16 {
+            core.handle_event(cc(ch, 91, 100));
+            core.handle_event(cc(ch, 93, 80));
+            core.handle_event(cc(ch, 94, 60));
+        }
+        for ch in [0, 1, 9] {
+            core.handle_event(cc(ch, 74, 50));
+            core.handle_event(cc(ch, 71, 90));
+        }
+        for ch in 0..6 {
+            core.note_on(ch, 60 + ch, 100);
+        }
+        for key in [36, 38, 42] {
+            core.note_on(9, key, 110);
+        }
+        let mut out = vec![0.0f32; BLOCK * 2];
+        let mut render = |core: &mut EngineCore, seconds: f32| {
+            for _ in 0..(seconds * sr) as usize / BLOCK {
+                out.fill(0.0);
+                core.render_block_add(BLOCK, &mut out);
+            }
+        };
+        render(&mut core, 1.0);
+        for ch in 0..16 {
+            core.handle_event(cc(ch, 120, 0));
+        }
+        render(&mut core, 10.0);
+
+        assert!(core.active.is_empty(), "every voice must be gone");
+        let mut parked = std::collections::BTreeMap::<&str, usize>::new();
+        core.visit_always_running_state(&mut |site, x| {
+            if x.is_subnormal() {
+                *parked.entry(site).or_default() += 1;
+            }
+        });
+        assert!(
+            parked.is_empty(),
+            "always-running state still holds subnormals 10 s after all-sound-off \
+             (site: count): {parked:?}"
+        );
+    }
 
     /// `PROGRAM_TRIM_DB` is CONSERVATIVE by design, and this oracle pins its scope
     /// so a future edit cannot silently trim piano, guitar or drums — plus the

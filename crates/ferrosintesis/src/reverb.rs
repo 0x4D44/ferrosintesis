@@ -170,6 +170,26 @@ impl Reverb {
         }
     }
 
+    /// Test-only: visit every stored sample and filter state of the hall —
+    /// pre-delay line, comb buffers and damp states, allpass buffers.
+    #[cfg(test)]
+    pub(crate) fn visit_state(&self, visit: &mut dyn FnMut(&'static str, f32)) {
+        for &x in self.pre.debug_buf() {
+            visit("reverb pre-delay line", x);
+        }
+        for c in self.combs_l.iter().chain(&self.combs_r) {
+            visit("reverb comb damp state", c.store);
+            for &x in &c.buf {
+                visit("reverb comb buffer", x);
+            }
+        }
+        for a in self.aps_l.iter().chain(&self.aps_r) {
+            for &x in &a.buf {
+                visit("reverb allpass buffer", x);
+            }
+        }
+    }
+
     /// Test-only: the first comb's feedback, so a caller can prove which
     /// `Reverb` instance a reconfigure touched.
     #[cfg(test)]
@@ -322,6 +342,26 @@ impl CathedralReverb {
             active: false,
             #[cfg(test)]
             return_peak: 0.0,
+        }
+    }
+
+    /// Test-only: visit every stored sample and filter state of the room.
+    #[cfg(test)]
+    pub(crate) fn visit_state(&self, visit: &mut dyn FnMut(&'static str, f32)) {
+        for &x in self.input_delay.debug_buf() {
+            visit("cathedral input delay", x);
+        }
+        for line in &self.lines {
+            visit("cathedral decay filter", line.low_state);
+            visit("cathedral decay filter", line.high_state);
+            for &x in &line.buf {
+                visit("cathedral line buffer", x);
+            }
+        }
+        for hp in [&self.return_hp_l, &self.return_hp_r] {
+            for x in hp.debug_state() {
+                visit("cathedral return high-pass", x);
+            }
         }
     }
 

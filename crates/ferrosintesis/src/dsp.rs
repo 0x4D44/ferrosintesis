@@ -314,6 +314,29 @@ impl OnePole {
     }
 }
 
+/// Test-only state readers for the denormal-leak oracle
+/// (`engine::tests::silent_session_state_never_parks_subnormal`).
+#[cfg(test)]
+impl OnePole {
+    pub(crate) fn debug_state(&self) -> f32 {
+        self.z
+    }
+}
+
+#[cfg(test)]
+impl Biquad {
+    pub(crate) fn debug_state(&self) -> [f32; 4] {
+        [self.x1, self.x2, self.y1, self.y2]
+    }
+}
+
+#[cfg(test)]
+impl DelayLine {
+    pub(crate) fn debug_buf(&self) -> &[f32] {
+        &self.buf
+    }
+}
+
 /// Snap a magnitude below the flush floor to exactly 0.0.
 ///
 /// An IIR feedback state never reaches zero on its own: once a tail decays

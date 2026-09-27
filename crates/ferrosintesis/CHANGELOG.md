@@ -11,6 +11,16 @@ lives in the repository's git log and `wrk_journals/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Silent CPU cost after a song ends.** Three always-running filters never decayed to
+  zero after the last note: the hall reverb's send high-pass, any authored CC74 channel
+  filter, and the program 29/30 (and XG amp) drive insert. They settled into the
+  subnormal float range, which x86 processes very slowly, so a realtime synth kept paying
+  for silence. mdem measured the post-song tail at 3-6x the idle cost. Each now gets the same
+  per-block flush the other effect buses already had. Audio is bit-identical until a state
+  falls below 1e-34; only samples below about -735 dBFS change, and they become exact zero.
+
 ## [0.21.58] - 2026-08-17
 
 ### Changed

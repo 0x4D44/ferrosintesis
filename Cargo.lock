@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "ferrosintesis"
-version = "0.21.58"
+version = "0.21.59"
 dependencies = [
  "ferrosintesis-flac",
  "ferrosintesis-samples-b1-upright",

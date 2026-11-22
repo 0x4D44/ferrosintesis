@@ -1,7 +1,8 @@
 # Lantern Year — composer notes (the album bible)
 
-Ten nights at a lighthouse across one year. Ten composers work **in parallel**,
-one track each; this file is the whole shared contract. Read it, then
+Ten nights at a lighthouse across one year. Ten composers worked **in parallel**,
+one track each; this file was the whole shared contract (kept as written, with
+the corrections the composers reported folded in). Read it, then
 `material.py` (the album DNA + oracle kit, ~330 lines), then skim `engine.py`
 (the toolkit: read the docstring index, then only the helpers you use). Do not
 explore the rest of the repo — everything you need is here. One exemplar of the
@@ -116,17 +117,18 @@ note-ons inside its own movement; CCs exempt).
 ## 3. Workflow (absolute paths — your shell does not start in the album)
 
 ```
-python3 "/Users/md/worktrees/ferrosintesis/20261122-TSK-HUM-fable5-new-10-track-album/albums/fable5/Lantern Year/build.py" --track N --check     # in-memory oracles (fast loop)
-python3 "/Users/md/worktrees/ferrosintesis/20261122-TSK-HUM-fable5-new-10-track-album/albums/fable5/Lantern Year/build.py" --track N             # writes midi/<FILE>
-python3 "/Users/md/worktrees/ferrosintesis/20261122-TSK-HUM-fable5-new-10-track-album/albums/fable5/Lantern Year/build.py" --track N --verify    # file-backed + all oracles
-"/Users/md/worktrees/ferrosintesis/20261122-TSK-HUM-fable5-new-10-track-album/target/release/ferrosintesis" "/Users/md/worktrees/ferrosintesis/20261122-TSK-HUM-fable5-new-10-track-album/albums/fable5/Lantern Year/midi/<FILE>" -o "/Users/md/worktrees/ferrosintesis/20261122-TSK-HUM-fable5-new-10-track-album/albums/fable5/Lantern Year/audio/<NN - Title>.wav" -q
-python3 "/Users/md/worktrees/ferrosintesis/20261122-TSK-HUM-fable5-new-10-track-album/albums/fable5/Lantern Year/analyze.py" --track N           # click scan, mono check, your audio_checks
+python3 "<album dir>/build.py" --track N --check     # in-memory oracles (fast loop)
+python3 "<album dir>/build.py" --track N             # writes midi/<FILE>
+python3 "<album dir>/build.py" --track N --verify    # file-backed + all oracles
+"<repo>/target/release/ferrosintesis" "<album dir>/midi/<FILE>" -o "<album dir>/audio/<NN - Title>.wav" -q
+python3 "<album dir>/analyze.py" --track N           # click scan, mono check, your audio_checks
 ```
 
 Order matters: edit → `build.py --track N` (writes) → `--verify` → render →
 `analyze.py`. `--verify` never writes the file. The synth binary is already
 built; do not run cargo. A verification stem for one channel:
-`… --solo <channel 1-16> -o stem.wav`. **Done means:** `--verify` prints
+`… --solo <channel> -o stem.wav` — the channel is **0-based**, the same number
+you pass to `sc.note` (`--solo 9` is the kit; `--solo 3,8` renders two). **Done means:** `--verify` prints
 `RESULT: PASS`, the render exists, and `analyze.py --track N` prints
 `AUDIO: PASS` — and you have *listened with numbers* (see §6).
 
@@ -178,10 +180,15 @@ All GM programs 0–127 are voiced. Catalog-proven colours:
   `en.bend_ramp`, `en.vibrato`), `en.bend_range` for wider bends.
 
 **Mix rules of thumb.** The render is loudness-normalised, so only *relative*
-balance matters. Lead voices volume 100–118, beds 78–95. Keep bass, kick and
+balance matters. Basses render hot: the upright (32), fingered (33) and fretless
+(35) all needed channel volume 72–78 here, not 100+; harp and fingerstyle steel
+guitar render quiet and needed 118–124. Lead voices volume 100–118, beds 78–95. Keep bass, kick and
 the main lead centred (list them in `CENTERED_CHANNELS`). Pan the rest inside
 **34..94** — the synth's pan adds a Haas micro-delay, and hard-panned doubles
-of the same line collapse in mono (analyze.py fails > 2 dB mono loss). Reverb
+of the same line collapse in mono (analyze.py fails > 2 dB mono loss). In a
+dense score even a mild pan costs mono level — the orchestral tracks here had
+to centre their tune-carrying voices to stay under the cap — so pan colour and
+answer voices, and centre whatever carries the tune. Reverb
 sends 20–45 for rhythm, 55–80 for beds and distance. Humanise: leave the
 default `jt`/`jv` on unpinned lanes; use `jt=0` on anything an oracle
 pins tick-exactly and on notes at movement edges.
@@ -194,8 +201,10 @@ pins tick-exactly and on notes at movement edges.
 2. **Jitter leaks across boundaries**: a jt>0 note at a movement edge can land
    outside the builder's window → check_movement_bounds fails. Use jt=0 at
    edges.
-3. **Same-pitch overlaps** on one channel fail check_overlaps (pads + repeated
-   notes are the usual culprit): shave the earlier note, or split lanes.
+3. **Same-pitch overlaps** on one channel are clamped by the engine at write
+   time (the earlier note is cut at the re-strike), so a pad re-striking a held
+   pitch loses its tail. Two note-ons of the same pitch on the same tick are
+   worse: they break file-vs-Score note parity. Shave or split lanes.
 4. **DURATION_WINDOW includes the 2-beat end pad** at the final tempo, and the
    file ends at the last note-off, not at END — let the last notes ring to END.
 5. **check_gaps is global**: any stretch with nothing sounding anywhere for
@@ -216,7 +225,10 @@ This box has no ears; you do the listening numerically. After rendering:
 compare section loudness with `ctx.rms`/`ctx.db` in `audio_checks` (hush vs
 peak ≥ 6 dB apart; second peak ≥ first), and solo your lead (`--solo`) to
 confirm it is not buried: its stem should sit within ~12 dB of the full mix
-in the passages where it leads. If the hook is inaudible, fix the mix, not
+in the passages where it leads. Every render is normalised on its own, stems
+included, so a stem's level is not directly comparable with the mix: solo the
+voice *together with* a reference voice that plays alone somewhere in the
+track (`--solo CH,REF`) and calibrate on that passage. If the hook is inaudible, fix the mix, not
 the oracle.
 
 ## 7. The ten nights

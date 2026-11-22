@@ -1,0 +1,636 @@
+{
+  "album": "Lantern Year",
+  "artist": "Claude Fable 5",
+  "style": "Ten nights at a lighthouse across one year, each in its own idiom (chamber folk, storm prog, fog ambient, 6/8 jig, mallet minimalism, 5/4 noir, night-sky electronica, orchestral scherzo, 12/8 slow blues, cathedral finale), bound by a five-note BEAM cell stated on every track and a 16-bar keeper's hymn that opens and crowns the year \u2014 every recurrence machine-verified.",
+  "track_count": 10,
+  "total_duration_seconds": 3000.44,
+  "total_duration_minutes": 50.01,
+  "tracks": [
+    {
+      "number": 1,
+      "title": "First Lighting",
+      "file": "midi/01 - First Lighting.mid",
+      "duration_seconds": 301.53,
+      "duration_minutes": 5.03,
+      "movements": [
+        {
+          "name": "I. Lamp and Beam",
+          "start_beat": 0.0,
+          "end_beat": 40.0,
+          "start_seconds": 0.0,
+          "end_seconds": 26.09,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Keeper's Hymn",
+          "start_beat": 40.0,
+          "end_beat": 112.0,
+          "start_seconds": 26.09,
+          "end_seconds": 73.04,
+          "time": "0:26"
+        },
+        {
+          "name": "III. Second Verse",
+          "start_beat": 112.0,
+          "end_beat": 184.0,
+          "start_seconds": 73.04,
+          "end_seconds": 120.0,
+          "time": "1:13"
+        },
+        {
+          "name": "IV. Thaw Light",
+          "start_beat": 184.0,
+          "end_beat": 312.0,
+          "start_seconds": 120.0,
+          "end_seconds": 203.48,
+          "time": "2:00"
+        },
+        {
+          "name": "V. The Hymn, Full",
+          "start_beat": 312.0,
+          "end_beat": 376.0,
+          "start_seconds": 203.48,
+          "end_seconds": 245.22,
+          "time": "3:23"
+        },
+        {
+          "name": "VI. The Year Begins",
+          "start_beat": 376.0,
+          "end_beat": 456.0,
+          "start_seconds": 245.22,
+          "end_seconds": 299.99,
+          "time": "4:05"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Northeaster",
+      "file": "midi/02 - Northeaster.mid",
+      "duration_seconds": 300.8,
+      "duration_minutes": 5.01,
+      "movements": [
+        {
+          "name": "I. Landfall",
+          "start_beat": 0.0,
+          "end_beat": 56.0,
+          "start_seconds": 0.0,
+          "end_seconds": 22.4,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Verse - The Glass Falls",
+          "start_beat": 56.0,
+          "end_beat": 112.0,
+          "start_seconds": 22.4,
+          "end_seconds": 44.8,
+          "time": "0:22"
+        },
+        {
+          "name": "III. Chorus - Hold the Light",
+          "start_beat": 112.0,
+          "end_beat": 176.0,
+          "start_seconds": 44.8,
+          "end_seconds": 70.4,
+          "time": "0:44"
+        },
+        {
+          "name": "IV. Verse - Green Water",
+          "start_beat": 176.0,
+          "end_beat": 232.0,
+          "start_seconds": 70.4,
+          "end_seconds": 92.8,
+          "time": "1:10"
+        },
+        {
+          "name": "V. Chorus - The First Peak",
+          "start_beat": 232.0,
+          "end_beat": 296.0,
+          "start_seconds": 92.8,
+          "end_seconds": 118.4,
+          "time": "1:32"
+        },
+        {
+          "name": "VI. Organ Solo - Spindrift",
+          "start_beat": 296.0,
+          "end_beat": 380.0,
+          "start_seconds": 118.4,
+          "end_seconds": 152.0,
+          "time": "1:58"
+        },
+        {
+          "name": "VII. The Eye of the Storm",
+          "start_beat": 380.0,
+          "end_beat": 444.0,
+          "start_seconds": 152.0,
+          "end_seconds": 177.6,
+          "time": "2:32"
+        },
+        {
+          "name": "VIII. Guitar Solo - The Back Wall",
+          "start_beat": 444.0,
+          "end_beat": 528.0,
+          "start_seconds": 177.6,
+          "end_seconds": 211.2,
+          "time": "2:57"
+        },
+        {
+          "name": "IX. Verse - All Hands",
+          "start_beat": 528.0,
+          "end_beat": 584.0,
+          "start_seconds": 211.2,
+          "end_seconds": 233.6,
+          "time": "3:31"
+        },
+        {
+          "name": "X. Chorus - The Second Peak",
+          "start_beat": 584.0,
+          "end_beat": 680.0,
+          "start_seconds": 233.6,
+          "end_seconds": 272.0,
+          "time": "3:53"
+        },
+        {
+          "name": "XI. Coda - Slammed Unison",
+          "start_beat": 680.0,
+          "end_beat": 750.0,
+          "start_seconds": 272.0,
+          "end_seconds": 300.0,
+          "time": "4:32"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Fog Signal",
+      "file": "midi/03 - Fog Signal.mid",
+      "duration_seconds": 302.0,
+      "duration_minutes": 5.03,
+      "movements": [
+        {
+          "name": "I. Fog Bank",
+          "start_beat": 0.0,
+          "end_beat": 60.0,
+          "start_seconds": 0.0,
+          "end_seconds": 60.0,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Bearings",
+          "start_beat": 60.0,
+          "end_beat": 132.0,
+          "start_seconds": 60.0,
+          "end_seconds": 132.0,
+          "time": "1:00"
+        },
+        {
+          "name": "III. The Keeper's Phrase",
+          "start_beat": 132.0,
+          "end_beat": 196.0,
+          "start_seconds": 132.0,
+          "end_seconds": 196.0,
+          "time": "2:12"
+        },
+        {
+          "name": "IV. Thick Weather",
+          "start_beat": 196.0,
+          "end_beat": 248.0,
+          "start_seconds": 196.0,
+          "end_seconds": 248.0,
+          "time": "3:16"
+        },
+        {
+          "name": "V. The Signal Holds",
+          "start_beat": 248.0,
+          "end_beat": 300.0,
+          "start_seconds": 248.0,
+          "end_seconds": 300.0,
+          "time": "4:08"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "The Mail Boat",
+      "file": "midi/04 - The Mail Boat.mid",
+      "duration_seconds": 302.28,
+      "duration_minutes": 5.04,
+      "movements": [
+        {
+          "name": "I. Casting Off",
+          "start_beat": 0.0,
+          "end_beat": 24.0,
+          "start_seconds": 0.0,
+          "end_seconds": 8.89,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Mail Boat (jig in G)",
+          "start_beat": 24.0,
+          "end_beat": 312.0,
+          "start_seconds": 8.89,
+          "end_seconds": 115.56,
+          "time": "0:08"
+        },
+        {
+          "name": "III. The Outbound Tide (jig in E dorian)",
+          "start_beat": 312.0,
+          "end_beat": 600.0,
+          "start_seconds": 115.56,
+          "end_seconds": 222.22,
+          "time": "1:55"
+        },
+        {
+          "name": "IV. Rounding the Point",
+          "start_beat": 600.0,
+          "end_beat": 612.0,
+          "start_seconds": 222.22,
+          "end_seconds": 226.57,
+          "time": "3:42"
+        },
+        {
+          "name": "V. The Mail Boat, a tone higher (in A)",
+          "start_beat": 612.0,
+          "end_beat": 804.0,
+          "start_seconds": 226.57,
+          "end_seconds": 295.14,
+          "time": "3:46"
+        },
+        {
+          "name": "VI. Stamped Home",
+          "start_beat": 804.0,
+          "end_beat": 822.0,
+          "start_seconds": 295.14,
+          "end_seconds": 301.57,
+          "time": "4:55"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Glass Calm",
+      "file": "midi/05 - Glass Calm.mid",
+      "duration_seconds": 299.09,
+      "duration_minutes": 4.98,
+      "movements": [
+        {
+          "name": "I. Still Water",
+          "start_beat": 0.0,
+          "end_beat": 64.0,
+          "start_seconds": 0.0,
+          "end_seconds": 29.09,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Drift",
+          "start_beat": 64.0,
+          "end_beat": 192.0,
+          "start_seconds": 29.09,
+          "end_seconds": 87.27,
+          "time": "0:29"
+        },
+        {
+          "name": "III. Open Water",
+          "start_beat": 192.0,
+          "end_beat": 320.0,
+          "start_seconds": 87.27,
+          "end_seconds": 145.45,
+          "time": "1:27"
+        },
+        {
+          "name": "IV. The Swell",
+          "start_beat": 320.0,
+          "end_beat": 400.0,
+          "start_seconds": 145.45,
+          "end_seconds": 181.82,
+          "time": "2:25"
+        },
+        {
+          "name": "V. Unison",
+          "start_beat": 400.0,
+          "end_beat": 528.0,
+          "start_seconds": 181.82,
+          "end_seconds": 240.0,
+          "time": "3:01"
+        },
+        {
+          "name": "VI. Afterglow",
+          "start_beat": 528.0,
+          "end_beat": 656.0,
+          "start_seconds": 240.0,
+          "end_seconds": 298.18,
+          "time": "4:00"
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "title": "False Lights",
+      "file": "midi/06 - False Lights.mid",
+      "duration_seconds": 301.15,
+      "duration_minutes": 5.02,
+      "movements": [
+        {
+          "name": "I. No Moon",
+          "start_beat": 0.0,
+          "end_beat": 40.0,
+          "start_seconds": 0.0,
+          "end_seconds": 23.08,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Lure",
+          "start_beat": 40.0,
+          "end_beat": 120.0,
+          "start_seconds": 23.08,
+          "end_seconds": 69.23,
+          "time": "0:23"
+        },
+        {
+          "name": "III. Wreckers",
+          "start_beat": 120.0,
+          "end_beat": 160.0,
+          "start_seconds": 69.23,
+          "end_seconds": 92.31,
+          "time": "1:09"
+        },
+        {
+          "name": "IV. The Watch",
+          "start_beat": 160.0,
+          "end_beat": 240.0,
+          "start_seconds": 92.31,
+          "end_seconds": 138.46,
+          "time": "1:32"
+        },
+        {
+          "name": "V. On the Rocks",
+          "start_beat": 240.0,
+          "end_beat": 290.0,
+          "start_seconds": 138.46,
+          "end_seconds": 167.31,
+          "time": "2:18"
+        },
+        {
+          "name": "VI. The True Light",
+          "start_beat": 290.0,
+          "end_beat": 410.0,
+          "start_seconds": 167.31,
+          "end_seconds": 236.54,
+          "time": "2:47"
+        },
+        {
+          "name": "VII. Dark Water",
+          "start_beat": 410.0,
+          "end_beat": 520.0,
+          "start_seconds": 236.54,
+          "end_seconds": 300.0,
+          "time": "3:56"
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Perseids",
+      "file": "midi/07 - Perseids.mid",
+      "duration_seconds": 298.09,
+      "duration_minutes": 4.97,
+      "movements": [
+        {
+          "name": "I. First Dark",
+          "start_beat": 0.0,
+          "end_beat": 96.0,
+          "start_seconds": 0.0,
+          "end_seconds": 45.71,
+          "time": "0:00"
+        },
+        {
+          "name": "II. First Drop",
+          "start_beat": 96.0,
+          "end_beat": 192.0,
+          "start_seconds": 45.71,
+          "end_seconds": 91.43,
+          "time": "0:45"
+        },
+        {
+          "name": "III. Breakdown",
+          "start_beat": 192.0,
+          "end_beat": 288.0,
+          "start_seconds": 91.43,
+          "end_seconds": 137.14,
+          "time": "1:31"
+        },
+        {
+          "name": "IV. Bigger Build",
+          "start_beat": 288.0,
+          "end_beat": 352.0,
+          "start_seconds": 137.14,
+          "end_seconds": 167.62,
+          "time": "2:17"
+        },
+        {
+          "name": "V. Second Drop",
+          "start_beat": 352.0,
+          "end_beat": 512.0,
+          "start_seconds": 167.62,
+          "end_seconds": 243.81,
+          "time": "2:47"
+        },
+        {
+          "name": "VI. Afterglow",
+          "start_beat": 512.0,
+          "end_beat": 624.0,
+          "start_seconds": 243.81,
+          "end_seconds": 297.14,
+          "time": "4:03"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Equinox Gale",
+      "file": "midi/08 - Equinox Gale.mid",
+      "duration_seconds": 292.3,
+      "duration_minutes": 4.87,
+      "movements": [
+        {
+          "name": "I. Scherzo",
+          "start_beat": 0.0,
+          "end_beat": 264.0,
+          "start_seconds": 0.0,
+          "end_seconds": 91.03,
+          "time": "0:00"
+        },
+        {
+          "name": "II. Trio",
+          "start_beat": 264.0,
+          "end_beat": 456.0,
+          "start_seconds": 91.03,
+          "end_seconds": 171.03,
+          "time": "1:31"
+        },
+        {
+          "name": "III. Scherzo da capo",
+          "start_beat": 456.0,
+          "end_beat": 672.0,
+          "start_seconds": 171.03,
+          "end_seconds": 245.52,
+          "time": "2:51"
+        },
+        {
+          "name": "IV. Coda",
+          "start_beat": 672.0,
+          "end_beat": 816.0,
+          "start_seconds": 245.52,
+          "end_seconds": 291.7,
+          "time": "4:05"
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "title": "The Long Watch",
+      "file": "midi/09 - The Long Watch.mid",
+      "duration_seconds": 305.45,
+      "duration_minutes": 5.09,
+      "movements": [
+        {
+          "name": "I. Small Hours (intro)",
+          "start_beat": 0.0,
+          "end_beat": 24.0,
+          "start_seconds": 0.0,
+          "end_seconds": 17.14,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Head (tenor)",
+          "start_beat": 24.0,
+          "end_beat": 96.0,
+          "start_seconds": 17.14,
+          "end_seconds": 68.57,
+          "time": "0:17"
+        },
+        {
+          "name": "III. Muted Trumpet",
+          "start_beat": 96.0,
+          "end_beat": 168.0,
+          "start_seconds": 68.57,
+          "end_seconds": 120.0,
+          "time": "1:08"
+        },
+        {
+          "name": "IV. Stop-Time (guitar)",
+          "start_beat": 168.0,
+          "end_beat": 240.0,
+          "start_seconds": 120.0,
+          "end_seconds": 171.43,
+          "time": "2:00"
+        },
+        {
+          "name": "V. Organ",
+          "start_beat": 240.0,
+          "end_beat": 312.0,
+          "start_seconds": 171.43,
+          "end_seconds": 222.86,
+          "time": "2:51"
+        },
+        {
+          "name": "VI. Everyone",
+          "start_beat": 312.0,
+          "end_beat": 384.0,
+          "start_seconds": 222.86,
+          "end_seconds": 274.29,
+          "time": "3:42"
+        },
+        {
+          "name": "VII. Tag",
+          "start_beat": 384.0,
+          "end_beat": 420.0,
+          "start_seconds": 274.29,
+          "end_seconds": 303.38,
+          "time": "4:34"
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "title": "Last Lighting",
+      "file": "midi/10 - Last Lighting.mid",
+      "duration_seconds": 297.75,
+      "duration_minutes": 4.96,
+      "movements": [
+        {
+          "name": "I. The Lamp",
+          "start_beat": 0.0,
+          "end_beat": 40.0,
+          "start_seconds": 0.0,
+          "end_seconds": 27.27,
+          "time": "0:00"
+        },
+        {
+          "name": "II. The Keeper's Hymn",
+          "start_beat": 40.0,
+          "end_beat": 104.0,
+          "start_seconds": 27.27,
+          "end_seconds": 70.91,
+          "time": "0:27"
+        },
+        {
+          "name": "III. The Year Remembered",
+          "start_beat": 104.0,
+          "end_beat": 168.0,
+          "start_seconds": 70.91,
+          "end_seconds": 113.58,
+          "time": "1:10"
+        },
+        {
+          "name": "IV. Gathering",
+          "start_beat": 168.0,
+          "end_beat": 232.0,
+          "start_seconds": 113.58,
+          "end_seconds": 155.31,
+          "time": "1:53"
+        },
+        {
+          "name": "V. The Turning",
+          "start_beat": 232.0,
+          "end_beat": 280.0,
+          "start_seconds": 155.31,
+          "end_seconds": 186.07,
+          "time": "2:35"
+        },
+        {
+          "name": "VI. The Crown",
+          "start_beat": 280.0,
+          "end_beat": 344.0,
+          "start_seconds": 186.07,
+          "end_seconds": 226.07,
+          "time": "3:06"
+        },
+        {
+          "name": "VII. Afterglow",
+          "start_beat": 344.0,
+          "end_beat": 392.0,
+          "start_seconds": 226.07,
+          "end_seconds": 257.85,
+          "time": "3:46"
+        },
+        {
+          "name": "VIII. The Last Beam",
+          "start_beat": 392.0,
+          "end_beat": 424.0,
+          "start_seconds": 257.85,
+          "end_seconds": 281.39,
+          "time": "4:17"
+        },
+        {
+          "name": "IX. The Lamp Alone",
+          "start_beat": 424.0,
+          "end_beat": 440.0,
+          "start_seconds": 281.39,
+          "end_seconds": 295.93,
+          "time": "4:41"
+        }
+      ]
+    }
+  ]
+}

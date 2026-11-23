@@ -221,6 +221,35 @@ pub fn render_to_wav_with_progress(
     crate::scratch::render_to_wav(&song.0, opt, output, normalization.kind, on_progress)
 }
 
+/// Render a song incrementally, handing each block to `emit` as soon as it exists.
+///
+/// `emit` receives consecutive slices of **raw interleaved stereo `f32`** at
+/// [`Options::sample_rate`]: concatenated, they are bit-for-bit the buffer [`render`]
+/// returns, so the stream is the same audio, not an approximation of it. No
+/// normalization is applied — a whole-song gain cannot be known before the song ends —
+/// so samples may exceed ±1.0; [`Stats::peak`] reports the peak once the render is done.
+///
+/// This is the entry point for playing a file while it renders: a player can start
+/// on the first blocks while the synthesizer keeps working ahead of the playhead.
+/// Working memory is one block, independent of song length. Each slice is short (a
+/// few dozen frames), so buffer in `emit` if the destination wants large writes.
+///
+/// Returning an error from `emit` stops the render at once and returns that error,
+/// which is how a caller cancels. `on_progress` is called as for
+/// [`render_with_progress`].
+///
+/// # Errors
+///
+/// Returns the first error `emit` returns; the synthesizer itself cannot fail.
+pub fn render_stream(
+    song: &Song,
+    opt: &Options,
+    on_progress: &mut dyn FnMut(Progress),
+    emit: &mut dyn FnMut(&[f32]) -> std::io::Result<()>,
+) -> std::io::Result<Stats> {
+    crate::engine::render_stream_with_progress(&song.0, opt, on_progress, emit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -679,5 +708,63 @@ mod tests {
         );
         let measured_peak = audio.iter().fold(0.0f32, |peak, &x| peak.max(x.abs()));
         assert_eq!(stats.peak, measured_peak);
+    }
+
+    #[test]
+    fn render_stream_concatenates_to_the_buffered_render() {
+        let song = one_note_song();
+        let opt = Options::default()
+            .with_sample_rate(8_000)
+            .with_samples(false)
+            .with_tail(0.5);
+        let (expected, expected_stats) = render(&song, &opt);
+
+        let mut streamed = Vec::new();
+        let mut blocks = 0usize;
+        let stats = render_stream(&song, &opt, &mut |_| {}, &mut |block| {
+            assert!(
+                !block.is_empty() && block.len() % 2 == 0,
+                "blocks are whole stereo frames"
+            );
+            blocks += 1;
+            streamed.extend_from_slice(block);
+            Ok(())
+        })
+        .unwrap();
+
+        assert!(
+            blocks > 1,
+            "the stream must arrive in pieces, not one buffer"
+        );
+        assert_eq!(streamed.len(), expected.len());
+        assert!(
+            streamed
+                .iter()
+                .zip(&expected)
+                .all(|(a, b)| a.to_bits() == b.to_bits()),
+            "streamed audio must be bit-identical to render()"
+        );
+        assert_eq!(stats.peak, expected_stats.peak);
+    }
+
+    #[test]
+    fn render_stream_stops_at_the_first_emit_error() {
+        let song = one_note_song();
+        let opt = Options::default()
+            .with_sample_rate(8_000)
+            .with_samples(false)
+            .with_tail(0.5);
+        let mut calls = 0usize;
+        let error = render_stream(&song, &opt, &mut |_| {}, &mut |_| {
+            calls += 1;
+            if calls == 3 {
+                Err(std::io::Error::other("listener skipped"))
+            } else {
+                Ok(())
+            }
+        })
+        .unwrap_err();
+        assert_eq!(error.to_string(), "listener skipped");
+        assert_eq!(calls, 3, "no block may be emitted after a refusal");
     }
 }

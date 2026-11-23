@@ -59,7 +59,9 @@ atomically publishes the WAV. Audio working memory does not grow with track dura
 
 `offline::render` remains the lower-level alternative. It returns `(Vec<f32>, Stats)`:
 **interleaved stereo** — left, right, left, right — at `opt.sample_rate()`,
-un-normalized. `normalize_loudness`, `normalize_to_i16`, and `write_wav` preserve the
+un-normalized. `offline::render_stream` produces the same audio a block at a time,
+through a callback, for a player that wants to start before the render ends.
+`normalize_loudness`, `normalize_to_i16`, and `write_wav` preserve the
 buffer-first building blocks for callers that need them. The measurement primitives
 — `integrated_lufs`, `true_peak_dbtp`, `limit_true_peak` — are public if you
 want your own gain staging.

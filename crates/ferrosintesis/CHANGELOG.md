@@ -11,6 +11,14 @@ lives in the repository's git log and `wrk_journals/`.
 
 ## [Unreleased]
 
+### Added
+
+- **`offline::render_stream`** renders a song block by block and hands each block of raw
+  interleaved stereo `f32` to a callback as soon as it is synthesised. The blocks
+  concatenate to exactly what `offline::render` returns, in one block of memory, so a
+  player can start a file while it is still rendering. Returning an error from the
+  callback cancels the render.
+
 ### Fixed
 
 - **Silent CPU cost after a song ends.** Three always-running filters never decayed to

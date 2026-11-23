@@ -18,6 +18,8 @@ lives in the repository's git log and `wrk_journals/`.
   concatenate to exactly what `offline::render` returns, in one block of memory, so a
   player can start a file while it is still rendering. Returning an error from the
   callback cancels the render.
+- **`VERSION`**, the crate version, so a cache of rendered audio can be keyed on the
+  synthesizer that made it.
 
 ### Fixed
 

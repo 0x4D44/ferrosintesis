@@ -81,6 +81,10 @@ pub mod offline;
 mod error;
 pub use error::MidiError;
 
+/// This crate's version, for a caller that keys a cache of rendered audio on the
+/// synthesizer that produced it: a new release may sound different.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Whether this build contains the optional compile-time attack-sample bank.
 ///
 /// Disable the crate's default features to build the fully modeled synth without

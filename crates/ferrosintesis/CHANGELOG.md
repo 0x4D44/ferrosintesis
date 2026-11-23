@@ -11,6 +11,11 @@ lives in the repository's git log and `wrk_journals/`.
 
 ## [Unreleased]
 
+## [0.21.60] - 2026-11-23
+
+The first release from trunk since 0.21.58, so it carries every sample-crate change made
+since then; 0.21.59 was a hotfix branch with one fix, which this release also contains.
+
 ### Added
 
 - **`offline::render_stream`** renders a song block by block and hands each block of raw
@@ -20,6 +25,10 @@ lives in the repository's git log and `wrk_journals/`.
   callback cancels the render.
 - **`VERSION`**, the crate version, so a cache of rendered audio can be keyed on the
   synthesizer that made it.
+
+## [0.21.59] - 2026-09-27
+
+A hotfix release built on 0.21.58: it contains this fix and nothing else.
 
 ### Fixed
 

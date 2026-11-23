@@ -1,6 +1,6 @@
 [package]
 name = "ferrosintesis-samples-drumkit"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 # Keep this in lockstep with every other crate in the workspace: the declaration is what
 # turns on clippy's `incompatible_msrv` lint, so a crate without it is silently unpoliced
@@ -22,4 +22,4 @@ path = "src/lib.rs"
 # dependencies and the no-network build survives. Keep it on ONE line: a
 # multi-line inline table is invalid TOML 1.0 and cargo at our MSRV (1.87)
 # refuses the manifest outright.
-ferrosintesis-flac = { path = "../ferrosintesis-flac", version = "=0.1.0" }
+ferrosintesis-flac = { path = "../ferrosintesis-flac", version = "=0.1.1" }

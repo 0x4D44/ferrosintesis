@@ -1,18 +1,5 @@
 # Scratchpad — out-of-scope observations (triage separately)
 
-- [ ] 2026.09.27 — **The next release from trunk must bump the sample crates; the 0.21.59
-  hotfix could not ship from trunk.** Since the 0.21.58 release commit (`77a1526~1`), trunk has
-  changed every sample crate plus `ferrosintesis-flac` and `ferrosintesis-cli`, but their
-  manifests still carry the already-published versions (samples `=0.2.0`, b1-upright
-  `=0.1.1`). crates.io cannot replace a version, so a trunk publish fails on those crates, and
-  the published payloads are stale beside trunk (e.g. vcsl-steinway's `LOGICAL_FILE_COUNT`
-  went 54 -> 81). So 0.21.59 shipped from `hotfix/0.21.59` (tag
-  `ferrosintesis-v0.21.59`), and the next release must be the full multi-crate one (library
-  0.21.60+), bumping each changed crate and its `=` pin in
-  `D:\language\ferrosintesis\crates\ferrosintesis\Cargo.toml` per
-  `D:\language\ferrosintesis\RELEASING.md` "Prepare the release". List the changed crates with
-  `git diff --name-only ferrosintesis-v0.21.59 origin/main -- crates/`.
-
 - [ ] 2026.09.15 — **The core drumkit velocity-split test has the same one-sided gap as
   drumkit2 had (MM-BUG-CRU-00078).** `D:\language\ferrosintesis\crates\ferrosintesis-samples-drumkit\src\lib.rs:layer_for_velocity_respects_the_sfz_splits`
   hand-lists probes, and leaves most boundaries unpinned: HH_CLOSED 63/64 and 95/96, SNARE

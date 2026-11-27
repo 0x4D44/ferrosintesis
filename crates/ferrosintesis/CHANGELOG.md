@@ -11,6 +11,19 @@ lives in the repository's git log and `wrk_journals/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A realtime reset no longer discards the storage reservation.**
+  `RealtimeSynth::reset`, a MIDI System Reset (`FF`) and GM System On each rebuilt
+  the engine, which dropped what `reserve_realtime_storage` had reserved; the next
+  notes then grew the voice vector on the audio thread. The reservation now
+  survives every reset, so one call at setup is enough.
+- **`reserve_realtime_storage` now covers a whole block of queued NoteOns.** The
+  voice cap is applied once per block, after the queue drains, so a block that
+  queued more NoteOns than there was free room under the cap grew the voice vector
+  before the cap trimmed it. The reservation now holds the cap plus the most the
+  queue can insert. Which voices are stolen, and the audio, are unchanged.
+
 ## [0.21.60] - 2026-11-23
 
 The first release from trunk since 0.21.58, so it carries every sample-crate change made

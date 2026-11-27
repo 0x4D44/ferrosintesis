@@ -35,6 +35,11 @@ const LIVE_MAX_VOICES: usize = 128;
 /// margin while costing a few KB of inline storage.
 const LIVE_MAX_PENDING: usize = 1024;
 
+/// The most voices one block's queue can insert before the voice cap runs: each
+/// queued command inserts at most two (a GM 109 NoteOn starts the chanter and,
+/// when none is sounding on the channel, the drone).
+const LIVE_MAX_QUEUED_VOICES: usize = 2 * LIVE_MAX_PENDING;
+
 /// The fixed-capacity command queue between `write_byte` and `render_add`.
 ///
 /// Overflow policy is **drop the newest and count it**: the queue never allocates,
@@ -317,8 +322,15 @@ impl RealtimeSynth {
     ///
     /// Separate from [`prewarm_samples`](Self::prewarm_samples) because it is not about
     /// samples: a `--no-samples` build needs this just as much. Call both at setup.
+    ///
+    /// The reservation survives [`reset`](Self::reset) and a MIDI System Reset or GM
+    /// System On in the stream, so one call at setup is enough. It also covers a
+    /// whole block's queued NoteOns: the voice cap is applied once per block, after
+    /// the queue drains, so until then the voice vector holds every voice the queue
+    /// inserted.
     pub fn reserve_realtime_storage(&mut self) {
-        self.core.reserve_voices(LIVE_MAX_VOICES);
+        self.core
+            .reserve_voices(LIVE_MAX_VOICES, LIVE_MAX_QUEUED_VOICES);
     }
 
     /// Feed one byte of a live MIDI stream.
@@ -865,6 +877,116 @@ mod tests {
             "burst left polyphony above the cap"
         );
         assert!(synth.pending.is_empty());
+    }
+
+    /// Capacities of the storage `reserve_realtime_storage` reserves: the voice
+    /// vector, then the 16 per-channel index buckets.
+    fn reserved_storage(synth: &RealtimeSynth) -> (usize, [usize; 16]) {
+        synth.core.voice_storage_capacity()
+    }
+
+    /// Every way a live stream can reset the engine must hand back the storage the
+    /// caller reserved at setup. A reset used to replace the core with a fresh one,
+    /// so the first notes after it grew the voice vector and the buckets on the
+    /// audio thread (mdem MDD-BUG-TEM-00018).
+    #[test]
+    fn every_reset_route_keeps_the_realtime_reservation() {
+        let routes: [(&str, &[u8]); 3] = [
+            ("reset()", &[]),
+            ("System Reset (FF)", &[0xFF]),
+            ("GM System On", &[0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7]),
+        ];
+        for (route, bytes) in routes {
+            let mut synth = RealtimeSynth::new(opts());
+            synth.reserve_realtime_storage();
+            let reserved = reserved_storage(&synth);
+            let mut out = [0.0; LIVE_BLOCK * 2];
+
+            for byte in [0x90, 60, 100] {
+                synth.write_byte(byte);
+            }
+            synth.render_add(LIVE_BLOCK, &mut out).unwrap();
+            assert_eq!(synth.active_voice_count(), 1);
+
+            if bytes.is_empty() {
+                synth.reset();
+            }
+            for &byte in bytes {
+                synth.write_byte(byte);
+            }
+            // The first note after the reset, in the same block as a queued one.
+            for byte in [0x91, 64, 100] {
+                synth.write_byte(byte);
+            }
+            synth.render_add(LIVE_BLOCK, &mut out).unwrap();
+
+            assert_eq!(
+                synth.active_voice_count(),
+                1,
+                "{route} did not clear the voice that was sounding"
+            );
+            assert_eq!(
+                reserved_storage(&synth),
+                reserved,
+                "{route} discarded the realtime reservation"
+            );
+        }
+    }
+
+    /// Queue `notes` NoteOns on distinct (channel, key) pairs over `channels`,
+    /// 88 keys to a channel, and apply them in one block.
+    fn queue_burst_and_render(synth: &mut RealtimeSynth, channels: &[u8], notes: usize) {
+        assert!(notes <= channels.len() * 88);
+        for i in 0..notes {
+            synth.write_byte(0x90 | channels[i / 88]);
+            synth.write_byte(21 + (i % 88) as u8);
+            synth.write_byte(80);
+        }
+        let mut out = [0.0; LIVE_BLOCK * 2];
+        synth.render_add(LIVE_BLOCK, &mut out).unwrap();
+    }
+
+    /// The cap is enforced once per block, after the queue drains, so every queued
+    /// NoteOn is inserted before any voice is stolen. The reservation has to cover
+    /// that. It covered 128 voices, so the 129th NoteOn of a block grew the voice
+    /// vector on the audio thread (mdem MDD-BUG-TEM-00019). Each burst here starts
+    /// from a synth already at the cap, the worst case; GM 109 is the program whose
+    /// NoteOn can add a drone as well as its own voice.
+    #[test]
+    fn no_queued_burst_grows_the_reserved_storage() {
+        const BURST_CHANNELS: [u8; 12] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12];
+        for program in [0u8, 109] {
+            for notes in [
+                65,
+                LIVE_MAX_VOICES + 1,
+                LIVE_MAX_PENDING - BURST_CHANNELS.len(),
+            ] {
+                let mut synth = RealtimeSynth::new(opts());
+                synth.reserve_realtime_storage();
+                let reserved = reserved_storage(&synth);
+
+                queue_burst_and_render(&mut synth, &[13, 14], LIVE_MAX_VOICES);
+                assert_eq!(synth.active_voice_count(), LIVE_MAX_VOICES);
+
+                for ch in BURST_CHANNELS {
+                    synth.write_byte(0xC0 | ch);
+                    synth.write_byte(program);
+                }
+                queue_burst_and_render(&mut synth, &BURST_CHANNELS, notes);
+
+                assert_eq!(
+                    synth.dropped_command_count(),
+                    0,
+                    "the burst must fit the queue to be the case under test"
+                );
+                assert_eq!(synth.active_voice_count(), LIVE_MAX_VOICES);
+                assert_eq!(
+                    reserved_storage(&synth),
+                    reserved,
+                    "GM {program}: {notes} queued NoteOns grew the reserved storage"
+                );
+            }
+        }
     }
 
     /// `reset` clears queued commands but keeps the cumulative drop count — a

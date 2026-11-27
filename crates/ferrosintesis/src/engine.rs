@@ -2289,9 +2289,25 @@ impl EngineCore {
         }
     }
 
+    /// Return to the state `new` builds, keeping the voice storage.
+    ///
+    /// A live reset (System Reset, GM System On, `RealtimeSynth::reset`) runs on
+    /// the audio thread, and the notes that follow it must not grow a vector there.
+    /// So the voice vector and the per-channel buckets are emptied and carried
+    /// over, with whatever capacity `reserve_voices` gave them, rather than
+    /// replaced by the unreserved ones `new` makes. Capacity is not audible:
+    /// offline renders are unchanged.
     pub(crate) fn hard_reset(&mut self) {
         let opt = self.opt;
+        let mut active = std::mem::take(&mut self.active);
+        let mut voice_by_ch = std::mem::take(&mut self.voice_by_ch);
+        active.clear();
+        for bucket in &mut voice_by_ch {
+            bucket.clear();
+        }
         *self = Self::new(opt);
+        self.active = active;
+        self.voice_by_ch = voice_by_ch;
     }
 
     /// Restore fresh GM synthesis/channel state while whole-render diagnostics
@@ -2304,6 +2320,16 @@ impl EngineCore {
 
     pub(crate) fn active_voice_count(&self) -> usize {
         self.active.len()
+    }
+
+    /// Capacity of the voice vector and of each per-channel index bucket: the
+    /// storage `reserve_voices` reserves.
+    #[cfg(test)]
+    pub(crate) fn voice_storage_capacity(&self) -> (usize, [usize; 16]) {
+        (
+            self.active.capacity(),
+            std::array::from_fn(|ch| self.voice_by_ch[ch].capacity()),
+        )
     }
 
     pub(crate) fn stats(&self) -> Stats {
@@ -2470,10 +2496,16 @@ impl EngineCore {
     /// bucket rebuild inside the audio callback never grows a vector
     /// (MM-BUG-KILN-00082, MM-BUG-CRUCIBLE-00006).
     ///
+    /// `cap` is the voice cap the caller enforces before each block renders, and
+    /// `queued` the most voices one block's events can insert on top of it before
+    /// that cap runs. The buckets are rebuilt after the cap, so they need `cap` only.
+    ///
     /// Realtime-only: the offline renderer is unbounded by design and pays nothing for
     /// growth amortised over a whole render, so it does not call this.
-    pub(crate) fn reserve_voices(&mut self, cap: usize) {
-        self.active.reserve(cap.saturating_sub(self.active.len()));
+    pub(crate) fn reserve_voices(&mut self, cap: usize, queued: usize) {
+        let voices = cap.saturating_add(queued);
+        self.active
+            .reserve(voices.saturating_sub(self.active.len()));
         for bucket in &mut self.voice_by_ch {
             bucket.reserve(cap.saturating_sub(bucket.len()));
         }

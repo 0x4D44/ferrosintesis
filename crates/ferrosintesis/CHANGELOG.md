@@ -11,6 +11,8 @@ lives in the repository's git log and `wrk_journals/`.
 
 ## [Unreleased]
 
+## [0.21.61] - 2026-11-28
+
 ### Fixed
 
 - **A realtime reset no longer discards the storage reservation.**
